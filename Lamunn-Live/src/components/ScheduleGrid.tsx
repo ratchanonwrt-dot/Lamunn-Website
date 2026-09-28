@@ -20,6 +20,15 @@ export interface GridShift {
   hours: number;
   sales: number;
   hasResults: boolean;
+  pay: number; // ยอดที่จ่ายจริง (หลังขั้นต่ำ / ยอดที่แอดมินกำหนดเอง)
+  effectivePct: number | null; // จ่ายจริงคิดเป็นกี่ % ของยอดหลังหักค่าส่ง (null = ยอดขายเป็นศูนย์)
+  hitMinimum: boolean;
+  payOverridden: boolean;
+}
+
+/** % คอมจริง ทศนิยม 1 ตำแหน่ง — ยอดขายเป็นศูนย์คิด % ไม่ได้ */
+function pctLabel(v: number | null): string {
+  return v === null ? "–%" : `${v.toFixed(1)}%`;
 }
 
 export interface GridRequest {
@@ -312,16 +321,32 @@ export default function ScheduleGrid({
                         streamerColor(colors[s.streamerId])
                       )}
                       style={{ top: top + 1, height: Math.max(bottom - top - 2, 18) }}
-                      title={`${s.streamerName} ${s.startTime}–${s.endTime}${s.channelName ? ` · ${s.channelName}` : ""}${s.hasResults ? ` · ขาย ${formatBaht(s.sales)} ฿` : " · ยังไม่กรอกยอด"}`}
+                      title={`${s.streamerName} ${s.startTime}–${s.endTime}${s.channelName ? ` · ${s.channelName}` : ""}${
+                        s.hasResults
+                          ? ` · ขาย ${formatBaht(s.sales)} ฿ · จ่ายจริง ${formatBaht(s.pay)} ฿ = ${pctLabel(s.effectivePct)} ของยอดหลังหักค่าส่ง${s.payOverridden ? " (แอดมินกำหนดยอดเอง)" : s.hitMinimum ? " (จ่ายขั้นต่ำรายชั่วโมง)" : ""}`
+                          : " · ยังไม่กรอกยอด"
+                      }`}
                     >
                       <p className="truncate text-[13px] font-bold leading-tight">{s.streamerName}</p>
                       <p className="truncate text-[11px] opacity-80">
                         {s.startTime}–{s.endTime}
                         {spills && " ↗"}
+                        {/* กะสั้นมีที่แค่สองบรรทัด — ต่อ % คอมจริงท้ายเวลาให้เห็นทุกกะที่กรอกยอดแล้ว */}
+                        {s.hasResults && bottom - top <= 44 && <span className="font-semibold"> · {pctLabel(s.effectivePct)}</span>}
                       </p>
                       {bottom - top > 44 && (
-                        <p className="truncate opacity-70">{s.hasResults ? `${formatBaht(s.sales)} ฿` : s.channelName ?? ""}</p>
+                        s.hasResults ? (
+                          <p className="truncate text-[12px] font-bold">คอมจริง {pctLabel(s.effectivePct)}</p>
+                        ) : (
+                          <p className="truncate opacity-70">{s.channelName ?? ""}</p>
+                        )
                       )}
+                      {s.hasResults && bottom - top > 62 && (
+                        <p className="truncate opacity-75">
+                          จ่าย {formatBaht(s.pay)} ฿{s.payOverridden ? " (กำหนดเอง)" : s.hitMinimum ? " (ขั้นต่ำ)" : ""}
+                        </p>
+                      )}
+                      {s.hasResults && bottom - top > 78 && <p className="truncate opacity-60">ขาย {formatBaht(s.sales)} ฿</p>}
                     </a>
                   );
                 })}

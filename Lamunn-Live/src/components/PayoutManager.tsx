@@ -209,6 +209,12 @@ export default function PayoutManager({ rows, from, to, canEdit }: { rows: Payou
                           <td className="px-3 py-2.5 text-right tabular-nums text-muted">{formatBaht(r.sales)}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums">
                             <p className="font-semibold text-ink">{formatBaht(r.status === "APPROVED" || r.status === "PAID" ? (r.approvedAmount ?? 0) : r.amount)}</p>
+                            {/* % คอมจริง = ยอดที่จ่าย ÷ ยอดหลังหักค่าส่ง (นิยามเดียวกับหน้าค่าคอมมิชชั่นและตารางไลฟ์) */}
+                            {r.net > 0 && (
+                              <p className="text-[11px] text-muted">
+                                คอมจริง {(((r.status === "APPROVED" || r.status === "PAID" ? (r.approvedAmount ?? 0) : r.amount) / r.net) * 100).toFixed(1)}%
+                              </p>
+                            )}
                             {r.changed && r.status !== "PAID" && <p className="text-[11px] text-red-600">ยอดปัจจุบัน {formatBaht(r.amount)} — อนุมัติใหม่</p>}
                             {r.changed && r.status === "PAID" && <p className="text-[11px] text-red-600">ยอดปัจจุบัน {formatBaht(r.amount)} (จ่ายไปแล้ว)</p>}
                           </td>

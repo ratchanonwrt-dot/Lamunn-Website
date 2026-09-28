@@ -2,7 +2,9 @@ import { prisma } from "@lamunn/db-live";
 import { requirePageRole } from "@/lib/requirePageRole";
 import { parseDateOnly } from "@/lib/validation";
 import { addDays, freeRanges, isoDate, pickUnusedColor, todayTH, toRange, weekStartOf } from "@/lib/schedule";
-import { formatThaiDateShort, thaiDaysShort } from "@/lib/format";
+import { formatThaiDateShort, thaiDaysShort, slotHours } from "@/lib/format";
+import { getPaySettings } from "@/lib/paySettings";
+import { computePay, applyOverride } from "@/lib/pay";
 import WeekPicker from "@/components/WeekPicker";
 import ScheduleGrid, { type GridDay } from "@/components/ScheduleGrid";
 
@@ -16,7 +18,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: { w
   const weekStart = weekStartOf(requested ?? today);
   const weekEnd = addDays(weekStart, 6);
 
-  const [shifts, streamers, channels, requests, blocks] = await Promise.all([
+  const [shifts, streamers, channels, requests, blocks, settings] = await Promise.all([
     prisma.liveShift.findMany({
       where: { date: { gte: weekStart, lte: weekEnd } },
       include: { streamer: true, channel: true, slots: true },
@@ -26,6 +28,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: { w
     prisma.channel.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
     prisma.slotRequest.findMany({ where: { date: { gte: weekStart, lte: weekEnd }, status: "PENDING" }, include: { channel: true } }),
     prisma.scheduleBlock.findMany({ where: { date: { gte: weekStart, lte: weekEnd } }, include: { channel: true } }),
+    getPaySettings(),
   ]);
 
   // สีประจำคนจาก Streamer.color (ตั้งได้ในหน้าคนไลฟ์) — คนที่ยังไม่มีสีจะได้สีที่ยังไม่ซ้ำชั่วคราว
@@ -40,6 +43,17 @@ export default async function SchedulePage({ searchParams }: { searchParams: { w
       colors[s.id] = c;
       used.push(c);
     }
+  }
+
+  // ค่าตอบแทนจริงของกะ — สูตรเดียวกับหน้าค่าคอมมิชชั่น (ชั่วโมงจริงจากที่กรอก + ยอดที่แอดมินกำหนดเอง)
+  // เพื่อให้ % คอมจริงบนตารางตรงกับตัวเลขที่จ่ายจริงทุกหน้า
+  function shiftPay(s: (typeof shifts)[number]) {
+    const sales = s.slots.reduce((a, sl) => a + sl.sales, 0);
+    const hasResults = s.slots.length > 0;
+    if (!hasResults) return { sales, hasResults, pay: 0, effectivePct: null, hitMinimum: false, payOverridden: false };
+    const hours = s.slots.reduce((a, sl) => a + slotHours(sl.startTime, sl.endTime), 0);
+    const p = applyOverride(computePay(sales, hours, settings), s.payOverride);
+    return { sales, hasResults, pay: p.pay, effectivePct: p.effectivePct, hitMinimum: p.hitMinimum, payOverridden: p.overridden };
   }
 
   const days: GridDay[] = Array.from({ length: 7 }, (_, i) => {
@@ -59,8 +73,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: { w
           s: r.s,
           e: r.e,
           hours: (r.e - r.s) / 60,
-          sales: s.slots.reduce((a, sl) => a + sl.sales, 0),
-          hasResults: s.slots.length > 0,
+          ...shiftPay(s),
         };
       });
     const dayRequests = requests
