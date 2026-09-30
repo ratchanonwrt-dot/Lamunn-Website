@@ -26,6 +26,9 @@ export async function POST(req: NextRequest) {
   if (formType !== "PND3" && formType !== "PND53") {
     return NextResponse.json({ error: "แบบที่ยื่นต้องเป็น ภ.ง.ด.3 หรือ ภ.ง.ด.53" }, { status: 400 });
   }
+  if (formType === "PND3" && !String(payeeAddress ?? "").trim()) {
+    return NextResponse.json({ error: "กรอกที่อยู่ผู้ถูกหักภาษีสำหรับหนังสือรับรอง 50 ทวิ ภ.ง.ด.3" }, { status: 400 });
+  }
 
   const base = toSatang(baseAmount);
   if (base <= 0) return NextResponse.json({ error: "จำนวนเงินต้องมากกว่า 0" }, { status: 400 });
@@ -73,7 +76,7 @@ export async function POST(req: NextRequest) {
       partnerId: partnerId || null,
       payeeName: String(payeeName).trim(),
       payeeTaxId: payeeTaxId || null,
-      payeeAddress: payeeAddress || null,
+      payeeAddress: String(payeeAddress ?? "").trim() || null,
       payeeBranchTag: payeeBranchTag || null,
       incomeType: String(incomeType).trim(),
       baseAmount: toBaht(base),

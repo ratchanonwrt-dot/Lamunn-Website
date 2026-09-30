@@ -5,6 +5,7 @@ import { requireSectionPage } from "@/lib/permissions";
 import { getAllSettings } from "@/lib/settings";
 import { bahtTextFromSatang } from "@/lib/accounting/bahtText";
 import { fmtSatang, toSatang } from "@/lib/accounting/money";
+import { resolveWhtPayeeAddress } from "@/lib/accounting/withholding";
 import PrintButton from "@/components/accounting/PrintButton";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +52,10 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
   await requireSectionPage("ACCOUNTING");
   const [settings, certificate] = await Promise.all([
     getAllSettings(),
-    prisma.accWhtCertificate.findUnique({ where: { id: params.id } }),
+    prisma.accWhtCertificate.findUnique({
+      where: { id: params.id },
+      include: { partner: { select: { address: true } } },
+    }),
   ]);
   if (!certificate) notFound();
 
@@ -65,13 +69,14 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
     base: fmtSatang(base, { zeroDash: false }),
     wht: fmtSatang(wht, { zeroDash: false }),
   };
+  const reportPath = certificate.formType === "PND3" ? "pnd3" : "pnd53";
 
   return (
     <div>
       <style>{`@page { size: A4 portrait; margin: 7mm; } @media print { html, body { background: white !important; } }`}</style>
       <div className="mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3 print:hidden">
-        <Link href={`/accounting/tax-reports/pnd53?year=${year}&month=${month}`} className="text-sm text-gray-500 hover:text-brand-700 hover:underline">
-          ← กลับไป ภ.ง.ด.53
+        <Link href={`/accounting/tax-reports/${reportPath}?year=${year}&month=${month}`} className="text-sm text-gray-500 hover:text-brand-700 hover:underline">
+          ← กลับไป {certificate.formType === "PND3" ? "ภ.ง.ด.3" : "ภ.ง.ด.53"}
         </Link>
         <PrintButton label="พิมพ์หนังสือรับรอง 50 ทวิ" />
       </div>
@@ -103,7 +108,7 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
             address={WHT_PAYER_ADDRESS}
             taxId={WHT_PAYER_TAX_ID}
           />
-          <PartyBox title="ผู้ถูกหักภาษี ณ ที่จ่าย" name={`${certificate.payeeName}${certificate.payeeBranchTag ? ` (${certificate.payeeBranchTag})` : ""}`} address={certificate.payeeAddress || "-"} taxId={certificate.payeeTaxId || ""} />
+          <PartyBox title="ผู้ถูกหักภาษี ณ ที่จ่าย" name={`${certificate.payeeName}${certificate.payeeBranchTag ? ` (${certificate.payeeBranchTag})` : ""}`} address={resolveWhtPayeeAddress(certificate)} taxId={certificate.payeeTaxId || ""} />
 
           <section className="flex items-center gap-2 border-b border-black px-1 py-1">
             <div className="w-48">

@@ -13,6 +13,7 @@ interface PartnerOption {
   type: "DEBTOR" | "CREDITOR";
   phone: string | null;
   taxId: string | null;
+  address: string | null;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -65,7 +66,13 @@ export default function WhtCertificateForm({
 
   function pickPartner(id: string) {
     const p = partners.find((x) => x.id === id);
-    setForm((f) => ({ ...f, partnerId: id, payeeName: p ? p.name : f.payeeName, payeeTaxId: p?.taxId ?? f.payeeTaxId }));
+    setForm((f) => ({
+      ...f,
+      partnerId: id,
+      payeeName: p ? p.name : f.payeeName,
+      payeeTaxId: p?.taxId ?? f.payeeTaxId,
+      payeeAddress: p?.address ?? f.payeeAddress,
+    }));
   }
 
   function pickIncomeType(label: string) {
@@ -144,8 +151,9 @@ export default function WhtCertificateForm({
           <input value={form.payeeTaxId} onChange={(e) => setForm({ ...form, payeeTaxId: e.target.value })} maxLength={13} className={field} />
         </label>
         <label className={label}>
-          ที่อยู่ผู้รับเงิน
-          <input value={form.payeeAddress} onChange={(e) => setForm({ ...form, payeeAddress: e.target.value })} className={field} />
+          ที่อยู่ผู้ถูกหักภาษี
+          <input required={form.formType === "PND3"} value={form.payeeAddress} onChange={(e) => setForm({ ...form, payeeAddress: e.target.value })} className={field} />
+          {form.formType === "PND3" && <span className="mt-1 block text-[11px] text-gray-400">จำเป็นสำหรับหนังสือรับรอง 50 ทวิ</span>}
         </label>
 
         <label className={`${label} sm:col-span-2`}>
