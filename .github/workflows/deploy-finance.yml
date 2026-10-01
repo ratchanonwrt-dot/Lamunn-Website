@@ -55,7 +55,9 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          npx vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" --scope lamunncrm --regions sin1 \
+          # tee กลบ exit code ของ Vercel ได้ จึงต้องเปิด pipefail เพื่อไม่ให้ deploy ล้มแต่ workflow ขึ้นเขียว
+          set -o pipefail
+          npx vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" --regions sin1 \
             --meta gitCommit="${{ github.sha }}" --meta gitAuthor="${{ github.actor }}" | tee deploy.log
           URL=$(grep -oE 'https://[a-z0-9.-]+\.vercel\.app' deploy.log | tail -1)
           echo "deployed: $URL"
