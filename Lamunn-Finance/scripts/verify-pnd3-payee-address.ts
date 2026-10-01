@@ -49,7 +49,7 @@ async function main() {
       include: { partner: { select: { address: true } } },
     });
     certificateIds.push(legacyCertificate.id);
-    check("เอกสารเก่า ภ.ง.ด.3 ใช้ที่อยู่จากคู่ค้า", resolveWhtPayeeAddress(legacyCertificate), partner.address);
+    check("เอกสารเก่า ภ.ง.ด.3 ใช้ที่อยู่จากคู่ค้า", await resolveWhtPayeeAddress(legacyCertificate), partner.address);
 
     const snapshotCertificate = await prisma.accWhtCertificate.create({
       data: {
@@ -68,7 +68,29 @@ async function main() {
       include: { partner: { select: { address: true } } },
     });
     certificateIds.push(snapshotCertificate.id);
-    check("เอกสารใหม่ใช้ที่อยู่ snapshot ก่อนข้อมูลคู่ค้า", resolveWhtPayeeAddress(snapshotCertificate), "[test] ที่อยู่ตอนออกหนังสือรับรอง");
+    check("เอกสารใหม่ใช้ที่อยู่ snapshot ก่อนข้อมูลคู่ค้า", await resolveWhtPayeeAddress(snapshotCertificate), "[test] ที่อยู่ตอนออกหนังสือรับรอง");
+
+    const unlinkedLegacyCertificate = await prisma.accWhtCertificate.create({
+      data: {
+        docNo: `[test]-PND3-UNLINKED-${suffix}`,
+        payDate: date,
+        formType: "PND3",
+        payeeName: partner.name,
+        payeeTaxId: partner.taxId,
+        payeeAddress: null,
+        incomeType: "ค่าบริการ ม.40(2)",
+        baseAmount: 3000,
+        whtRate: 0.03,
+        whtAmount: 90,
+      },
+      include: { partner: { select: { address: true } } },
+    });
+    certificateIds.push(unlinkedLegacyCertificate.id);
+    check(
+      "เอกสารเก่าที่ไม่ผูกคู่ค้าเทียบที่อยู่ด้วยเลขผู้เสียภาษี",
+      await resolveWhtPayeeAddress(unlinkedLegacyCertificate),
+      partner.address,
+    );
   } finally {
     console.log("ลบข้อมูลทดสอบด้วย id ที่สร้างในรอบนี้...");
     for (const id of certificateIds.reverse()) {
