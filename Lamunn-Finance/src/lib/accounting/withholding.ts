@@ -1,13 +1,43 @@
 import { prisma } from "@lamunn/db-finance";
 
 type WhtDocNoClient = Pick<typeof prisma, "accWhtCertificate">;
+type WhtPayeeAddressClient = Pick<typeof prisma, "accPartner" | "accWhtCertificate">;
 
-export function resolveWhtPayeeAddress(certificate: {
+export async function resolveWhtPayeeAddress(certificate: {
+  id: string;
+  payeeName: string;
+  payeeTaxId: string | null;
   payeeAddress: string | null;
   partner?: { address: string | null } | null;
-}): string {
-  // เอกสารเก่าบางใบยังไม่มี snapshot ที่อยู่ จึงใช้ข้อมูลคู่ค้าเป็นทางสำรองเพื่อให้ 50 ทวิไม่พิมพ์เป็นขีด
-  return certificate.payeeAddress?.trim() || certificate.partner?.address?.trim() || "-";
+}, db: WhtPayeeAddressClient = prisma): Promise<string> {
+  const savedAddress = certificate.payeeAddress?.trim() || certificate.partner?.address?.trim();
+  if (savedAddress) return savedAddress;
+
+  const taxId = certificate.payeeTaxId?.replace(/\D/g, "") ?? "";
+  const taxIds = [...new Set([certificate.payeeTaxId?.trim(), taxId].filter((value): value is string => Boolean(value)))];
+  const identity = taxIds.length
+    ? { taxId: { in: taxIds } }
+    : { name: certificate.payeeName.trim() };
+
+  const [matchingPartner, matchingCertificate] = await Promise.all([
+    db.accPartner.findFirst({
+      where: { ...identity, address: { not: null } },
+      orderBy: { updatedAt: "desc" },
+      select: { address: true },
+    }),
+    db.accWhtCertificate.findFirst({
+      where: {
+        id: { not: certificate.id },
+        ...(taxIds.length ? { payeeTaxId: { in: taxIds } } : { payeeName: certificate.payeeName.trim() }),
+        payeeAddress: { not: null },
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { payeeAddress: true },
+    }),
+  ]);
+
+  // เอกสารเก่าหลายใบไม่มี partnerId จึงต้องเทียบตัวตนจากเลขผู้เสียภาษี และใช้เอกสารใบอื่นเป็นทางสำรองสุดท้าย
+  return matchingPartner?.address?.trim() || matchingCertificate?.payeeAddress?.trim() || "-";
 }
 
 /** เลขที่หนังสือรับรองรันต่อเนื่องต่อเดือน เช่น WHT-6909-0004 */

@@ -70,6 +70,7 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
     wht: fmtSatang(wht, { zeroDash: false }),
   };
   const reportPath = certificate.formType === "PND3" ? "pnd3" : "pnd53";
+  const payeeAddress = await resolveWhtPayeeAddress(certificate);
 
   return (
     <div>
@@ -108,7 +109,7 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
             address={WHT_PAYER_ADDRESS}
             taxId={WHT_PAYER_TAX_ID}
           />
-          <PartyBox title="ผู้ถูกหักภาษี ณ ที่จ่าย" name={`${certificate.payeeName}${certificate.payeeBranchTag ? ` (${certificate.payeeBranchTag})` : ""}`} address={resolveWhtPayeeAddress(certificate)} taxId={certificate.payeeTaxId || ""} />
+          <PartyBox title="ผู้ถูกหักภาษี ณ ที่จ่าย" name={`${certificate.payeeName}${certificate.payeeBranchTag ? ` (${certificate.payeeBranchTag})` : ""}`} address={payeeAddress} taxId={certificate.payeeTaxId || ""} />
 
           <section className="flex items-center gap-2 border-b border-black px-1 py-1">
             <div className="w-48">
