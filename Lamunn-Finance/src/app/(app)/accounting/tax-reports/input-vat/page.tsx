@@ -10,7 +10,7 @@ import StatementShell from "@/components/accounting/StatementShell";
 import PurchaseTaxInvoiceForm from "@/components/accounting/PurchaseTaxInvoiceForm";
 import VoidDocButton from "@/components/accounting/VoidDocButton";
 import EditPurchaseInvoiceButton from "@/components/accounting/EditPurchaseInvoiceButton";
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, Printer } from "lucide-react";
 import { buildInputVatReport } from "@/lib/accounting/taxReports";
 import { fmtSatang } from "@/lib/accounting/money";
 
@@ -57,12 +57,22 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
         </div>
         <div className="flex flex-wrap items-start gap-2">
           {report.rows.length > 0 && (
-            <a
-              href={`/api/accounting/tax-reports/input-vat/export?year=${year}&month=${month}`}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
-            >
-              <FileSpreadsheet size={15} /> Export Excel
-            </a>
+            <>
+              <Link
+                href={`/print/input-vat?year=${year}&month=${month}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"
+              >
+                <Printer size={15} /> พิมพ์ / PDF
+              </Link>
+              <a
+                href={`/api/accounting/tax-reports/input-vat/export?year=${year}&month=${month}`}
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+              >
+                <FileSpreadsheet size={15} /> Export Excel
+              </a>
+            </>
           )}
           {canEdit && (
             <PurchaseTaxInvoiceForm
