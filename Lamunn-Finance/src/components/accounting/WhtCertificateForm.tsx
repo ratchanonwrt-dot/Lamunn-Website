@@ -13,6 +13,7 @@ interface PartnerOption {
   type: "DEBTOR" | "CREDITOR";
   phone: string | null;
   taxId: string | null;
+  branchTag: string | null;
   address: string | null;
 }
 
@@ -71,6 +72,7 @@ export default function WhtCertificateForm({
       partnerId: id,
       payeeName: p ? p.name : f.payeeName,
       payeeTaxId: p?.taxId ?? f.payeeTaxId,
+      payeeBranchTag: p?.branchTag ?? f.payeeBranchTag,
       payeeAddress: p?.address ?? f.payeeAddress,
     }));
   }

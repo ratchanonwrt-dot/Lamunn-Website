@@ -10,7 +10,7 @@ export default function AddPartnerForm() {
   const [submitting, setSubmitting] = useState(false);
   const busy = submitting || refreshing;
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", type: "CREDITOR", phone: "", taxId: "", address: "", note: "" });
+  const [form, setForm] = useState({ name: "", type: "CREDITOR", phone: "", taxId: "", branchTag: "", address: "", note: "" });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,7 +27,7 @@ export default function AddPartnerForm() {
       setError(data.error ?? "บันทึกไม่สำเร็จ");
       return;
     }
-    setForm({ name: "", type: "CREDITOR", phone: "", taxId: "", address: "", note: "" });
+    setForm({ name: "", type: "CREDITOR", phone: "", taxId: "", branchTag: "", address: "", note: "" });
     setOpen(false);
     refresh();
   }
@@ -82,6 +82,15 @@ export default function AddPartnerForm() {
           <input
             value={form.taxId}
             onChange={(e) => setForm({ ...form, taxId: e.target.value })}
+            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900"
+          />
+        </label>
+        <label className="text-xs text-gray-500">
+          สาขา / สำนักงานใหญ่
+          <input
+            value={form.branchTag}
+            onChange={(e) => setForm({ ...form, branchTag: e.target.value })}
+            placeholder="เช่น สำนักงานใหญ่ หรือ 00001"
             className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900"
           />
         </label>

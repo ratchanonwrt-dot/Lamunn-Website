@@ -15,6 +15,7 @@ interface PartnerOption {
   type: "DEBTOR" | "CREDITOR";
   phone: string | null;
   taxId: string | null;
+  branchTag: string | null;
   address: string | null;
 }
 
@@ -74,6 +75,7 @@ export default function PurchaseTaxInvoiceForm({
       partnerId: id,
       vendorName: p ? p.name : f.vendorName,
       vendorTaxId: p?.taxId ?? f.vendorTaxId,
+      vendorBranchTag: p?.branchTag ?? f.vendorBranchTag,
       vendorAddress: p?.address ?? f.vendorAddress,
     }));
   }

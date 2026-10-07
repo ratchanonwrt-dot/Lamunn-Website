@@ -10,6 +10,7 @@ export interface PartnerListItem {
   type: "DEBTOR" | "CREDITOR";
   phone: string | null;
   taxId: string | null;
+  branchTag: string | null;
   address: string | null;
   note: string | null;
   isActive: boolean;
@@ -45,7 +46,7 @@ export default function PartnerList({ partners, canEdit }: { partners: PartnerLi
   const q = query.trim().toLowerCase();
   const filtered = useMemo(() => {
     if (!q) return items;
-    return items.filter((p) => [p.name, p.taxId, p.phone, p.note, p.address].some((f) => (f ?? "").toLowerCase().includes(q)));
+    return items.filter((p) => [p.name, p.taxId, p.phone, p.branchTag, p.note, p.address].some((f) => (f ?? "").toLowerCase().includes(q)));
   }, [items, q]);
 
   return (
@@ -56,7 +57,7 @@ export default function PartnerList({ partners, canEdit }: { partners: PartnerLi
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="ค้นหาชื่อ / เลขผู้เสียภาษี / เบอร์โทร / หมายเหตุ"
+            placeholder="ค้นหาชื่อ / เลขผู้เสียภาษี / สาขา / เบอร์โทร / หมายเหตุ"
             className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-9 text-sm text-gray-900"
           />
           {query && (
@@ -99,7 +100,7 @@ export default function PartnerList({ partners, canEdit }: { partners: PartnerLi
                     .map((p) =>
                       editingId === p.id ? (
                         <tr key={p.id} className="border-b border-gray-100 bg-brand-50/40">
-                          <td colSpan={6} className="p-4">
+                          <td colSpan={7} className="p-4">
                             <PartnerEditForm
                               partner={p}
                               onSaved={(changes) => {
@@ -118,6 +119,7 @@ export default function PartnerList({ partners, canEdit }: { partners: PartnerLi
                           </td>
                           <td className="py-2 text-xs text-gray-400">{p.phone ?? ""}</td>
                           <td className="py-2 font-mono text-xs text-gray-400">{p.taxId ?? ""}</td>
+                          <td className="py-2 text-xs text-gray-500">{p.branchTag ? `สาขา/สำนักงานใหญ่: ${p.branchTag}` : ""}</td>
                           <td className="py-2 text-xs text-gray-400">{p.note ?? ""}</td>
                           <td className="w-24 py-2 text-right text-xs text-gray-400">
                             {p.usedCount ? `${p.usedCount} รายการ` : ""}
@@ -241,6 +243,7 @@ function PartnerEditForm({
     type: partner.type,
     phone: partner.phone ?? "",
     taxId: partner.taxId ?? "",
+    branchTag: partner.branchTag ?? "",
     address: partner.address ?? "",
     note: partner.note ?? "",
   });
@@ -266,6 +269,7 @@ function PartnerEditForm({
       type: form.type,
       phone: form.phone.trim() || null,
       taxId: form.taxId.trim() || null,
+      branchTag: form.branchTag.trim() || null,
       address: form.address.trim() || null,
       note: form.note.trim() || null,
     });
@@ -301,7 +305,16 @@ function PartnerEditForm({
           เบอร์โทร
           <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={field} />
         </label>
-        <label className={`${label} lg:col-span-3`}>
+        <label className={label}>
+          สาขา / สำนักงานใหญ่
+          <input
+            value={form.branchTag}
+            onChange={(e) => setForm({ ...form, branchTag: e.target.value })}
+            placeholder="เช่น สำนักงานใหญ่ หรือ 00001"
+            className={field}
+          />
+        </label>
+        <label className={`${label} lg:col-span-2`}>
           ที่อยู่
           <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={field} />
         </label>

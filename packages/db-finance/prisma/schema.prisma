@@ -791,14 +791,15 @@ enum AccPartnerType {
 
 // คู่ค้า — ใช้เป็นทั้งฐานข้อมูลลูกหนี้/เจ้าหนี้ และตัวเลือก "จ่ายให้ใคร" ตอนคีย์ใบสำคัญ (ดู AccJournalLine.partnerId)
 model AccPartner {
-  id       String         @id @default(cuid())
-  name     String
-  type     AccPartnerType
-  phone    String?
-  taxId    String?
-  address  String?
-  note     String?
-  isActive Boolean        @default(true)
+  id        String         @id @default(cuid())
+  name      String
+  type      AccPartnerType
+  phone     String?
+  taxId     String?
+  branchTag String?
+  address   String?
+  note      String?
+  isActive  Boolean        @default(true)
 
   lines               AccJournalLine[]
   purchaseTaxInvoices AccPurchaseTaxInvoice[]
