@@ -8,7 +8,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!staff) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, type, phone, taxId, address, note, isActive } = body;
+  const { name, type, phone, taxId, branchTag, address, note, isActive } = body;
 
   const data: Record<string, unknown> = {};
   if (name !== undefined) data.name = String(name).trim();
@@ -18,6 +18,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
   if (phone !== undefined) data.phone = phone || null;
   if (taxId !== undefined) data.taxId = taxId || null;
+  if (branchTag !== undefined) data.branchTag = String(branchTag).trim() || null;
   if (address !== undefined) data.address = address || null;
   if (note !== undefined) data.note = note || null;
   if (isActive !== undefined) data.isActive = !!isActive;

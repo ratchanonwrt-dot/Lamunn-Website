@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const staff = await requireSectionApi("ACCOUNTING", "edit");
   if (!staff) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { name, type, phone, taxId, address, note } = await req.json();
+  const { name, type, phone, taxId, branchTag, address, note } = await req.json();
   if (!name || !type) return NextResponse.json({ error: "กรอกชื่อและประเภท (ลูกหนี้/เจ้าหนี้) ให้ครบ" }, { status: 400 });
   if (!["DEBTOR", "CREDITOR"].includes(type)) return NextResponse.json({ error: "ประเภทไม่ถูกต้อง" }, { status: 400 });
 
@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
       type,
       phone: phone || null,
       taxId: taxId || null,
+      branchTag: String(branchTag ?? "").trim() || null,
       address: address || null,
       note: note || null,
     },

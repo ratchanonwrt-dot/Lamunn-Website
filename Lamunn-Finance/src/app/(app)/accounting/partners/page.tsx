@@ -39,6 +39,7 @@ export default async function PartnersPage() {
           type: p.type,
           phone: p.phone,
           taxId: p.taxId,
+          branchTag: p.branchTag,
           address: p.address,
           note: p.note,
           isActive: p.isActive,

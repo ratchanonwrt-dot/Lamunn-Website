@@ -46,7 +46,7 @@ export const getPartnerOptions = unstable_cache(
   async () =>
     prisma.accPartner.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, type: true, phone: true, taxId: true, isActive: true },
+      select: { id: true, name: true, type: true, phone: true, taxId: true, branchTag: true, isActive: true },
     }),
   ["acc-partner-options"],
   { tags: [ACC_PARTNERS_TAG] }

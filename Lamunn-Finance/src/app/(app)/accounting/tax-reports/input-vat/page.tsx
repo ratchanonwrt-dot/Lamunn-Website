@@ -31,7 +31,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
     prisma.accPartner.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, type: true, phone: true, taxId: true, address: true },
+      select: { id: true, name: true, type: true, phone: true, taxId: true, branchTag: true, address: true },
     }),
     // บัญชีสำหรับสร้างใบสำคัญให้อัตโนมัติ — เดบิตเป็นค่าใช้จ่าย/สินทรัพย์ เครดิตเป็นเงิน/เจ้าหนี้
     prisma.accAccount.findMany({
