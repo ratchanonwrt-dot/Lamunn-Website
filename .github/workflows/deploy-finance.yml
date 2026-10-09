@@ -1,21 +1,25 @@
-# Deploy Lamunn-Finance ขึ้น production อัตโนมัติเมื่อมี commit เข้า master
+# อัปเดตฐานข้อมูล (prisma migrate) ของ Lamunn-Finance อัตโนมัติเมื่อมี migration ใหม่เข้า master
 #
-# แทนการรัน `vercel --prod` จากเครื่องใครคนหนึ่ง — ทุกคน (รวม AI agent ของทีมบัญชี) แค่ merge PR
-# ก็ขึ้นเว็บจริงได้ โดยไม่ต้องมีสิทธิ์ใน Vercel เลย
+# ตัว "deploy ขึ้นเว็บ" ไม่ได้อยู่ที่นี่แล้ว — Vercel ที่เชื่อมกับ GitHub ไว้ build + deploy production เองทุกครั้งที่
+# master เปลี่ยน (ตั้งค่าใน Lamunn-Finance/vercel.json: branch acc/* กับ fin/* ไม่สร้าง preview)
+#
+# ทำไมไม่ deploy จาก Action: ขั้น `vercel deploy` ที่นี่ล้มทุกรอบตั้งแต่ run #17 ("Could not retrieve Project
+# Settings") ขณะที่ production ขึ้นผ่าน Vercel Git มาตลอด ถ้าเปิดทั้งสองทางพร้อมกันจะ deploy ซ้ำ 2 รอบต่อการ merge
+# จึงให้ Action ทำเฉพาะงานที่ Vercel ทำแทนไม่ได้ คือรัน migration ด้วยค่าลับของฐานข้อมูล production
+#
+# ลำดับเวลา: migration เสร็จในราว 35 วินาทีหลัง merge ส่วน Vercel build ราว 1 นาที ปกติฐานข้อมูลจึงพร้อมก่อน
+# โค้ดใหม่ขึ้นเว็บ — แต่ไม่ได้รับประกัน ถ้า PR ไหนเพิ่มคอลัมน์ที่โค้ดใหม่ต้องใช้ทันที ให้แยก PR migration ไป merge ก่อน
 #
 # Secrets ที่ต้องตั้งใน GitHub → Settings → Secrets and variables → Actions:
-#   VERCEL_TOKEN   token ของเจ้าของ (vercel.com/account/tokens)
-#   DATABASE_URL   / DIRECT_URL   ค่าเดียวกับใน Lamunn-Finance/.env ของเครื่อง production (ใช้รัน migration)
-#
-# ORG/PROJECT id ไม่ใช่ความลับ — เป็นค่าใน .vercel/project.json ที่ถูก gitignore ไว้
+#   DATABASE_URL   / DIRECT_URL   ค่าเดียวกับใน Lamunn-Finance/.env ของเครื่อง production
+# (VERCEL_TOKEN ไม่ได้ใช้แล้ว ลบทิ้งได้)
 name: deploy-finance
 
 on:
   push:
     branches: [master]
     paths:
-      - "Lamunn-Finance/**"
-      - "packages/db-finance/**"
+      - "packages/db-finance/prisma/**"
       - ".github/workflows/deploy-finance.yml"
   workflow_dispatch:
 
@@ -23,12 +27,8 @@ concurrency:
   group: deploy-finance
   cancel-in-progress: false
 
-env:
-  VERCEL_ORG_ID: team_Sh5GLzkkONrmAJCYkHApaXFH
-  VERCEL_PROJECT_ID: prj_y8ZSjhGjZvYgKtTZqQZZFvVkuKBy
-
 jobs:
-  deploy:
+  migrate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,25 +41,9 @@ jobs:
       - name: ติดตั้ง dependencies
         run: npm ci
 
-      # รัน migration ก่อน deploy เสมอ — โค้ดใหม่อาจอ้างคอลัมน์ใหม่ ถ้า deploy ก่อนหน้าเว็บจะพังชั่วคราว
       # prisma migrate deploy ทำเฉพาะ migration ที่ยังไม่เคยรัน (idempotent) รันซ้ำได้ปลอดภัย
       - name: รัน database migration
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: npx prisma migrate deploy --schema packages/db-finance/prisma/schema.prisma
-
-      # ต้อง deploy จาก root ของ monorepo (Root Directory ของโปรเจกต์ Vercel ตั้งเป็น Lamunn-Finance)
-      # และบังคับ region sin1 ให้อยู่ใกล้ Supabase — regions ใน vercel.json ถูก CLI มองข้าม
-      - name: Deploy to Vercel (production)
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          # tee กลบ exit code ของ Vercel ได้ จึงต้องเปิด pipefail เพื่อไม่ให้ deploy ล้มแต่ workflow ขึ้นเขียว
-          set -o pipefail
-          npx vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" --regions sin1 \
-            --meta gitCommit="${{ github.sha }}" --meta gitAuthor="${{ github.actor }}" | tee deploy.log
-          URL=$(grep -oE 'https://[a-z0-9.-]+\.vercel\.app' deploy.log | tail -1)
-          echo "deployed: $URL"
-          echo "### Deployed ✅" >> "$GITHUB_STEP_SUMMARY"
-          echo "$URL  (commit ${{ github.sha }} by ${{ github.actor }})" >> "$GITHUB_STEP_SUMMARY"
