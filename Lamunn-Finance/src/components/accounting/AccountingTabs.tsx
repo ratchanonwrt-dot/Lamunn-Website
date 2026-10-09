@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Video } from "lucide-react";
 import clsx from "clsx";
 
 const TABS = [
@@ -17,7 +16,6 @@ const TABS = [
   { href: "/accounting/tax-invoices", label: "ใบกำกับภาษีเต็มรูป", color: "amber" },
   { href: "/accounting/tax-reports", label: "รายงานภาษี", color: "yellow" },
   { href: "/accounting/accounts", label: "ผังบัญชี", color: "slate" },
-  { href: "/accounting/live-payouts", label: "ทำจ่ายคนไลฟ์", color: "rose" },
 ];
 
 const TAB_COLORS = {
@@ -32,7 +30,6 @@ const TAB_COLORS = {
   amber: ["bg-amber-500 text-white", "text-amber-700 bg-amber-50 hover:bg-amber-100"],
   yellow: ["bg-yellow-500 text-white", "text-yellow-700 bg-yellow-50 hover:bg-yellow-100"],
   slate: ["bg-slate-600 text-white", "text-slate-700 bg-slate-50 hover:bg-slate-100"],
-  rose: ["bg-rose-600 text-white", "text-rose-700 bg-rose-50 hover:bg-rose-100"],
 } as const;
 
 export default function AccountingTabs() {
@@ -53,9 +50,6 @@ export default function AccountingTabs() {
             )}
           >
             {t.label}
-            {t.href === "/accounting/live-payouts" && (
-              <Video size={16} className="ml-1.5 inline-block align-text-bottom" aria-hidden="true" />
-            )}
           </Link>
         );
       })}
