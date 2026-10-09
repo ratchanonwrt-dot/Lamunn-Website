@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const staff = await requireSectionApi("ACCOUNTING", "edit");
   if (!staff) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { date, journalType, description, lines, postNow, autokeyDocumentId, autokeyTaxReview } = await req.json();
+  const { date, journalType, description, lines, postNow, autokeyDocumentId, autokeyDraftId, autokeyTaxReview } = await req.json();
   if (!date || !description) return NextResponse.json({ error: "กรอกวันที่และคำอธิบายรายการ" }, { status: 400 });
   if (!Array.isArray(lines)) return NextResponse.json({ error: "ไม่มีบรรทัดรายการ" }, { status: 400 });
 
@@ -27,9 +27,16 @@ export async function POST(req: NextRequest) {
     const autokeyDocument = autokeyDocumentId
       ? await prisma.accAutokeyDocument.findUnique({ where: { id: String(autokeyDocumentId) } })
       : null;
+    const autokeyDraft = autokeyDraftId
+      ? await prisma.accAutokeyDraft.findUnique({ where: { id: String(autokeyDraftId) }, include: { document: true } })
+      : null;
     if (autokeyDocumentId && !autokeyDocument) return NextResponse.json({ error: "ไม่พบเอกสาร AI Autokey" }, { status: 404 });
+    if (autokeyDraftId && !autokeyDraft) return NextResponse.json({ error: "ไม่พบร่าง AI Autokey ของหน้านี้" }, { status: 404 });
+    if (autokeyDocument && autokeyDraft) return NextResponse.json({ error: "ข้อมูลอ้างอิง AI Autokey ซ้ำซ้อน" }, { status: 400 });
     if (autokeyDocument?.entryId) return NextResponse.json({ error: "เอกสารนี้สร้างใบสำคัญแล้ว" }, { status: 409 });
-    const normalizedTaxReview = autokeyDocument ? {
+    if (autokeyDraft?.entryId) return NextResponse.json({ error: "หน้าเอกสารนี้สร้างใบสำคัญแล้ว" }, { status: 409 });
+    const autokeySource = autokeyDraft?.document ?? autokeyDocument;
+    const normalizedTaxReview = autokeySource ? {
       isClaimableVat: autokeyTaxReview?.isClaimableVat !== false,
       whtFormType: ["PND3", "PND53"].includes(autokeyTaxReview?.whtFormType) ? autokeyTaxReview.whtFormType as "PND3" | "PND53" : null,
       whtRatePercent: Number.isFinite(Number(autokeyTaxReview?.whtRatePercent)) ? Number(autokeyTaxReview.whtRatePercent) : null,
@@ -38,7 +45,7 @@ export async function POST(req: NextRequest) {
     if (normalizedTaxReview?.whtFormType && (!(normalizedTaxReview.whtRatePercent && normalizedTaxReview.whtRatePercent > 0 && normalizedTaxReview.whtRatePercent <= 100) || !normalizedTaxReview.incomeType)) {
       return NextResponse.json({ error: "กรุณายืนยันอัตราหักและประเภทเงินได้ก่อนบันทึกร่าง" }, { status: 400 });
     }
-    if (autokeyDocument) {
+    if (autokeySource) {
       const accountIds = (lines as LineInput[]).map((line) => line.accountId).filter(Boolean);
       const taxAccounts = await prisma.accAccount.findMany({
         where: { id: { in: accountIds }, vatRole: { in: ["INPUT", "WHT"] } },
@@ -56,9 +63,9 @@ export async function POST(req: NextRequest) {
       journalType: journalType || "GENERAL",
       description: String(description).trim(),
       // เอกสารจาก AI ต้องเริ่มเป็นร่างเสมอ ต่อให้ client ส่ง postNow ผิดมาก็ห้ามข้ามการตรวจของคน
-      status: autokeyDocument ? "DRAFT" : postNow ? "POSTED" : "DRAFT",
-      sourceType: autokeyDocument ? "AI_AUTOKEY" : null,
-      sourceKey: autokeyDocument?.fileHash ?? null,
+      status: autokeySource ? "DRAFT" : postNow ? "POSTED" : "DRAFT",
+      sourceType: autokeySource ? "AI_AUTOKEY" : null,
+      sourceKey: autokeyDraft ? `${autokeyDraft.document.fileHash}:page:${autokeyDraft.pageNumber}` : autokeyDocument?.fileHash ?? null,
       userId: staff.staffId,
       lines: (lines as LineInput[]).map((l) => ({
         accountId: l.accountId,
@@ -70,7 +77,22 @@ export async function POST(req: NextRequest) {
         docNo: l.docNo || null,
       })),
     });
-    if (autokeyDocument) {
+    if (autokeyDraft) {
+      await prisma.accAutokeyDraft.update({
+        where: { id: autokeyDraft.id },
+        data: {
+          entryId: entry.id,
+          reviewedBy: staff.staffId,
+          reviewedAt: new Date(),
+          reviewedData: { date, journalType, description, lines, taxReview: normalizedTaxReview },
+        },
+      });
+      const remaining = await prisma.accAutokeyDraft.count({ where: { documentId: autokeyDraft.documentId, entryId: null } });
+      await prisma.accAutokeyDocument.update({
+        where: { id: autokeyDraft.documentId },
+        data: { status: remaining === 0 ? "DRAFTED" : "REVIEW", reviewedBy: staff.staffId, reviewedAt: new Date() },
+      });
+    } else if (autokeyDocument) {
       await prisma.accAutokeyDocument.update({
         where: { id: autokeyDocument.id },
         data: {

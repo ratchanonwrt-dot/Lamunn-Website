@@ -862,6 +862,7 @@ model AccJournalEntry {
 
   lines AccJournalLine[]
   autokeyDocument AccAutokeyDocument?
+  autokeyDraft    AccAutokeyDraft?
 
   createdBy String?
   postedAt  DateTime?
@@ -899,6 +900,7 @@ model AccAutokeyDocument {
   entryId       String?          @unique
   entry         AccJournalEntry? @relation(fields: [entryId], references: [id], onDelete: SetNull)
   chunks        AccAutokeyFileChunk[]
+  drafts        AccAutokeyDraft[]
   createdBy     String?
   reviewedBy    String?
   reviewedAt    DateTime?
@@ -907,6 +909,27 @@ model AccAutokeyDocument {
 
   @@index([status, createdAt])
   @@map("acc_autokey_documents")
+}
+
+// PDF หนึ่งไฟล์อาจมีเอกสารหลายหน้า จึงแยกผลตรวจและใบสำคัญของแต่ละหน้า
+// เพื่อไม่ให้การยืนยันหน้าหนึ่งไปล็อกหรือเขียนทับหน้าที่เหลือ
+model AccAutokeyDraft {
+  id            String              @id @default(cuid())
+  documentId    String
+  document      AccAutokeyDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  pageNumber    Int
+  extractedData Json
+  reviewedData  Json?
+  entryId       String?             @unique
+  entry         AccJournalEntry?    @relation(fields: [entryId], references: [id], onDelete: SetNull)
+  createdBy     String?
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([documentId, pageNumber])
+  @@map("acc_autokey_drafts")
 }
 
 model AccAutokeyFileChunk {

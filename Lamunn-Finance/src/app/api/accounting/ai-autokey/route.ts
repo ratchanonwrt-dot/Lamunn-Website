@@ -12,8 +12,22 @@ export async function POST(req: NextRequest) {
   }
   if (!/^[a-f0-9]{64}$/i.test(fileHash || "")) return NextResponse.json({ error: "file hash ไม่ถูกต้อง" }, { status: 400 });
 
-  const existing = await prisma.accAutokeyDocument.findUnique({ where: { fileHash } });
+  const existing = await prisma.accAutokeyDocument.findUnique({
+    where: { fileHash },
+    include: { drafts: { orderBy: { pageNumber: "asc" } } },
+  });
   if (existing) {
+    if (existing.drafts.length > 0) {
+      return NextResponse.json({
+        documentId: existing.id,
+        resumed: true,
+        results: existing.drafts.map((draft) => ({
+          ...(draft.extractedData as object),
+          draftId: draft.id,
+          entryId: draft.entryId,
+        })),
+      });
+    }
     if (!existing.entryId) {
       // ถ้า AI เคยล้มเหลวหรือเน็ตขาด ผู้ใช้ต้องอัปโหลดไฟล์เดิมซ้ำได้ ไม่เช่นนั้น hash เดิมจะล็อกเอกสารถาวร
       await prisma.$transaction([
