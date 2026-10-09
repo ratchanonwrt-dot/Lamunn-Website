@@ -55,7 +55,16 @@ interface NavLink {
   icon: typeof LayoutDashboard;
   color: string;
   section: PermissionSection;
+  exact?: boolean;
+  activePrefixes?: string[];
 }
+
+interface NavMenuGroup {
+  label: string;
+  items: NavMenuItem[];
+}
+
+type NavMenuItem = NavLink | NavMenuGroup;
 
 /** สีประจำแต่ละหมวด — ให้เห็นทันทีว่ากำลังอยู่หมวดไหนก่อนจะอ่านตัวหนังสือด้วยซ้ำ
  * (แนวเดียวกับ Nav ของ Employee Manage) เขียนเป็น class string เต็มๆ แทนที่จะประกอบจากตัวแปร
@@ -112,18 +121,48 @@ const accountingLinks: NavLink[] = [
   { href: "/accounting/live-payouts", label: "ทำจ่ายคนไลฟ์", icon: Banknote, color: "bg-lime-100 text-lime-600", section: "ACCOUNTING" },
 ];
 
-// กลุ่ม "งบการเงิน" — ระบบบัญชีคู่ที่ใช้แทน FlowAccount (ผังบัญชี/สมุดรายวัน/งบการเงิน)
-const ledgerLinks: NavLink[] = [
-  { href: "/accounting", label: "ภาพรวมบัญชี", icon: BookOpen, color: "bg-emerald-100 text-emerald-600", section: "ACCOUNTING" },
+// แยกงบการเงินออกจากงานบัญชี เพื่อให้หมวดรีพอร์ตไม่กางรายการยาวจนหาเมนูยาก
+const financialStatementLinks: NavLink[] = [
+  { href: "/accounting", label: "ภาพรวมบัญชี", icon: BookOpen, color: "bg-emerald-100 text-emerald-600", section: "ACCOUNTING", exact: true },
   { href: "/accounting/trial-balance", label: "งบทดลอง", icon: Scale, color: "bg-teal-100 text-teal-600", section: "ACCOUNTING" },
   { href: "/accounting/income-statement", label: "งบกำไรขาดทุน", icon: BarChart3, color: "bg-green-100 text-green-600", section: "ACCOUNTING" },
   { href: "/accounting/balance-sheet", label: "งบแสดงฐานะการเงิน", icon: FileSpreadsheet, color: "bg-sky-100 text-sky-600", section: "ACCOUNTING" },
+];
+
+const taxReportLinks: NavLink[] = [
+  {
+    href: "/accounting/tax-reports",
+    label: "ภ.พ.30",
+    icon: ReceiptText,
+    color: "bg-violet-100 text-violet-600",
+    section: "ACCOUNTING",
+    exact: true,
+    activePrefixes: ["/accounting/tax-reports/input-vat", "/accounting/tax-reports/output-vat"],
+  },
+  {
+    href: "/accounting/tax-reports/pnd3",
+    label: "ภ.ง.ด.",
+    icon: Landmark,
+    color: "bg-fuchsia-100 text-fuchsia-600",
+    section: "ACCOUNTING",
+    exact: true,
+    activePrefixes: ["/accounting/tax-reports/pnd3", "/accounting/tax-reports/pnd53"],
+  },
+];
+
+const accountingReportItems: NavMenuItem[] = [
   { href: "/accounting/journal", label: "สมุดรายวัน", icon: ListTree, color: "bg-indigo-100 text-indigo-600", section: "ACCOUNTING" },
   { href: "/accounting/ledger", label: "บัญชีแยกประเภท", icon: BookOpen, color: "bg-purple-100 text-purple-600", section: "ACCOUNTING" },
+  { href: "/accounting/bank-reconciliation", label: "กระทบยอดเงินฝากธนาคาร", icon: Landmark, color: "bg-cyan-100 text-cyan-600", section: "ACCOUNTING" },
   { href: "/accounting/daily-posting", label: "ลงบัญชียอดขายรายวัน", icon: CalendarDays, color: "bg-blue-100 text-blue-600", section: "ACCOUNTING" },
   { href: "/accounting/tax-invoices", label: "ใบกำกับภาษีเต็มรูป", icon: ReceiptText, color: "bg-rose-100 text-rose-600", section: "ACCOUNTING" },
-  { href: "/accounting/tax-reports", label: "รายงานภาษี (ภ.พ.30 / ภ.ง.ด.)", icon: Landmark, color: "bg-violet-100 text-violet-600", section: "ACCOUNTING" },
+  { label: "รายงานภาษี", items: taxReportLinks },
   { href: "/accounting/partners", label: "คู่ค้า (ลูกหนี้/เจ้าหนี้)", icon: Handshake, color: "bg-amber-100 text-amber-600", section: "ACCOUNTING" },
+];
+
+const reportMenuGroups: NavMenuGroup[] = [
+  { label: "งบการเงิน", items: financialStatementLinks },
+  { label: "บัญชี", items: accountingReportItems },
 ];
 
 // กลุ่ม "อื่นๆ" — ใช้ไม่บ่อยเท่า/งานตั้งค่า
@@ -144,10 +183,37 @@ function isActiveLink(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
+function isNavLink(item: NavMenuItem): item is NavLink {
+  return "href" in item;
+}
+
+function isNavLinkActive(pathname: string, link: NavLink) {
+  const routeMatch = link.exact ? pathname === link.href : isActiveLink(pathname, link.href);
+  return routeMatch || Boolean(link.activePrefixes?.some((prefix) => isActiveLink(pathname, prefix)));
+}
+
+function menuItemHasActive(pathname: string, item: NavMenuItem): boolean {
+  return isNavLink(item)
+    ? isNavLinkActive(pathname, item)
+    : item.items.some((child) => menuItemHasActive(pathname, child));
+}
+
+function filterMenuItems(items: NavMenuItem[], canView: (link: NavLink) => boolean): NavMenuItem[] {
+  const visibleItems: NavMenuItem[] = [];
+  for (const item of items) {
+    if (isNavLink(item)) {
+      if (canView(item)) visibleItems.push(item);
+      continue;
+    }
+    const childItems = filterMenuItems(item.items, canView);
+    if (childItems.length > 0) visibleItems.push({ ...item, items: childItems });
+  }
+  return visibleItems;
+}
+
 function NavLinkRow({ link, pathname, colorful = false }: { link: NavLink; pathname: string; colorful?: boolean }) {
   const Icon = link.icon;
-  // ภาพรวมเป็นทางเข้าของทั้งหมวด จึงต้องเทียบตรง ๆ เพื่อไม่ให้เด่นพร้อมหน้างบที่เลือก
-  const active = colorful && link.href === "/accounting" ? pathname === link.href : isActiveLink(pathname, link.href);
+  const active = isNavLinkActive(pathname, link);
   return (
     <Link
       href={link.href}
@@ -211,6 +277,86 @@ function NavGroup({ title, tone, links, pathname, colorful = false }: { title: s
   );
 }
 
+function NavSubGroup({ group, pathname, depth = 0 }: { group: NavMenuGroup; pathname: string; depth?: number }) {
+  const hasActive = group.items.some((item) => menuItemHasActive(pathname, item));
+  const [open, setOpen] = useState(hasActive);
+
+  useEffect(() => {
+    if (hasActive) setOpen(true);
+  }, [hasActive]);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className={clsx(
+          "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-gray-700 hover:bg-emerald-50",
+          depth === 0 ? "text-[13px] font-semibold" : "text-[12.5px] font-medium"
+        )}
+      >
+        <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", depth === 0 ? "bg-emerald-500" : "bg-violet-400")} />
+        <span className="flex-1 truncate">{group.label}</span>
+        {hasActive && !open && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />}
+        <ChevronDown
+          size={12}
+          className={clsx("shrink-0 text-gray-400 transition-transform", open ? "rotate-0" : "-rotate-90")}
+        />
+      </button>
+      {open && (
+        <div className="ml-2 mt-0.5 flex flex-col gap-1 border-l border-emerald-100 pl-2">
+          {group.items.map((item) =>
+            isNavLink(item) ? (
+              <NavLinkRow key={item.href} link={item} pathname={pathname} colorful />
+            ) : (
+              <NavSubGroup key={item.label} group={item} pathname={pathname} depth={depth + 1} />
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReportNavGroup({ groups, pathname }: { groups: NavMenuGroup[]; pathname: string }) {
+  const hasActive = groups.some((group) => menuItemHasActive(pathname, group));
+  const [open, setOpen] = useState(hasActive);
+
+  useEffect(() => {
+    if (hasActive) setOpen(true);
+  }, [hasActive]);
+
+  if (groups.length === 0) return null;
+  const tone = TONES.green;
+
+  return (
+    <div className="mb-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-gray-100"
+      >
+        <span className={clsx("h-3.5 w-1 shrink-0 rounded-full", tone.bar)} />
+        <p className={clsx("flex-1 text-[11px] font-semibold uppercase tracking-[0.12em]", tone.title)}>รีพอร์ต</p>
+        {hasActive && !open && <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", tone.bar)} />}
+        <ChevronDown
+          size={13}
+          className={clsx("shrink-0 text-gray-400 transition-transform", open ? "rotate-0" : "-rotate-90")}
+        />
+      </button>
+      {open && (
+        <div className={clsx("ml-2.5 mt-0.5 flex flex-col gap-1 border-l pl-2", tone.rail)}>
+          {groups.map((group) => (
+            <NavSubGroup key={group.label} group={group} pathname={pathname} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Nav({
   role,
   name,
@@ -229,7 +375,10 @@ export default function Nav({
   const accounting = accountingLinks.filter(canView);
   const other: (NavLink & { badge?: boolean })[] = otherLinks.filter(canView);
   const catering = cateringLinks.filter(canView);
-  const ledger = ledgerLinks.filter(canView);
+  const reports = reportMenuGroups.flatMap((group) => {
+    const items = filterMenuItems(group.items, canView);
+    return items.length > 0 ? [{ ...group, items }] : [];
+  });
   // จัดการผู้ใช้งาน/สิทธิ์ตำแหน่ง — ล็อกไว้ที่ SUPER_ADMIN เท่านั้นเสมอ ไม่อยู่ในตาราง RolePermission
   // (กันไม่ให้ตั้งค่าสิทธิ์เผลอถอดสิทธิ์ตัวเองออกจากหน้าที่ใช้ตั้งค่าสิทธิ์)
   if (role === "SUPER_ADMIN") {
@@ -265,7 +414,7 @@ export default function Nav({
       <nav className="flex flex-1 flex-col">
         <NavGroup title="การเงิน" tone="blue" links={finance} pathname={pathname} />
         <NavGroup title="บัญชี" tone="amber" links={accounting} pathname={pathname} />
-        <NavGroup title="งบการเงิน" tone="green" links={ledger} pathname={pathname} colorful />
+        <ReportNavGroup groups={reports} pathname={pathname} />
         <NavGroup title="Catering" tone="violet" links={catering} pathname={pathname} />
         <NavGroup title="อื่นๆ" tone="slate" links={other} pathname={pathname} />
       </nav>
