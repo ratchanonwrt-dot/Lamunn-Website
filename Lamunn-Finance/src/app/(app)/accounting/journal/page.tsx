@@ -142,12 +142,20 @@ export default async function JournalPage({
           </p>
         </div>
         {canEdit && (
-          <Link
-            href="/accounting/journal/new"
-            className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            + คีย์ใบสำคัญ
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/accounting/journal/ai-autokey"
+              className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-100"
+            >
+              ✦ AI Autokey
+            </Link>
+            <Link
+              href="/accounting/journal/new"
+              className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            >
+              + คีย์ใบสำคัญ
+            </Link>
+          </div>
         )}
       </div>
 
