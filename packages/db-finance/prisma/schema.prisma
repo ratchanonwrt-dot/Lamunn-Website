@@ -776,6 +776,7 @@ model AccAccount {
   sortOrder  Int         @default(0)
 
   lines AccJournalLine[]
+  autokeyRules AccAutokeyRule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -860,6 +861,7 @@ model AccJournalEntry {
   sourceKey  String?
 
   lines AccJournalLine[]
+  autokeyDocument AccAutokeyDocument?
 
   createdBy String?
   postedAt  DateTime?
@@ -871,6 +873,72 @@ model AccJournalEntry {
   @@index([date])
   @@index([status])
   @@map("acc_journal_entries")
+}
+
+enum AccAutokeyStatus {
+  UPLOADING
+  READY
+  ANALYZING
+  REVIEW
+  DRAFTED
+  FAILED
+}
+
+// เอกสารต้นทางของ AI Autokey เก็บเป็นชิ้นย่อยเพื่อให้ไฟล์ใหญ่ไม่ติดเพดาน request ของ Vercel
+// และยังเปิดตรวจเอกสารเดิมย้อนหลังได้ แม้ไฟล์ชั่วคราวของผู้ให้บริการ AI หมดอายุแล้ว
+model AccAutokeyDocument {
+  id            String           @id @default(cuid())
+  fileName      String
+  mimeType      String
+  fileSize      Int
+  fileHash      String           @unique
+  status        AccAutokeyStatus @default(UPLOADING)
+  extractedData Json?
+  reviewedData  Json?
+  errorMessage  String?
+  entryId       String?          @unique
+  entry         AccJournalEntry? @relation(fields: [entryId], references: [id], onDelete: SetNull)
+  chunks        AccAutokeyFileChunk[]
+  createdBy     String?
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([status, createdAt])
+  @@map("acc_autokey_documents")
+}
+
+model AccAutokeyFileChunk {
+  id         String               @id @default(cuid())
+  documentId String
+  document   AccAutokeyDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  data       Bytes
+  createdAt  DateTime             @default(now())
+
+  @@unique([documentId, chunkIndex])
+  @@map("acc_autokey_file_chunks")
+}
+
+// ความจำที่ได้จากรายการซึ่งคนตรวจและผ่านรายการแล้วเท่านั้น AI ใช้เป็นคำแนะนำแต่ไม่มีสิทธิ์โพสต์เอง
+model AccAutokeyRule {
+  id              String         @id @default(cuid())
+  scopeKey        String         @unique
+  partnerTaxId    String?
+  keyword         String
+  journalType     AccJournalType
+  accountId       String
+  account         AccAccount     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  timesConfirmed  Int            @default(1)
+  timesOverridden Int            @default(0)
+  isActive        Boolean        @default(true)
+  lastConfirmedAt DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([partnerTaxId, isActive])
+  @@map("acc_autokey_rules")
 }
 
 model AccJournalLine {

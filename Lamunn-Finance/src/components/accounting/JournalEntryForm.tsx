@@ -73,6 +73,8 @@ export default function JournalEntryForm({
   mode = "create",
   entryId,
   initial,
+  autokeyDocumentId,
+  autokeyTaxReview,
 }: {
   accounts: AccountOption[];
   branches: BranchOption[];
@@ -83,6 +85,8 @@ export default function JournalEntryForm({
   mode?: "create" | "edit";
   entryId?: string;
   initial?: JournalEntryInitial;
+  autokeyDocumentId?: string;
+  autokeyTaxReview?: { isClaimableVat: boolean; whtFormType: "PND3" | "PND53" | null; whtRatePercent: number | null; incomeType: string | null };
 }) {
   const router = useRouter();
   const [date, setDate] = useState(initial?.date ?? defaultDate);
@@ -106,7 +110,8 @@ export default function JournalEntryForm({
   }, [lines]);
 
   const filledLines = lines.filter((l) => l.accountId && (satang(l.debit) !== 0 || satang(l.credit) !== 0));
-  const canSave = totals.diff === 0 && totals.debit > 0 && filledLines.length >= 2 && description.trim().length > 0;
+  const taxReviewReady = !autokeyTaxReview?.whtFormType || ((autokeyTaxReview.whtRatePercent ?? 0) > 0 && Boolean(autokeyTaxReview.incomeType?.trim()));
+  const canSave = totals.diff === 0 && totals.debit > 0 && filledLines.length >= 2 && description.trim().length > 0 && taxReviewReady;
 
   function update(i: number, patch: Partial<Line>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -120,7 +125,7 @@ export default function JournalEntryForm({
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, journalType, description, postNow, lines: filledLines }),
+      body: JSON.stringify({ date, journalType, description, postNow, lines: filledLines, autokeyDocumentId, autokeyTaxReview }),
     });
     const data = await res.json();
     setSubmitting(false);
@@ -308,21 +313,22 @@ export default function JournalEntryForm({
       {error && <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
       <div className="mt-5 flex flex-wrap gap-2">
-        <button
+        {!autokeyDocumentId && <button
           type="button"
           disabled={!canSave || busy}
           onClick={() => submit(true)}
           className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-40"
         >
-          {busy ? "กำลังบันทึก..." : mode === "edit" ? "บันทึกและผ่านรายการ" : "บันทึกและผ่านรายการ"}
+          {busy ? "กำลังบันทึก..." : "บันทึกและผ่านรายการ"}
         </button>
+        }
         <button
           type="button"
           disabled={!canSave || busy}
           onClick={() => submit(false)}
-          className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+          className={`rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40 ${autokeyDocumentId ? "bg-violet-600 text-white hover:bg-violet-700" : "border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
         >
-          {mode === "edit" ? "บันทึกการแก้ไข (ยังเป็นร่าง)" : "บันทึกเป็นร่าง"}
+          {busy ? "กำลังบันทึก..." : mode === "edit" ? "บันทึกการแก้ไข (ยังเป็นร่าง)" : autokeyDocumentId ? "ยืนยันและบันทึกเป็นร่าง" : "บันทึกเป็นร่าง"}
         </button>
         {mode === "edit" && (
           <button

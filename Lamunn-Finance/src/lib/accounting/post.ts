@@ -1,6 +1,7 @@
 import { prisma } from "@lamunn/db-finance";
 import type { AccEntryStatus, AccJournalType, Prisma } from "@lamunn/db-finance";
 import { toBaht, toSatang } from "./money";
+import { recordAutokeyLearning } from "./autokey";
 
 /** เครื่องมือกลางสำหรับสร้าง/ผ่านรายการใบสำคัญ
  *
@@ -230,6 +231,8 @@ export async function postEntry(entryId: string, userId?: string | null) {
     }),
     prisma.accJournalLine.updateMany({ where: { entryId }, data: { status: "POSTED" } }),
   ]);
+  // เรียนรู้หลังผ่านรายการเท่านั้น ร่างที่ยังไม่ตรวจหรือถูกยกเลิกจึงไม่มีทางทำให้กฎบัญชีเพี้ยน
+  if (entry.sourceType === "AI_AUTOKEY") await recordAutokeyLearning(entryId);
   return updated;
 }
 
