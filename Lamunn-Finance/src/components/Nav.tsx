@@ -157,6 +157,7 @@ const accountingReportItems: NavMenuItem[] = [
   { href: "/accounting/daily-posting", label: "ลงบัญชียอดขายรายวัน", icon: CalendarDays, color: "bg-blue-100 text-blue-600", section: "ACCOUNTING" },
   { href: "/accounting/tax-invoices", label: "ใบกำกับภาษีเต็มรูป", icon: ReceiptText, color: "bg-rose-100 text-rose-600", section: "ACCOUNTING" },
   { label: "รายงานภาษี", items: taxReportLinks },
+  { href: "/accounting/accounts", label: "ผังบัญชี", icon: ListTree, color: "bg-slate-100 text-slate-600", section: "ACCOUNTING" },
   { href: "/accounting/partners", label: "คู่ค้า (ลูกหนี้/เจ้าหนี้)", icon: Handshake, color: "bg-amber-100 text-amber-600", section: "ACCOUNTING" },
 ];
 
