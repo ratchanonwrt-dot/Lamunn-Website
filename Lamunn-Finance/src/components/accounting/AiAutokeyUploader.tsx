@@ -29,6 +29,17 @@ async function sha256(file: File) {
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function readApiResponse(response: Response): Promise<any> {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Vercel อาจตอบ plain text เมื่อ function timeout/crash จึงห้ามเรียก response.json() ตรง ๆ
+    return { error: response.ok ? "เซิร์ฟเวอร์ตอบข้อมูลไม่สมบูรณ์" : `เซิร์ฟเวอร์ประมวลผลไม่สำเร็จ (HTTP ${response.status}) กรุณาลองใหม่` };
+  }
+}
+
 export default function AiAutokeyUploader({ accounts, branches, partners }: { accounts: AccountOption[]; branches: BranchOption[]; partners: PartnerOption[] }) {
   const [file, setFile] = useState<File | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
@@ -52,20 +63,20 @@ export default function AiAutokeyUploader({ accounts, branches, partners }: { ac
       if (file.size > MAX_BYTES) throw new Error("ไฟล์ต้องมีขนาดไม่เกิน 50 MB");
       const hash = await sha256(file);
       const createRes = await fetch("/api/accounting/ai-autokey", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: file.name, mimeType: file.type, fileSize: file.size, fileHash: hash }) });
-      const created = await createRes.json();
+      const created = await readApiResponse(createRes);
       if (!createRes.ok) throw new Error(created.error || "เตรียมอัปโหลดไม่สำเร็จ");
       setDocumentId(created.documentId);
       const totalChunks = Math.ceil(file.size / CHUNK_BYTES);
       for (let index = 0; index < totalChunks; index += 1) {
         const chunk = file.slice(index * CHUNK_BYTES, Math.min(file.size, (index + 1) * CHUNK_BYTES));
         const uploadRes = await fetch(`/api/accounting/ai-autokey/${created.documentId}/chunk?index=${index}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: chunk });
-        const uploaded = await uploadRes.json();
+        const uploaded = await readApiResponse(uploadRes);
         if (!uploadRes.ok) throw new Error(uploaded.error || "อัปโหลดไฟล์ไม่สำเร็จ");
         setProgress(Math.round(((index + 1) / totalChunks) * 70));
       }
       setProgress(75);
       const analyzeRes = await fetch(`/api/accounting/ai-autokey/${created.documentId}/analyze`, { method: "POST" });
-      const analyzed = await analyzeRes.json();
+      const analyzed = await readApiResponse(analyzeRes);
       if (!analyzeRes.ok) throw new Error(analyzed.error || "AI อ่านเอกสารไม่สำเร็จ");
       setResult(analyzed.result); setProgress(100);
     } catch (caught) {

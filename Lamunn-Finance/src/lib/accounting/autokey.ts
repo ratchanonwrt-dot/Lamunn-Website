@@ -110,7 +110,9 @@ export async function analyzeAccountingDocument(file: Buffer, mimeType: string):
     `รูปแบบที่คนเคยยืนยันแล้ว (ใช้เป็นคำแนะนำเท่านั้น): ${JSON.stringify(rules)}`,
   ].join("\n");
 
-  const models = Array.from(new Set([process.env.GEMINI_MODEL?.trim(), "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash"].filter(Boolean))) as string[];
+  // งานอ่านเอกสารต้องจบใน serverless request เดียว รุ่น Lite ผ่านไฟล์ทดสอบในไม่กี่วินาที
+  // จึงไม่ fallback ไปรุ่นใหญ่ที่คิวแน่น เพราะจะทำให้ Vercel timeout ก่อนตอบ JSON กลับผู้ใช้
+  const models = Array.from(new Set([process.env.GEMINI_MODEL?.trim(), "gemini-3.1-flash-lite", "gemini-3.5-flash-lite"].filter(Boolean))) as string[];
   const requestBody = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType, data: file.toString("base64") } }] }],
     generationConfig: { responseMimeType: "application/json", responseSchema },
