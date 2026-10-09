@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import AccountCombobox from "@/components/accounting/AccountCombobox";
 import PartnerCombobox from "@/components/accounting/PartnerCombobox";
+import { useServerRefresh } from "@/components/accounting/useServerRefresh";
 
 interface AccountOption {
   id: string;
@@ -74,7 +75,9 @@ export default function JournalEntryForm({
   entryId,
   initial,
   autokeyDocumentId,
+  autokeyDraftId,
   autokeyTaxReview,
+  onSaved,
 }: {
   accounts: AccountOption[];
   branches: BranchOption[];
@@ -86,9 +89,12 @@ export default function JournalEntryForm({
   entryId?: string;
   initial?: JournalEntryInitial;
   autokeyDocumentId?: string;
+  autokeyDraftId?: string;
   autokeyTaxReview?: { isClaimableVat: boolean; whtFormType: "PND3" | "PND53" | null; whtRatePercent: number | null; incomeType: string | null };
+  onSaved?: (entry: { id: string; entryNo: string }) => void;
 }) {
   const router = useRouter();
+  const { refreshing, refresh } = useServerRefresh();
   const [date, setDate] = useState(initial?.date ?? defaultDate);
   const [journalType, setJournalType] = useState(initial?.journalType ?? "GENERAL");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -96,7 +102,7 @@ export default function JournalEntryForm({
   const [submitting, setSubmitting] = useState(false);
   // ค้างสถานะ "กำลังบันทึก" ไว้จนหน้าสมุดรายวันขึ้นจอจริง — ของเดิมปุ่มกลับมากดได้ทั้งที่ยังไม่ไปไหน
   const [navigating, startTransition] = useTransition();
-  const busy = submitting || navigating;
+  const busy = submitting || navigating || refreshing;
   const [error, setError] = useState<string | null>(null);
 
   const totals = useMemo(() => {
@@ -110,6 +116,7 @@ export default function JournalEntryForm({
   }, [lines]);
 
   const filledLines = lines.filter((l) => l.accountId && (satang(l.debit) !== 0 || satang(l.credit) !== 0));
+  const isAutokey = Boolean(autokeyDocumentId || autokeyDraftId);
   const taxReviewReady = !autokeyTaxReview?.whtFormType || ((autokeyTaxReview.whtRatePercent ?? 0) > 0 && Boolean(autokeyTaxReview.incomeType?.trim()));
   const canSave = totals.diff === 0 && totals.debit > 0 && filledLines.length >= 2 && description.trim().length > 0 && taxReviewReady;
 
@@ -125,12 +132,18 @@ export default function JournalEntryForm({
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, journalType, description, postNow, lines: filledLines, autokeyDocumentId, autokeyTaxReview }),
+      body: JSON.stringify({ date, journalType, description, postNow, lines: filledLines, autokeyDocumentId, autokeyDraftId, autokeyTaxReview }),
     });
     const data = await res.json();
     setSubmitting(false);
     if (!res.ok) {
       setError(data.error ?? "บันทึกไม่สำเร็จ");
+      return;
+    }
+    if (mode === "create" && onSaved) {
+      // หลายหน้าต้องอยู่หน้าเดิมเพื่อให้ผู้ใช้ตรวจและบันทึกหน้าถัดไปได้ทันที
+      onSaved(data.entry);
+      refresh();
       return;
     }
     if (mode === "edit" && !postNow) {
@@ -313,7 +326,7 @@ export default function JournalEntryForm({
       {error && <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
       <div className="mt-5 flex flex-wrap gap-2">
-        {!autokeyDocumentId && <button
+        {!isAutokey && <button
           type="button"
           disabled={!canSave || busy}
           onClick={() => submit(true)}
@@ -326,9 +339,9 @@ export default function JournalEntryForm({
           type="button"
           disabled={!canSave || busy}
           onClick={() => submit(false)}
-          className={`rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40 ${autokeyDocumentId ? "bg-violet-600 text-white hover:bg-violet-700" : "border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+          className={`rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40 ${isAutokey ? "bg-violet-600 text-white hover:bg-violet-700" : "border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
         >
-          {busy ? "กำลังบันทึก..." : mode === "edit" ? "บันทึกการแก้ไข (ยังเป็นร่าง)" : autokeyDocumentId ? "ยืนยันและบันทึกเป็นร่าง" : "บันทึกเป็นร่าง"}
+          {busy ? "กำลังบันทึก..." : mode === "edit" ? "บันทึกการแก้ไข (ยังเป็นร่าง)" : isAutokey ? "ยืนยันและบันทึกเป็นร่าง" : "บันทึกเป็นร่าง"}
         </button>
         {mode === "edit" && (
           <button
