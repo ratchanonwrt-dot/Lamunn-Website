@@ -1,5 +1,4 @@
-/** Skeleton เฉพาะหมวดบัญชี — มีแยกจาก (app)/loading.tsx เพื่อให้แถบแท็บด้านบน (AccountingTabs)
- * ยังอยู่ตอนสลับหน้าในหมวดนี้ ไม่กะพริบหายไปทั้งแถบ */
+/** Skeleton เฉพาะหมวดบัญชี เพื่อให้พื้นที่เนื้อหาคงรูปตอนสลับหน้าจากเมนูซ้าย */
 export default function AccountingLoading() {
   return (
     <div className="animate-pulse">
