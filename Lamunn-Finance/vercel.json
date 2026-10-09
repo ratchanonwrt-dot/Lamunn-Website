@@ -1,7 +1,10 @@
 {
   "regions": ["sin1"],
   "git": {
-    "deploymentEnabled": false
+    "deploymentEnabled": {
+      "acc/*": false,
+      "fin/*": false
+    }
   },
   "crons": [
     {
