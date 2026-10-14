@@ -3,12 +3,9 @@
  * ข้อมูลปี ค.ศ. 2090 เท่านั้น ลบเฉพาะของตัวเองใน finally
  * รัน: npx tsx scripts/verify-input-vat-docno.ts   (จากโฟลเดอร์ Lamunn-Finance)
  */
-import { prisma } from "@lamunn/db-finance";
-import { createEntry } from "../src/lib/accounting/post";
-import { buildInputVatReport } from "../src/lib/accounting/taxReports";
-import { buildInputVatWorkbook } from "../src/lib/accounting/inputVatExcel";
-import { SYSTEM_ACCOUNTS } from "../src/lib/accounting/chartOfAccounts";
-import { monthRange } from "../src/lib/dates";
+import { loadEnvConfig } from "@next/env";
+
+loadEnvConfig(process.cwd());
 
 const P = "ZZDOCNO";
 const YEAR = 2090;
@@ -20,13 +17,26 @@ function check(label: string, actual: unknown, expected: unknown) {
 }
 
 async function main() {
+  const [{ prisma }, { createEntry }, { buildInputVatReport }, { buildInputVatWorkbook }, { SYSTEM_ACCOUNTS }, { monthRange }] = await Promise.all([
+    import("@lamunn/db-finance"),
+    import("../src/lib/accounting/post"),
+    import("../src/lib/accounting/taxReports"),
+    import("../src/lib/accounting/inputVatExcel"),
+    import("../src/lib/accounting/chartOfAccounts"),
+    import("../src/lib/dates"),
+  ]);
   const entryIds: string[] = [];
   const partnerIds: string[] = [];
+  const accountIds: string[] = [];
+  const invoiceIds: string[] = [];
+  const existingPeriod = await prisma.accPeriod.findFirst({ where: { year: YEAR }, select: { id: true } });
+  let createdPeriodId: string | null = null;
   try {
     const inputVat = await prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.INPUT_VAT } });
     if (!inputVat) throw new Error("ไม่พบบัญชีภาษีซื้อในผัง");
     const rent = await prisma.accAccount.create({ data: { code: `${P}-5301`, nameTh: "[test] ค่าเช่า", type: "EXPENSE" } });
     const bank = await prisma.accAccount.create({ data: { code: `${P}-1120`, nameTh: "[test] ธนาคาร", type: "ASSET" } });
+    accountIds.push(rent.id, bank.id);
     const cpn = await prisma.accPartner.create({ data: { name: "[test] เซ็นทรัลพัฒนา", type: "CREDITOR", taxId: "0107537002443" } });
     partnerIds.push(cpn.id);
 
@@ -36,6 +46,8 @@ async function main() {
       journalType: "PAYMENT",
       description: "[test] จ่ายค่าเช่า CPN 3 ใบ",
       status: "POSTED",
+      sourceType: "AI_AUTOKEY",
+      sourceKey: `${P}-AI-MULTI`,
       lines: [
         { accountId: rent.id, debit: 5192.21, partnerId: cpn.id },
         { accountId: inputVat.id, debit: 46.15, partnerId: cpn.id, docNo: "202-10900640" },
@@ -52,6 +64,8 @@ async function main() {
       journalType: "PAYMENT",
       description: "[test] ซื้อของไม่ได้ใส่เลข",
       status: "POSTED",
+      sourceType: "AI_AUTOKEY",
+      sourceKey: `${P}-AI-NODOC`,
       lines: [
         { accountId: rent.id, debit: 1000, partnerId: cpn.id },
         { accountId: inputVat.id, debit: 70 },
@@ -59,6 +73,20 @@ async function main() {
       ],
     });
     entryIds.push(noDoc.id);
+
+    const manual = await createEntry({
+      date: new Date(Date.UTC(YEAR, 8, 10)),
+      journalType: "PAYMENT",
+      description: "[test] คนคีย์ใบสำคัญเอง",
+      status: "POSTED",
+      lines: [
+        { accountId: rent.id, debit: 1000, partnerId: cpn.id },
+        { accountId: inputVat.id, debit: 70, partnerId: cpn.id, docNo: `${P}-MANUAL-001` },
+        { accountId: bank.id, credit: 1070 },
+      ],
+    });
+    entryIds.push(manual.id);
+    if (!existingPeriod) createdPeriodId = (await prisma.accPeriod.findFirst({ where: { year: YEAR }, select: { id: true } }))?.id ?? null;
 
     const { start, end } = monthRange(YEAR, 8);
     const report = await buildInputVatReport(start, end);
@@ -76,19 +104,37 @@ async function main() {
     check("ชื่อผู้ขาย/เลขผู้เสียภาษีจากคู่ค้าที่บรรทัด", [r640.vendorName, r640.taxId], ["[test] เซ็นทรัลพัฒนา", "0107537002443"]);
     check("แถวแต่ละแถวมี id ไม่ซ้ำกัน (ไม่ชนกันตอน render)", new Set(multiRows.map((r) => r.id)).size, 3);
 
-    console.log("\n=== ใบสำคัญที่ไม่ได้ใส่เลขที่ใบกำกับ ===");
-    const nd = rows.find((r) => r.entryNo === noDoc.entryNo)!;
-    check("เลขที่ใบกำกับว่าง (ไม่เอาเลขที่ใบสำคัญมาแทน)", nd.invoiceNo, "");
-    check("เลขที่ใบสำคัญยังอยู่ในช่องอ้างอิง", nd.entryNo, noDoc.entryNo);
-    check("ยอดครบ", [nd.base, nd.vat], [100000, 7000]);
+    console.log("\n=== เงื่อนไขแหล่งข้อมูลรายงาน ===");
+    check("AI Autokey ที่ไม่มีเลขใบกำกับยังไม่เข้ารายงาน", rows.some((r) => r.entryNo === noDoc.entryNo), false);
+    check("ใบสำคัญที่คนคีย์เองไม่เข้ารายงาน แม้มีบัญชีภาษีซื้อและเลขใบกำกับ", rows.some((r) => r.entryNo === manual.entryNo), false);
+
+    const recordedInvoice = await prisma.accPurchaseTaxInvoice.create({
+      data: {
+        invoiceNo: "202-10900640",
+        invoiceDate: new Date(Date.UTC(YEAR, 8, 8)),
+        partnerId: cpn.id,
+        vendorName: cpn.name,
+        vendorTaxId: cpn.taxId,
+        description: "[test] คนบันทึกทะเบียนภาษีซื้อเอง",
+        baseAmount: 659.28,
+        vatAmount: 46.15,
+        totalAmount: 705.43,
+      },
+    });
+    invoiceIds.push(recordedInvoice.id);
+    const dedupReport = await buildInputVatReport(start, end);
+    const sameInvoiceRows = dedupReport.rows.filter((r) => r.invoiceNo === "202-10900640");
+    check("เลขใบกำกับเดียวกันของผู้ขายเดียวกันแสดงเพียงครั้งเดียว", sameInvoiceRows.length, 1);
+    check("รายการที่คนบันทึกเองเป็นตัวหลักแทนแถวจาก AI", sameInvoiceRows[0]?.kind, "DOC");
+    check("เลขใบกำกับอื่นจาก AI ยังอยู่ครบ", ["2026-10900638", "2026-10900639"].every((docNo) => dedupReport.rows.some((r) => r.invoiceNo === docNo)), true);
 
     console.log("\n=== Excel ===");
-    const wb = buildInputVatWorkbook(report, { companyName: "[test] บริษัท", companyTaxId: "0105568147638", companyAddress: "ที่อยู่ทดสอบ", year: YEAR, month: 9 });
+    const wb = buildInputVatWorkbook(dedupReport, { companyName: "[test] บริษัท", companyTaxId: "0105568147638", companyAddress: "ที่อยู่ทดสอบ", year: YEAR, month: 9 });
     const ws = wb.getWorksheet("PurchaseTaxReport")!;
     check("หัวรายงานบรรทัด 1", ws.getCell("A1").value, "รายงานภาษีซื้อตามเอกสาร");
     check("งวดภาษี", ws.getCell("A2").value, `สำหรับงวดภาษี เดือน กันยายน ปี ${YEAR}`);
     check("หัวตารางบรรทัด 6 ครบ 8 คอลัมน์", [1, 2, 3, 4, 5, 6, 7, 8].map((c) => ws.getRow(6).getCell(c).value), ["ลำดับที่", "วัน/เดือน/ปี", "เลขที่ใบกำกับ", "ชื่อผู้จำหน่าย", "เลขผู้เสียภาษี", "สำนักงานใหญ่/สาขา", "มูลค่า", "ภาษีมูลค่าเพิ่ม"]);
-    const n = report.rows.length;
+    const n = dedupReport.rows.length;
     check("จำนวนแถวข้อมูล = จำนวนแถวในรายงาน", ws.getRow(7 + n - 1).getCell(1).value, n);
     const totalRow = ws.getRow(7 + n);
     check("แถวรวมใช้สูตร SUM", (totalRow.getCell(7).value as { formula?: string }).formula, `SUM(G7:G${6 + n})`);
@@ -98,10 +144,11 @@ async function main() {
     check("Excel มีเลขที่ใบกำกับทั้ง 3 ใบของใบสำคัญเดียวกัน", ["202-10900640", "2026-10900638", "2026-10900639"].every((d) => excelDocNos.includes(d)), true);
     check("Excel ไม่มีเลขที่ใบสำคัญในคอลัมน์เลขที่ใบกำกับ", excelDocNos.some((d) => d === multi.entryNo || d === noDoc.entryNo), false);
   } finally {
-    await prisma.accJournalEntry.deleteMany({ where: { id: { in: entryIds } } });
-    await prisma.accPartner.deleteMany({ where: { id: { in: partnerIds } } });
-    await prisma.accAccount.deleteMany({ where: { code: { startsWith: P } } });
-    await prisma.accPeriod.deleteMany({ where: { year: YEAR } });
+    for (const id of invoiceIds) await prisma.accPurchaseTaxInvoice.delete({ where: { id } }).catch(() => undefined);
+    for (const id of entryIds) await prisma.accJournalEntry.delete({ where: { id } }).catch(() => undefined);
+    for (const id of partnerIds) await prisma.accPartner.delete({ where: { id } }).catch(() => undefined);
+    for (const id of accountIds) await prisma.accAccount.delete({ where: { id } }).catch(() => undefined);
+    if (createdPeriodId) await prisma.accPeriod.delete({ where: { id: createdPeriodId } }).catch(() => undefined);
     console.log(`\n  ข้อมูลทดสอบที่เหลือ: ${await prisma.accJournalEntry.count({ where: { description: { startsWith: "[test]" }, date: { gte: new Date(Date.UTC(YEAR, 0, 1)), lte: new Date(Date.UTC(YEAR, 11, 31)) } } })}`);
   }
   console.log(fails === 0 ? "\n✅ ผ่านทั้งหมด\n" : `\n❌ ไม่ผ่าน ${fails} ข้อ\n`);

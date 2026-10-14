@@ -56,7 +56,7 @@ export function buildInputVatWorkbook(report: InputVatReport, opts: InputVatExce
     const row = ws.getRow(firstDataRow + i);
     row.getCell(1).value = i + 1;
     row.getCell(2).value = fmtDate(r.date);
-    row.getCell(3).value = r.invoiceNo; // แถวจากสมุดรายวันที่ยังไม่ใส่เลขจะว่าง — ตั้งใจ ไม่เอาเลขที่ใบสำคัญมาแทน
+    row.getCell(3).value = r.invoiceNo; // ใช้เลขจากเอกสารหรือบรรทัด AI เท่านั้น ห้ามเอาเลขที่ใบสำคัญมาแทน
     row.getCell(4).value = r.vendorName;
     row.getCell(5).value = r.taxId ?? "";
     row.getCell(6).value = r.branchTag ?? "";
