@@ -9,6 +9,7 @@ import { SYSTEM_ACCOUNTS } from "@/lib/accounting/chartOfAccounts";
 import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
 import { nextWhtDocNo } from "@/lib/accounting/withholding";
 import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
+import { parsePurchaseTaxClaimPeriod } from "@/lib/accounting/purchaseTaxClaimPeriod";
 
 /** บันทึกใบกำกับภาษีซื้อ (ใบที่ผู้ขายออกให้เรา) — ตัวป้อนข้อมูลของรายงานภาษีซื้อและ ภ.พ.30
  * เลขที่ใบกำกับมาจากผู้ขาย ไม่ได้รันเอง จึงรับค่าจากผู้กรอกโดยตรง */
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
   const {
     invoiceNo,
     invoiceDate,
+    claimPeriod,
     partnerId,
     vendorName,
     vendorTaxId,
@@ -50,6 +52,13 @@ export async function POST(req: NextRequest) {
   const { base, vat } =
     amountIncludesVat === false ? addVatExclusive(amountSatang, vatRate) : splitVatInclusive(amountSatang, vatRate);
   const invoiceDateValue = parseDateOnly(invoiceDate);
+  let claimPeriodValue: Date;
+  try {
+    claimPeriodValue = parsePurchaseTaxClaimPeriod(claimPeriod, invoiceDateValue);
+  } catch (e) {
+    if (e instanceof AccountingError) return NextResponse.json({ error: e.message }, { status: 400 });
+    throw e;
+  }
   const whtEnabled = Boolean(String(whtIncomeType ?? "").trim());
   const allowedIncomeType = WHT_INCOME_TYPES.some(
     (item) => item.label === String(whtIncomeType ?? "").trim() && item.common !== "PND3"
@@ -143,6 +152,7 @@ export async function POST(req: NextRequest) {
       data: {
         invoiceNo: String(invoiceNo).trim(),
         invoiceDate: invoiceDateValue,
+        claimPeriod: claimPeriodValue,
         partnerId: partnerId || null,
         vendorName: String(vendorName).trim(),
         vendorTaxId: vendorTaxId || null,
