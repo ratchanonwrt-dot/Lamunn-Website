@@ -10,7 +10,7 @@ interface BranchOption { id: string; name: string }
 interface PartnerOption { id: string; name: string; type: "DEBTOR" | "CREDITOR"; phone: string | null; taxId?: string | null }
 interface AiDraft {
   draftId: string; pageNumber: number; entryId: string | null;
-  date: string; journalType: string; description: string; docNo: string | null;
+  date: string; documentType?: "INVOICE" | "CREDIT_NOTE"; journalType: string; description: string; docNo: string | null;
   vendor: { name: string; taxId: string | null; branchTag: string | null; address: string | null };
   isClaimableVat: boolean; whtFormType: "PND3" | "PND53" | null; whtRatePercent: number | null; incomeType: string | null;
   confidence: number; warnings: string[];
@@ -128,7 +128,10 @@ export default function AiAutokeyUploader({ accounts, branches, partners }: { ac
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white"><div className="flex items-center justify-between border-b px-4 py-3"><span className="flex items-center gap-2 text-sm font-semibold"><FileSearch size={17} />เอกสารต้นฉบับ · หน้า {result.pageNumber}</span><span className="text-xs text-emerald-700">ความมั่นใจ {result.confidence}%</span></div>{file?.type === "application/pdf" ? <iframe key={result.pageNumber} title={`เอกสารต้นฉบับหน้า ${result.pageNumber}`} src={previewUrl ? `${previewUrl}#page=${result.pageNumber}` : undefined} className="h-[45rem] w-full" /> : <img src={previewUrl || undefined} alt="เอกสารต้นฉบับ" className="max-h-[45rem] w-full object-contain" />}</section>
         <div className="space-y-4">
           {(result.warnings.length > 0 || review.unknownCodes.length > 0) && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><p className="flex items-center gap-2 font-semibold"><AlertTriangle size={17} />จุดที่ต้องตรวจสอบของหน้า {result.pageNumber}</p><ul className="mt-2 list-disc space-y-1 pl-5">{result.warnings.map((warning) => <li key={warning}>{warning}</li>)}{review.unknownCodes.map((code) => <li key={code}>ไม่พบรหัสบัญชี {code} กรุณาเลือกใหม่</li>)}</ul></div>}
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">ผู้ขาย: {result.vendor.name || "อ่านไม่พบ"}{result.vendor.taxId ? ` · เลขผู้เสียภาษี ${result.vendor.taxId}` : ""}{result.whtFormType ? ` · AI เสนอ ${result.whtFormType}${result.whtRatePercent ? ` อัตรา ${result.whtRatePercent}%` : ""}` : ""}</div>
+          <div className={`rounded-xl border p-3 text-sm ${result.documentType === "CREDIT_NOTE" ? "border-rose-200 bg-rose-50 text-rose-800" : "border-blue-200 bg-blue-50 text-blue-800"}`}>
+            {result.documentType === "CREDIT_NOTE" && <span className="mr-2 rounded bg-rose-600 px-2 py-0.5 text-xs font-semibold text-white">ใบลดหนี้</span>}
+            ผู้ขาย: {result.vendor.name || "อ่านไม่พบ"}{result.vendor.taxId ? ` · เลขผู้เสียภาษี ${result.vendor.taxId}` : ""}{result.whtFormType ? ` · AI เสนอ ${result.whtFormType}${result.whtRatePercent ? ` อัตรา ${result.whtRatePercent}%` : ""}` : ""}
+          </div>
           {result.entryId ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center text-sm text-emerald-800"><CheckCircle2 className="mx-auto mb-2" size={28} /><p className="font-semibold">หน้า {result.pageNumber} บันทึกเป็นใบสำคัญร่างแล้ว</p><p className="mt-1">เลือกหน้าที่ยังไม่บันทึกจากแถบด้านบนเพื่อตรวจต่อได้เลย</p></div> : <>
             <div className="grid gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:grid-cols-2 xl:grid-cols-4">
               <label className="text-xs text-amber-800">สิทธิภาษีซื้อ<select value={result.isClaimableVat ? "claimable" : "nonclaimable"} onChange={(event) => updateActive({ isClaimableVat: event.target.value === "claimable" })} className="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm"><option value="claimable">ภาษีซื้อขอคืนได้</option><option value="nonclaimable">ภาษีซื้อต้องห้าม/รวมค่าใช้จ่าย</option></select></label>
