@@ -52,7 +52,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
         <div>
           <h1 className="mb-1 text-xl font-bold text-gray-900">รายงานภาษีซื้อ</h1>
           <p className="text-sm text-gray-500">
-            ใบกำกับภาษีที่ผู้ขายออกให้เรา — ใช้แนบไปกับ ภ.พ.30 · รวมรายการที่บัญชีคีย์เองในสมุดรายวันแล้วแตะบัญชีภาษีซื้อด้วย
+            ใบกำกับภาษีที่ผู้ขายออกให้เรา — ใช้แนบไปกับ ภ.พ.30 · ใบสำคัญที่คนคีย์เองจะไม่ถูกนำเข้ารายงาน
           </p>
         </div>
         <div className="flex flex-wrap items-start gap-2">
@@ -98,7 +98,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
       {report.rows.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
           <p className="text-sm font-medium text-gray-700">
-            เดือน {thaiMonthLabel(year, month - 1)} ยังไม่มีทั้งใบกำกับภาษีซื้อและรายการภาษีซื้อในสมุดรายวัน
+            เดือน {thaiMonthLabel(year, month - 1)} ยังไม่มีใบกำกับภาษีซื้อ
           </p>
           {canEdit && <p className="mt-1 text-sm text-gray-500">กด &ldquo;บันทึกใบกำกับภาษีซื้อ&rdquo; ด้านบนเพื่อเริ่มบันทึก</p>}
         </div>
@@ -127,15 +127,15 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
                   <td className="py-1.5 pr-2 text-right text-xs text-gray-400">{i + 1}</td>
                   <td className="py-1.5 px-2 font-mono text-xs text-gray-500">{r.date.toISOString().slice(0, 10)}</td>
                   <td className="py-1.5 px-2 font-mono text-xs text-gray-700">
-                    {/* แถวจากสมุดรายวันโชว์เลขที่ใบกำกับที่กรอกไว้ที่บรรทัดเท่านั้น — เลขที่ใบสำคัญเป็นแค่ป้ายอ้างอิง */}
+                    {/* แถว AI โชว์เลขใบกำกับที่ตรวจแล้วเท่านั้น เพื่อไม่ให้คนเข้าใจว่าใบสำคัญคีย์เองถูกนำเข้ารายงาน */}
                     {r.invoiceNo ? (
                       r.invoiceNo
                     ) : (
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 font-sans text-amber-700">ยังไม่ใส่เลขที่ใบกำกับ</span>
                     )}
-                    {r.kind === "JOURNAL" && (
+                    {r.kind === "AI_AUTOKEY" && (
                       <span className="ml-1.5 whitespace-nowrap rounded bg-indigo-100 px-1.5 py-0.5 font-sans text-xs text-indigo-700">
-                        สมุดรายวัน {r.entryNo}
+                        AI Autokey {r.entryNo}
                       </span>
                     )}
                   </td>
@@ -152,7 +152,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
                   <td className="py-1.5 px-2 text-right">{fmtSatang(r.vat)}</td>
                   {canEdit && (
                     <td className="py-1.5 pl-2 text-right print:hidden">
-                      {/* แถวจากสมุดรายวันไม่มีเอกสารให้ยกเลิก — ต้องไปแก้ที่ใบสำคัญต้นทางแทน */}
+                      {/* แถว AI ไม่มีทะเบียนภาษีให้แก้ตรงนี้ ต้องย้อนกลับไปตรวจรายการที่ AI สร้าง */}
                       {r.kind === "DOC" ? (
                         <span className="inline-flex gap-1.5">
                           <EditPurchaseInvoiceButton id={r.id} />
@@ -163,7 +163,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
                           href={`/accounting/journal?year=${year}&month=${month}&q=${encodeURIComponent(r.entryNo ?? "")}`}
                           className="whitespace-nowrap rounded-lg border border-gray-200 px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-50"
                         >
-                          {r.invoiceNo ? "ดูใบสำคัญ" : "ไปใส่เลขที่"}
+                          ตรวจรายการ AI
                         </Link>
                       )}
                     </td>
@@ -175,7 +175,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
               <tr className="border-t-2 border-gray-800 font-bold tabular-nums">
                 <td colSpan={5} className="py-2 pr-2">
                   รวม {report.rows.length} รายการ
-                  {report.journalCount > 0 ? ` (${report.docCount} ใบกำกับ + ${report.journalCount} จากสมุดรายวัน)` : ""}
+                  {report.aiAutokeyCount > 0 ? ` (${report.docCount} บันทึกเอง + ${report.aiAutokeyCount} จาก AI Autokey)` : ""}
                 </td>
                 <td className="py-2 px-2 text-right">{fmtSatang(report.totalBase, { zeroDash: false })}</td>
                 <td className="py-2 px-2 text-right">{fmtSatang(report.totalVat, { zeroDash: false })}</td>

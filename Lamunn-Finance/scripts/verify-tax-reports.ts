@@ -3,9 +3,9 @@
  * สร้างสถานการณ์จำลองในปี พ.ศ. 2640 (ค.ศ. 2097) ซึ่งไม่มีทางชนข้อมูลจริง แล้วลบทิ้งทั้งหมดใน finally
  * รัน: npx tsx scripts/verify-tax-reports.ts   (จากโฟลเดอร์ Lamunn-Finance)
  */
-import { prisma } from "@lamunn/db-finance";
-import { createEntry } from "../src/lib/accounting/post";
-import { buildOutputVatReport, buildInputVatReport, buildPp30, buildWhtReport } from "../src/lib/accounting/taxReports";
+import { loadEnvConfig } from "@next/env";
+
+loadEnvConfig(process.cwd());
 
 const P = "TAXTEST";
 const YEAR = 2097;
@@ -22,6 +22,12 @@ function check(label: string, actual: unknown, expected: unknown) {
 const baht = (satang: number) => satang / 100;
 
 async function main() {
+  // โหลดโมดูลฐานข้อมูลหลัง .env เท่านั้น เพราะ ESM จะยก static import ขึ้นก่อนคำสั่ง loadEnvConfig
+  const [{ prisma }, { createEntry }, { buildOutputVatReport, buildInputVatReport, buildPp30, buildWhtReport }] = await Promise.all([
+    import("@lamunn/db-finance"),
+    import("../src/lib/accounting/post"),
+    import("../src/lib/accounting/taxReports"),
+  ]);
   const created: string[] = [];
   try {
     const accounts = await Promise.all([
@@ -156,9 +162,9 @@ async function main() {
     check("ภ.ง.ด.53 ตรงกับบัญชีภาษีหัก ณ ที่จ่ายค้างนำส่ง", baht(pnd53.glWhtPayable), 2500);
     check("ภ.ง.ด.3 ไม่มีรายการ (จ่ายให้นิติบุคคล ไม่เข้าแบบนี้)", pnd3.rows.length, 0);
 
-    console.log("\n=== ดึงรายการที่คีย์เองในสมุดรายวันเข้ารายงาน ===");
+    console.log("\n=== แยกใบสำคัญที่คนคีย์เองออกจากรายงานภาษีซื้อ ===");
 
-    // ซื้อของมี VAT โดยไม่ได้บันทึกใบกำกับภาษีซื้อ — ต้องโผล่ในรายงานภาษีซื้อ
+    // แม้คนคีย์เลขใบกำกับไว้ในบรรทัด บัญชีก็ยังไม่ใช่ทะเบียนภาษีซื้อ
     const journalPurchase = await createEntry({
       date: day,
       journalType: "PURCHASE",
@@ -166,7 +172,7 @@ async function main() {
       status: "POSTED",
       lines: [
         { accountId: rent.id, debit: 1000 },
-        { accountId: inVat.id, debit: 70 },
+        { accountId: inVat.id, debit: 70, docNo: `${P}-MANUAL-PURCHASE` },
         { accountId: cash.id, credit: 1070 },
       ],
     });
@@ -187,11 +193,9 @@ async function main() {
     created.push(journalSale.id);
 
     const inp2 = await buildInputVatReport(start, end);
-    const jIn = inp2.rows.filter((r) => r.kind === "JOURNAL");
-    check("ภาษีซื้อ: มีแถวจากสมุดรายวัน 1 แถว", jIn.length, 1);
-    check("ภาษีซื้อ: ฐานภาษีจากสมุดรายวัน = 1,000", baht(jIn[0]?.base ?? 0), 1000);
-    check("ภาษีซื้อ: VAT จากสมุดรายวัน = 70", baht(jIn[0]?.vat ?? 0), 70);
-    check("ภาษีซื้อรวม = 210 (140 จากใบกำกับ + 70 จากสมุดรายวัน)", baht(inp2.totalVat), 210);
+    const aiInputRows = inp2.rows.filter((r) => r.kind === "AI_AUTOKEY");
+    check("ภาษีซื้อ: ใบสำคัญที่คนคีย์เองไม่เข้ารายงาน แม้มีเลขใบกำกับ", aiInputRows.length, 0);
+    check("ภาษีซื้อรวมยังมาจากทะเบียนใบกำกับเท่านั้น", baht(inp2.totalVat), 140);
 
     const out2 = await buildOutputVatReport(start, end);
     const jOut = out2.rows.filter((r) => r.kind === "JOURNAL");
@@ -200,7 +204,8 @@ async function main() {
     check("ภาษีขายรวม = 840 (700 เดิม + 140 จากสมุดรายวัน)", baht(out2.totalVat), 840);
 
     const pp30b = await buildPp30(start, end);
-    check("ภ.พ.30 กระทบยอดยังตรงหลังดึงสมุดรายวันเข้ามา", pp30b.reconciled, true);
+    check("ภ.พ.30 เตือนยอดไม่ตรงเมื่อคนลงบัญชีภาษีซื้อแต่ยังไม่บันทึกทะเบียน", pp30b.reconciled, false);
+    check("ผลต่างภาษีซื้อเท่ากับรายการคนคีย์เอง 70 บาท", baht(pp30b.inputDiff), -70);
 
     // หัก ณ ที่จ่ายที่คีย์เองโดยไม่ออกหนังสือรับรอง — ต้องขึ้นในส่วนแยก ไม่รวมในยอดของแบบ
     const journalWht = await createEntry({

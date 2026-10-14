@@ -90,7 +90,7 @@ async function main() {
 
     const { start, end } = monthRange(YEAR, 8);
     const report = await buildInputVatReport(start, end);
-    const rows = report.rows.filter((r) => r.kind === "JOURNAL");
+    const rows = report.rows.filter((r) => r.kind === "AI_AUTOKEY");
 
     console.log("\n=== ใบสำคัญ 1 ใบ มีภาษีซื้อ 3 บรรทัด ===");
     const multiRows = rows.filter((r) => r.entryNo === multi.entryNo);
@@ -105,6 +105,7 @@ async function main() {
     check("แถวแต่ละแถวมี id ไม่ซ้ำกัน (ไม่ชนกันตอน render)", new Set(multiRows.map((r) => r.id)).size, 3);
 
     console.log("\n=== เงื่อนไขแหล่งข้อมูลรายงาน ===");
+    check("รายงานระบุแหล่ง AI แยกจากใบสำคัญที่คนคีย์เอง", rows.every((r) => r.kind === "AI_AUTOKEY"), true);
     check("AI Autokey ที่ไม่มีเลขใบกำกับยังไม่เข้ารายงาน", rows.some((r) => r.entryNo === noDoc.entryNo), false);
     check("ใบสำคัญที่คนคีย์เองไม่เข้ารายงาน แม้มีบัญชีภาษีซื้อและเลขใบกำกับ", rows.some((r) => r.entryNo === manual.entryNo), false);
 
