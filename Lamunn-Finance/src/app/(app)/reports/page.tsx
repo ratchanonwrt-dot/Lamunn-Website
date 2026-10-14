@@ -17,6 +17,9 @@ import {
 } from "@/lib/reportsCalc";
 import DonutChart, { CHART_COLORS } from "@/components/charts/DonutChart";
 import LineChart from "@/components/charts/LineChart";
+import ReportSection from "@/components/ReportSection";
+import { computeBranchDailyStats } from "@/lib/branchDailyStats";
+import BranchDailyAnalysis, { ANALYSIS_SORTS, type AnalysisSort, type AnalysisParams } from "./BranchDailyAnalysis";
 
 function pct(current: number, previous: number): number | null {
   if (previous === 0) return current === 0 ? 0 : null;
@@ -51,24 +54,82 @@ function ReportsSkeleton() {
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: { year?: string; month?: string };
+  searchParams: { year?: string; month?: string; aFrom?: string; aTo?: string; low?: string; div?: string; aSort?: string };
 }) {
   await requireSectionPage("REPORTS");
   const now = new Date();
   const year = Number(searchParams.year) || now.getUTCFullYear();
   const month = Number(searchParams.month) || now.getUTCMonth() + 1;
+  const analysis = analysisParams(searchParams, year, month);
   return (
     <div>
       <h1 className="mb-6 text-xl font-bold text-gray-800">ภาพรวมและวิเคราะห์ยอดขาย</h1>
       <MonthFilterBar basePath="/reports" year={year} month={month} />
       <Suspense fallback={<ReportsSkeleton />}>
-        <ReportsData year={year} month={month} />
+        <ReportsData year={year} month={month} analysis={analysis.params} analysisRequested={analysis.requested} />
       </Suspense>
     </div>
   );
 }
 
-async function ReportsData({ year, month }: { year: number; month: number }) {
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+/** ค่าตั้งของหมวด "วิเคราะห์ยอดรายสาขา" จาก URL — ค่าเริ่มต้น: ต้นเดือนที่เลือกถึง "เมื่อวาน" (เวลาไทย)
+ * ไม่รวมวันนี้เพราะยอดวันนี้ยังส่งเข้ามาไม่ครบ ถ้านับจะกลายเป็น "วันยอดต่ำ" ปลอมของทุกสาขา */
+function analysisParams(
+  sp: { aFrom?: string; aTo?: string; low?: string; div?: string; aSort?: string },
+  year: number,
+  month: number
+): { params: AnalysisParams; requested: boolean } {
+  const bkk = new Date(Date.now() + 7 * 3600 * 1000);
+  const today = new Date(Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate()));
+  const yesterday = new Date(today.getTime() - 86400000);
+  const { start, end } = monthRange(year, month - 1);
+  const monthTo = end < yesterday ? end : yesterday < start ? start : yesterday;
+
+  let from = ISO_DATE.test(sp.aFrom ?? "") ? sp.aFrom! : iso(start);
+  let to = ISO_DATE.test(sp.aTo ?? "") ? sp.aTo! : iso(monthTo);
+  if (to < from) [from, to] = [to, from];
+  // กันช่วงยาวเกินไป (เกิน 1 ปี) — ตัดต้นช่วงให้เหลือ 366 วันนับจากวันสุดท้าย
+  const maxFrom = iso(new Date(new Date(`${to}T00:00:00Z`).getTime() - 365 * 86400000));
+  if (from < maxFrom) from = maxFrom;
+
+  const lowRaw = Number(sp.low);
+  const divRaw = Number(sp.div);
+  const sort = ANALYSIS_SORTS.includes(sp.aSort as AnalysisSort) ? (sp.aSort as AnalysisSort) : "avg";
+  const back = (days: number) => iso(new Date(yesterday.getTime() - (days - 1) * 86400000));
+
+  return {
+    requested: Boolean(sp.aFrom || sp.aTo || sp.low || sp.div || sp.aSort),
+    params: {
+      year,
+      month,
+      from,
+      to,
+      low: Number.isFinite(lowRaw) && lowRaw >= 0 && sp.low ? lowRaw : 5000,
+      div: Number.isFinite(divRaw) && divRaw > 0 ? divRaw : 139,
+      sort,
+      presets: [
+        { label: "เดือนที่เลือก", from: iso(start), to: iso(monthTo) },
+        { label: "14 วันล่าสุด", from: back(14), to: iso(yesterday) },
+        { label: "30 วันล่าสุด", from: back(30), to: iso(yesterday) },
+      ],
+    },
+  };
+}
+
+async function ReportsData({
+  year,
+  month,
+  analysis,
+  analysisRequested,
+}: {
+  year: number;
+  month: number;
+  analysis: AnalysisParams;
+  analysisRequested: boolean;
+}) {
   const now = new Date();
   const { start, end } = monthRange(year, month - 1);
   const clampedEnd = end > now ? now : end;
@@ -230,6 +291,17 @@ async function ReportsData({ year, month }: { year: number; month: number }) {
   const sssg = computeSssg(branches, allSalesRows, { start, end: clampedEnd }, { start: lastStart, end: lastEnd });
   const sssgPrevLabel = thaiMonthLabel(lastMonthDate.getUTCFullYear(), lastMonthDate.getUTCMonth());
 
+  // --- วิเคราะห์ยอดรายสาขา: วันยอดต่ำ / เฉลี่ยวันธรรมดา vs ส-อา / ยอดเฉลี่ย ÷ ตัวหาร (lib/branchDailyStats.ts) ---
+  const dailyStats = computeBranchDailyStats(
+    branches,
+    allSalesRows,
+    new Date(`${analysis.from}T00:00:00.000Z`),
+    new Date(`${analysis.to}T00:00:00.000Z`),
+    analysis.low
+  );
+  const lowBranchCount = dailyStats.filter((s) => s.lowDates.length > 0).length;
+  const lowDayCount = dailyStats.reduce((a, s) => a + s.lowDates.length, 0);
+
   // --- แยกช่องทาง (เดือนนี้) ---
   let storefrontTotal = 0;
   let grabTotal = 0;
@@ -302,9 +374,20 @@ async function ReportsData({ year, month }: { year: number; month: number }) {
         </div>
       </div>
 
-      <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-5">
-        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-amber-800">SSSG — สาขาเดิม {thaiMonthLabel(year, month - 1)} vs {sssgPrevLabel} (เฉลี่ยต่อวันที่เปิดจริง)</h2>
+      <ReportSection
+        tone="amber"
+        title={`SSSG — สาขาเดิม ${thaiMonthLabel(year, month - 1)} vs ${sssgPrevLabel} (เฉลี่ยต่อวันที่เปิดจริง)`}
+        summary={
+          sssg.comparable.length === 0 ? (
+            "ไม่มีสาขาที่เทียบได้"
+          ) : (
+            <>
+              {sssg.comparable.length} สาขา · เฉลี่ย {formatBaht(sssg.current.avgPerDay)}/วัน <ChangeBadge value={sssg.change} />
+            </>
+          )
+        }
+      >
+        <div className="mb-1 flex justify-end">
           <Link href={`/reports/sssg?year=${year}&month=${month}`} className="text-xs font-medium text-brand-600 hover:underline">
             ดูรายสาขา + เรียงลำดับ →
           </Link>
@@ -355,12 +438,14 @@ async function ReportsData({ year, month }: { year: number; month: number }) {
             {sssg.closedBranches.length > 0 && `ไม่รวมสาขาที่เดือนนี้ไม่มีวันเปิด ${sssg.closedBranches.length} สาขา: ${sssg.closedBranches.map((r) => r.branch.name).join(", ")}`}
           </p>
         )}
-      </div>
+      </ReportSection>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
-          <h2 className="mb-1 text-sm font-semibold text-emerald-800">สาขาที่ยอดขึ้น ({branchesUp.length})</h2>
-          <p className="mb-3 text-xs text-emerald-700">เทียบ {daysSoFar} วันแรกของเดือนนี้กับเดือนก่อน (ไม่รวมสาขาใหม่)</p>
+      <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2 sm:items-start">
+        <ReportSection
+          tone="emerald"
+          title={`สาขาที่ยอดขึ้น (${branchesUp.length})`}
+          summary={branchesUp.length > 0 ? `มากสุด ${branchesUp[0].branch.name} · เทียบ ${daysSoFar} วันแรกกับเดือนก่อน` : `เทียบ ${daysSoFar} วันแรกกับเดือนก่อน`}
+        >
           <div className="flex flex-col gap-1.5">
             {branchesUp.map((r) => (
               <div key={r.branch.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
@@ -376,11 +461,13 @@ async function ReportsData({ year, month }: { year: number; month: number }) {
             ))}
             {branchesUp.length === 0 && <p className="text-sm text-emerald-700">ไม่มีสาขาที่ยอดขึ้นในรอบนี้</p>}
           </div>
-        </div>
+        </ReportSection>
 
-        <div className="rounded-xl border border-red-200 bg-red-50 p-5">
-          <h2 className="mb-1 text-sm font-semibold text-red-800">สาขาที่ยอดตก ({branchesDown.length})</h2>
-          <p className="mb-3 text-xs text-red-700">เทียบ {daysSoFar} วันแรกของเดือนนี้กับเดือนก่อน (ไม่รวมสาขาใหม่)</p>
+        <ReportSection
+          tone="red"
+          title={`สาขาที่ยอดตก (${branchesDown.length})`}
+          summary={branchesDown.length > 0 ? `ตกมากสุด ${branchesDown[0].branch.name} · เทียบ ${daysSoFar} วันแรกกับเดือนก่อน` : `เทียบ ${daysSoFar} วันแรกกับเดือนก่อน`}
+        >
           <div className="flex flex-col gap-1.5">
             {branchesDown.map((r) => (
               <div key={r.branch.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
@@ -396,11 +483,20 @@ async function ReportsData({ year, month }: { year: number; month: number }) {
             ))}
             {branchesDown.length === 0 && <p className="text-sm text-red-700">ไม่มีสาขาที่ยอดตกในรอบนี้</p>}
           </div>
-        </div>
+        </ReportSection>
       </div>
 
-      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-1 text-sm font-semibold text-gray-700">ยอดขายรายเดือน — ปี {year + 543}</h2>
+      <ReportSection
+        id="branch-analysis"
+        tone="brand"
+        defaultOpen={analysisRequested}
+        title="วิเคราะห์ยอดรายสาขา — วันยอดต่ำ · วันธรรมดา vs เสาร์-อาทิตย์ · ยอดเฉลี่ยต่อวัน"
+        summary={`${dailyStats.length} สาขา · มีวันยอดต่ำกว่า ${formatBaht(analysis.low)} บาท ${lowBranchCount} สาขา รวม ${lowDayCount} วัน`}
+      >
+        <BranchDailyAnalysis stats={dailyStats} p={analysis} />
+      </ReportSection>
+
+      <ReportSection title={`ยอดขายรายเดือน — ปี ${year + 543}`} summary={`รวมทั้งปีถึงเดือนที่เลือก ${formatBaht(yearTotal)} บาท`}>
         <p className="mb-4 text-xs text-gray-400">ดูภาพรวมทั้งปีทีละเดือน เทียบเห็นเดือนไหนขายดี/ขายน้อยกว่ากัน</p>
         <div className="flex flex-col gap-2">
           {monthlyBreakdownRows.map((r) => (
@@ -416,26 +512,33 @@ async function ReportsData({ year, month }: { year: number; month: number }) {
             </div>
           ))}
         </div>
-      </div>
+      </ReportSection>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-gray-700">สัดส่วนช่องทางการขาย (เดือนนี้)</h2>
-          <DonutChart data={channelSlices} />
+      <ReportSection
+        title="สัดส่วนช่องทางการขาย (เดือนนี้)"
+        summary={`หน้าร้าน ${formatBaht(storefrontTotal)} · Grab ${formatBaht(grabTotal)} · Lineman ${formatBaht(linemanTotal)} · E-Commerce ${formatBaht(ecomTotal)}`}
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <h3 className="mb-4 text-xs font-semibold text-gray-500">ทุกช่องทาง</h3>
+            <DonutChart data={channelSlices} />
+          </div>
+          <div>
+            <h3 className="mb-4 text-xs font-semibold text-gray-500">E-Commerce ย่อย</h3>
+            <DonutChart data={ecomSlices} />
+          </div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-gray-700">สัดส่วน E-Commerce ย่อย (เดือนนี้)</h2>
-          <DonutChart data={ecomSlices} />
-        </div>
-      </div>
+      </ReportSection>
 
-      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-gray-700">แนวโน้มยอดขายรายวัน — เทียบเดือนก่อน</h2>
+      <ReportSection title="แนวโน้มยอดขายรายวัน — เทียบเดือนก่อน" summary="กราฟยอดรวมทุกช่องทางรายวัน เดือนนี้เทียบเดือนก่อน">
         <LineChart series={trendSeries} />
-      </div>
+      </ReportSection>
 
-      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-gray-700">อันดับสาขา — {daysSoFar} วันแรกเดือนนี้ vs เดือนก่อน</h2>
+      <ReportSection
+        title={`อันดับสาขา — ${daysSoFar} วันแรกเดือนนี้ vs เดือนก่อน`}
+        summary={ranking.length > 0 ? `อันดับ 1 ${ranking[0].branch.name} ${formatBaht(ranking[0].thisTotal)} บาท` : undefined}
+      >
+      <div className="mb-1 flex flex-wrap items-center justify-end gap-2">
         <Link href="/reports/ranking" className="text-xs font-medium text-brand-600 hover:underline">
           🏆 ดูอันดับแบบเลือกช่วงวันที่เอง + แยกหน้าร้าน/Delivery →
         </Link>
@@ -496,6 +599,7 @@ async function ReportsData({ year, month }: { year: number; month: number }) {
           </tbody>
         </table>
       </div>
+      </ReportSection>
     </>
   );
 }
