@@ -19,6 +19,7 @@ const lineSchema = z.object({
 
 export const autokeyResultSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  documentType: z.enum(["INVOICE", "CREDIT_NOTE"]),
   journalType: z.enum(["GENERAL", "SALES", "PURCHASE", "RECEIPT", "PAYMENT", "ADJUST"]),
   description: z.string().min(1),
   docNo: z.string().nullable(),
@@ -51,6 +52,7 @@ export type AutokeyBatchResult = z.infer<typeof autokeyBatchResultSchema>;
 
 const resultProperties = {
   date: { type: "string", description: "วันที่เอกสาร ค.ศ. รูปแบบ YYYY-MM-DD" },
+  documentType: { type: "string", enum: ["INVOICE", "CREDIT_NOTE"], description: "CREDIT_NOTE เมื่อยอดติดลบ อยู่ในวงเล็บ หรือเอกสารระบุว่าเป็นใบลดหนี้" },
   journalType: { type: "string", enum: ["GENERAL", "SALES", "PURCHASE", "RECEIPT", "PAYMENT", "ADJUST"] },
   description: { type: "string" },
   docNo: { type: "string", nullable: true },
@@ -96,7 +98,7 @@ const responseSchema = {
       minItems: 1,
       items: {
         type: "object",
-        required: ["pageNumber", "date", "journalType", "description", "docNo", "vendor", "isClaimableVat", "whtFormType", "whtRatePercent", "incomeType", "confidence", "warnings", "lines"],
+        required: ["pageNumber", "date", "documentType", "journalType", "description", "docNo", "vendor", "isClaimableVat", "whtFormType", "whtRatePercent", "incomeType", "confidence", "warnings", "lines"],
         properties: { pageNumber: { type: "integer", minimum: 1 }, ...resultProperties },
       },
     },
@@ -116,6 +118,46 @@ export function normalizeAutokeyDate(value: string, referenceYear = new Date().g
   // เอกสารไทยมักพิมพ์ปี พ.ศ. แค่สองหลัก เช่น 69 และโมเดลอาจคืน 2069 แทน 2026
   else if (year >= referenceYear + 38 && year <= referenceYear + 48) normalizedYear = year - 43;
   return `${String(normalizedYear).padStart(4, "0")}-${month}-${day}`;
+}
+
+interface AutokeyAccountHint {
+  code: string;
+  type: string;
+  vatRole: string | null;
+}
+
+/** ใบลดหนี้ใช้จำนวนบวกเหมือนใบปกติ แต่กลับด้านเดบิต/เครดิตทั้งใบ
+ * เพื่อไม่ให้เครื่องหมายลบหลุดเข้า money helper และยังรักษาสมการบัญชีคู่ไว้ครบ */
+export function normalizeAutokeyCreditNote(draft: AutokeyResult, accounts: readonly AutokeyAccountHint[]): AutokeyResult {
+  if (draft.documentType !== "CREDIT_NOTE") return draft;
+
+  const accountByCode = new Map(accounts.map((account) => [account.code, account]));
+  let normalInputVat = 0;
+  let normalOutputVat = 0;
+  let normalExpense = 0;
+  let normalRevenue = 0;
+  for (const line of draft.lines) {
+    const account = accountByCode.get(line.accountCode);
+    if (!account) continue;
+    if (account.vatRole === "INPUT") normalInputVat += line.debitSatang - line.creditSatang;
+    else if (account.vatRole === "OUTPUT") normalOutputVat += line.creditSatang - line.debitSatang;
+    else if (account.type === "EXPENSE") normalExpense += line.debitSatang - line.creditSatang;
+    else if (account.type === "REVENUE") normalRevenue += line.creditSatang - line.debitSatang;
+  }
+
+  // โมเดลอาจอ่านคำว่าใบลดหนี้ถูก แต่ยังลงบัญชีเหมือนใบกำกับปกติ จึงกลับทั้งใบเพียงครั้งเดียว
+  const shouldReverse = normalInputVat > 0 || normalOutputVat > 0 || normalExpense > 0 || normalRevenue > 0;
+  const warning = shouldReverse
+    ? "ตรวจพบใบลดหนี้จากยอดติดลบ/วงเล็บ ระบบกลับด้านเดบิตและเครดิตแล้ว กรุณาตรวจสอบก่อนบันทึกร่าง"
+    : "ตรวจพบใบลดหนี้จากยอดติดลบ/วงเล็บ กรุณาตรวจสอบด้านเดบิตและเครดิตก่อนบันทึกร่าง";
+  return {
+    ...draft,
+    description: /ใบลดหนี้|credit\s*note/i.test(draft.description) ? draft.description : `ใบลดหนี้: ${draft.description}`,
+    warnings: draft.warnings.includes(warning) ? draft.warnings : [...draft.warnings, warning],
+    lines: shouldReverse
+      ? draft.lines.map((line) => ({ ...line, debitSatang: line.creditSatang, creditSatang: line.debitSatang }))
+      : draft.lines,
+  };
 }
 
 export async function analyzeAccountingDocument(file: Buffer, mimeType: string): Promise<AutokeyBatchResult> {
@@ -142,6 +184,8 @@ export async function analyzeAccountingDocument(file: Buffer, mimeType: string):
     "ต้องสร้างผลลัพธ์หนึ่ง draft ต่อหนึ่งหน้าจริง เรียง pageNumber จาก 1 และห้ามรวมเอกสารคนละหน้าเข้าด้วยกัน",
     expectedPageCount ? `ไฟล์นี้มี ${expectedPageCount} หน้า ดังนั้น drafts ต้องมี ${expectedPageCount} รายการและเลขหน้าต้องครบ 1 ถึง ${expectedPageCount}` : "ตรวจจำนวนหน้าจริงจากไฟล์และส่ง draft ให้ครบทุกหน้า",
     "วันที่ผลลัพธ์ต้องเป็นปี ค.ศ. ถ้าเอกสารเป็น พ.ศ. 25xx ให้ลบ 543 และปีไทยแบบสองหลัก เช่น 69 ให้ตีความเป็น พ.ศ. 2569 หรือ ค.ศ. 2026 ห้ามตีความเป็น ค.ศ. 2069",
+    "ถ้ายอดรวม ฐานภาษี หรือ VAT ติดลบ/อยู่ในวงเล็บ หรือหัวเอกสารระบุใบลดหนี้/credit note ให้ documentType เป็น CREDIT_NOTE มิฉะนั้นเป็น INVOICE",
+    "ใบลดหนี้ต้องใช้จำนวนสตางค์บวกและกลับด้านบัญชี: ใบลดหนี้ซื้อให้เครดิตค่าใช้จ่ายและภาษีซื้อแล้วเดบิตเจ้าหนี้/เงินคืน ส่วนใบลดหนี้ขายให้เดบิตรายได้และภาษีขายแล้วเครดิตลูกหนี้/เงินคืน",
     "ใช้เฉพาะรหัสบัญชีในผังที่ให้มา จำนวนเงินทุกช่องต้องเป็นสตางค์จำนวนเต็ม และผลรวมเดบิตต้องเท่ากับเครดิต",
     "เลขที่ใบกำกับภาษีต้องใส่ docNo ในบรรทัดภาษีซื้อ/ขาย ห้ามใช้เลขที่ใบสำคัญแทน",
     "ถ้ามีส่วนต่างระหว่างยอดรวมกับยอดจ่าย ให้ตรวจว่าตรงกับภาษีหัก ณ ที่จ่ายหรือไม่ แล้วเตือนเมื่อยังไม่แน่ใจ",
@@ -176,7 +220,11 @@ export async function analyzeAccountingDocument(file: Buffer, mimeType: string):
   if (!text) throw new Error("Gemini ไม่ได้ส่งผลการอ่านเอกสารกลับมา");
 
   const result = autokeyBatchResultSchema.parse(JSON.parse(text));
-  for (const draft of result.drafts) draft.date = normalizeAutokeyDate(draft.date);
+  for (let index = 0; index < result.drafts.length; index += 1) {
+    const draft = result.drafts[index];
+    draft.date = normalizeAutokeyDate(draft.date);
+    result.drafts[index] = { ...normalizeAutokeyCreditNote(draft, accounts), pageNumber: draft.pageNumber };
+  }
   result.drafts.sort((a, b) => a.pageNumber - b.pageNumber);
   const expectedNumbers = Array.from({ length: expectedPageCount ?? result.drafts.length }, (_, index) => index + 1);
   if (result.drafts.length !== expectedNumbers.length || result.drafts.some((draft, index) => draft.pageNumber !== expectedNumbers[index])) {

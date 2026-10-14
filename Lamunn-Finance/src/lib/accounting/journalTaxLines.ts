@@ -166,14 +166,17 @@ export async function journalInputVatRows(start: Date, end: Date): Promise<Journ
       .filter((x) => x.line.account.vatRole === "INPUT" && x.vat !== 0 && Boolean(x.line.docNo?.trim()));
     if (vatLines.length === 0) continue;
 
+    const totalVat = vatLines.reduce((s, x) => s + x.vat, 0);
+    const vatDirection = Math.sign(totalVat);
     let base = 0;
     for (const l of e.lines) {
       const debitSide = toSatang(l.debit) - toSatang(l.credit);
-      if (l.account.vatRole === null && debitSide > 0 && (l.account.type === "EXPENSE" || l.account.type === "ASSET")) {
+      // เลือกเฉพาะค่าใช้จ่าย/สินทรัพย์ที่อยู่ทิศเดียวกับภาษีซื้อ เพื่อไม่หยิบเงินฝากฝั่งชำระหรือรับคืนมารวมเป็นฐาน
+      // ใบลดหนี้จึงได้ทั้งฐานและ VAT เป็นลบ ขณะที่จำนวนในบรรทัดบัญชียังคงเป็นจำนวนบวกตามหลักบัญชีคู่
+      if (l.account.vatRole === null && debitSide !== 0 && Math.sign(debitSide) === vatDirection && (l.account.type === "EXPENSE" || l.account.type === "ASSET")) {
         base += debitSide;
       }
     }
-    const totalVat = vatLines.reduce((s, x) => s + x.vat, 0);
 
     const fallback = partnerOf(e);
     let allocated = 0;

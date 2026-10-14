@@ -19,7 +19,7 @@ let certificateId: string | null = null;
 const ruleIds: string[] = [];
 
 async function main() {
-  const [{ prisma }, { createEntry, postEntry }, { buildInputVatReport }, { normalizeAutokeyDate }] = await Promise.all([
+  const [{ prisma }, { createEntry, postEntry }, { buildInputVatReport }, { normalizeAutokeyDate, normalizeAutokeyCreditNote, autokeyResultSchema }] = await Promise.all([
     import("@lamunn/db-finance"),
     import("../src/lib/accounting/post"),
     import("../src/lib/accounting/taxReports"),
@@ -27,6 +27,40 @@ async function main() {
   ]);
   try {
     check(normalizeAutokeyDate("2569-09-29", 2026) === "2026-09-29" && normalizeAutokeyDate("2069-09-29", 2026) === "2026-09-29", "แปลงปี พ.ศ. 2569 และปีไทยแบบสั้น 69 เป็น ค.ศ. 2026");
+    const creditNoteBase = {
+      date: "2091-01-15", documentType: "CREDIT_NOTE" as const, journalType: "PURCHASE" as const,
+      description: "[test] ยอดในวงเล็บ", docNo: "[test]-CN-001",
+      vendor: { name: "[test] ผู้ขาย", taxId: null, branchTag: null, address: null },
+      isClaimableVat: true, whtFormType: null, whtRatePercent: null, incomeType: null,
+      confidence: 95, warnings: [] as string[],
+      lines: [
+        { accountCode: "EXP", debitSatang: 10000, creditSatang: 0, memo: "[test] สินค้า", docNo: null },
+        { accountCode: "INPUT", debitSatang: 700, creditSatang: 0, memo: "[test] ภาษีซื้อ", docNo: "[test]-CN-001" },
+        { accountCode: "AP", debitSatang: 0, creditSatang: 10700, memo: "[test] เจ้าหนี้", docNo: null },
+      ],
+    };
+    const accountHints = [
+      { code: "EXP", type: "EXPENSE", vatRole: null },
+      { code: "INPUT", type: "ASSET", vatRole: "INPUT" },
+      { code: "AP", type: "LIABILITY", vatRole: null },
+      { code: "REV", type: "REVENUE", vatRole: null },
+      { code: "OUTPUT", type: "LIABILITY", vatRole: "OUTPUT" },
+      { code: "AR", type: "ASSET", vatRole: null },
+    ];
+    const purchaseCreditNote = normalizeAutokeyCreditNote(autokeyResultSchema.parse(creditNoteBase), accountHints);
+    check(purchaseCreditNote.lines[0].creditSatang === 10000 && purchaseCreditNote.lines[1].creditSatang === 700 && purchaseCreditNote.lines[2].debitSatang === 10700, "ยอดติดลบ/วงเล็บของใบซื้อกลับด้านเป็นลดค่าใช้จ่าย ภาษีซื้อ และเจ้าหนี้");
+    check(purchaseCreditNote.description.startsWith("ใบลดหนี้:"), "คำอธิบายร่างระบุชัดว่าเป็นใบลดหนี้");
+
+    const salesCreditNote = normalizeAutokeyCreditNote(autokeyResultSchema.parse({
+      ...creditNoteBase, journalType: "SALES", description: "[test] ใบลดหนี้ขาย",
+      lines: [
+        { accountCode: "REV", debitSatang: 10000, creditSatang: 0, memo: "[test] ลดรายได้", docNo: null },
+        { accountCode: "OUTPUT", debitSatang: 700, creditSatang: 0, memo: "[test] ลดภาษีขาย", docNo: "[test]-CN-002" },
+        { accountCode: "AR", debitSatang: 0, creditSatang: 10700, memo: "[test] ลดลูกหนี้", docNo: null },
+      ],
+    }), accountHints);
+    check(salesCreditNote.lines[0].debitSatang === 10000 && salesCreditNote.lines[1].debitSatang === 700 && salesCreditNote.lines[2].creditSatang === 10700, "ใบลดหนี้ขายที่กลับด้านถูกแล้วไม่ถูกสลับซ้ำ");
+
     const [expense, inputVat, bank, wht] = await Promise.all([
       prisma.accAccount.create({ data: { code: `TST-AUTO-E-${stamp}`, nameTh: "[test] ค่าใช้จ่าย AI Autokey", type: "EXPENSE" } }),
       prisma.accAccount.create({ data: { code: `TST-AUTO-V-${stamp}`, nameTh: "[test] ภาษีซื้อ AI Autokey", type: "ASSET", vatRole: "INPUT" } }),
@@ -94,6 +128,20 @@ async function main() {
     check(rule?.timesConfirmed === 1 && rule.keyword.includes("[test]"), "เรียนรู้เฉพาะรายการที่ผ่านรายการแล้ว");
     check(certificate?.formType === "PND53" && Number(certificate.whtAmount) === 3, "สร้างหนังสือรับรองและเชื่อม ภ.ง.ด.53 จากข้อมูลที่คนยืนยัน");
     check(inputVatReport.rows.some((row) => row.entryNo === posted?.entryNo && row.invoiceNo === `[test]-VAT-${stamp}` && row.vat === 700), "ภาษีซื้อจากบรรทัดใบสำคัญเข้าสู่รายงานด้วยเลขที่ใบกำกับจาก docNo");
+    const creditNoteEntry = await createEntry({
+      date, journalType: "PURCHASE", status: "DRAFT", description: "[test] ใบลดหนี้ AI Autokey",
+      sourceType: "AI_AUTOKEY", sourceKey: `${document.fileHash}:credit-note`,
+      lines: [
+        { accountId: expense.id, credit: 93, partnerId, memo: "[test] ลดค่าใช้จ่าย" },
+        { accountId: inputVat.id, credit: 7, partnerId, memo: "[test] ลดภาษีซื้อ", docNo: `[test]-CN-${stamp}` },
+        { accountId: bank.id, debit: 100, partnerId, memo: "[test] เงินรับคืน" },
+      ],
+    });
+    extraEntryIds.push(creditNoteEntry.id);
+    await postEntry(creditNoteEntry.id, "[test]");
+    const creditNoteReport = await buildInputVatReport(new Date("2091-01-01T00:00:00.000Z"), new Date("2091-01-31T23:59:59.999Z"));
+    const creditNoteRow = creditNoteReport.rows.find((row) => row.invoiceNo === `[test]-CN-${stamp}`);
+    check(creditNoteRow?.base === -9300 && creditNoteRow.vat === -700 && creditNoteRow.total === -10000, "ใบลดหนี้ AI ลดฐาน ภาษีซื้อ และยอดรวมในรายงานด้วยจำนวนติดลบ");
     if (rule) ruleIds.push(rule.id);
     if (certificate) certificateId = certificate.id;
   } finally {
