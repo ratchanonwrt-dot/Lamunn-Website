@@ -16,6 +16,20 @@ export function toSatang(v: Money): number {
   return Math.round(n * 100);
 }
 
+/** แปลงยอดที่คนพิมพ์ โดยรองรับทั้ง -1,070.00 และ (1,070.00) เป็นยอดลบ
+ * แยกจาก toSatang เพราะค่าจากฐานข้อมูลไม่ควรถูกตีความรูปแบบข้อความเพิ่มเติมโดยไม่ตั้งใจ */
+export function signedInputToSatang(v: Money): number {
+  if (v === null || v === undefined || v === "") return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? Math.round(v * 100) : 0;
+  const original = v.toString().trim();
+  const parenthesized = /^\(.*\)$/.test(original);
+  const cleaned = original.replace(/^\((.*)\)$/, "$1").replace(/[,\s฿]/g, "");
+  const parsed = Number(cleaned);
+  if (!Number.isFinite(parsed)) return 0;
+  const sign = parenthesized || parsed < 0 ? -1 : 1;
+  return Math.round(Math.abs(parsed) * 100) * sign;
+}
+
 /** แปลงสตางค์กลับเป็นบาท (ทศนิยม 2 ตำแหน่ง) สำหรับเขียนลงฐานข้อมูล/แสดงผล */
 export function toBaht(satang: number): number {
   return Math.round(satang) / 100;

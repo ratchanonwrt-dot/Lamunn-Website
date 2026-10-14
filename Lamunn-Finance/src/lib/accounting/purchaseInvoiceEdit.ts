@@ -1,7 +1,7 @@
 import { prisma } from "@lamunn/db-finance";
 import { parseDateOnly } from "@/lib/dates";
 import { getAllSettings } from "@/lib/settings";
-import { splitVatInclusive, addVatExclusive, toBaht, toSatang } from "./money";
+import { splitVatInclusive, addVatExclusive, signedInputToSatang, toBaht, toSatang } from "./money";
 import { AccountingError, updateEntry } from "./post";
 import { SYSTEM_ACCOUNTS } from "./chartOfAccounts";
 import { withholdingFromPercent } from "./withholdingMath";
@@ -30,7 +30,8 @@ export interface PurchaseInvoicePatch {
   amountIncludesVat?: boolean;
 }
 
-export const entryDescriptionFor = (vendorName: string, invoiceNo: string) => `ซื้อ ${vendorName} ใบกำกับ ${invoiceNo}`;
+export const entryDescriptionFor = (vendorName: string, invoiceNo: string, isCreditNote = false) =>
+  `${isCreditNote ? "ใบลดหนี้" : "ซื้อ"} ${vendorName} ใบกำกับ ${invoiceNo}`;
 
 const str = (v: unknown) => String(v ?? "").trim();
 
@@ -57,8 +58,8 @@ export async function updatePurchaseInvoice(id: string, patch: PurchaseInvoicePa
   let base = toSatang(current.baseAmount);
   let vat = toSatang(current.vatAmount);
   if (patch.amount !== undefined && str(patch.amount) !== "") {
-    const amountSatang = toSatang(patch.amount);
-    if (amountSatang <= 0) throw new AccountingError("ยอดเงินต้องมากกว่า 0");
+    const amountSatang = signedInputToSatang(patch.amount);
+    if (amountSatang === 0) throw new AccountingError("ยอดเงินต้องไม่เป็น 0");
     const vatRate = opts.vatRate ?? Number((await getAllSettings()).vatRate);
     ({ base, vat } = patch.amountIncludesVat === false ? addVatExclusive(amountSatang, vatRate) : splitVatInclusive(amountSatang, vatRate));
   }
@@ -68,6 +69,11 @@ export async function updatePurchaseInvoice(id: string, patch: PurchaseInvoicePa
   const identityChanged = invoiceNo !== current.invoiceNo || vendorName !== current.vendorName || vendorTaxId !== current.vendorTaxId;
   const linkedWht = current.whtCertificate;
   const oldBase = toSatang(current.baseAmount);
+  const isCreditNote = base < 0;
+  const wasCreditNote = oldBase < 0;
+  if (linkedWht && isCreditNote) {
+    throw new AccountingError("ใบที่มีหนังสือรับรองหัก ณ ที่จ่ายเปลี่ยนเป็นใบลดหนี้ไม่ได้ กรุณายกเลิกเอกสารแล้วบันทึกใบลดหนี้ใหม่");
+  }
   // ถ้าผู้ใช้เคยกำหนดฐานหักเอง ให้คงฐานนั้นไว้; ถ้าเดิมใช้ฐานเต็มจึงขยับตามยอดใบกำกับใหม่
   const linkedWhtBase = linkedWht
     ? (toSatang(linkedWht.baseAmount) === oldBase ? base : toSatang(linkedWht.baseAmount))
@@ -115,32 +121,41 @@ export async function updatePurchaseInvoice(id: string, patch: PurchaseInvoicePa
       const whtLine = linkedWht
         ? entry.lines.find((l) => l.account.code === SYSTEM_ACCOUNTS.WHT_PAYABLE && toSatang(l.credit) > 0)
         : null;
-      const creditLine = entry.lines.find((l) => l !== whtLine && toSatang(l.credit) > 0);
-      const expenseLine = entry.lines.find((l) => l !== vatLine && toSatang(l.debit) > 0);
+      // ใบที่ระบบสร้างเรียง ค่าใช้จ่าย → VAT → เงิน/เจ้าหนี้ → WHT เสมอ จึงใช้ลำดับแทนการเดาจากด้านบัญชี
+      // เพราะเมื่อเปลี่ยนเป็นใบลดหนี้ ทุกบรรทัดจะสลับด้านพร้อมกัน
+      const nonTaxLines = entry.lines.filter((l) => l !== vatLine && l !== whtLine);
+      const [expenseLine, settlementLine] = nonTaxLines;
       const expectedLineCount = linkedWht ? 4 : 3;
-      if (entry.lines.length !== expectedLineCount || !vatLine || !creditLine || !expenseLine || (linkedWht && !whtLine)) {
+      if (entry.lines.length !== expectedLineCount || !vatLine || !expenseLine || !settlementLine || (linkedWht && !whtLine)) {
         throw new AccountingError(
           `ใบสำคัญ ${entry.entryNo} ถูกแก้ไขจนไม่ใช่รูปแบบมาตรฐาน (ค่าใช้จ่าย/ภาษีซื้อ/ยอดจ่าย/ภาษีหัก) — แก้ยอดที่ใบสำคัญโดยตรงแทน`
         );
       }
-      const keepOrNew = entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo)
-        ? entryDescriptionFor(vendorName, invoiceNo)
+      const keepOrNew = entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)
+        ? entryDescriptionFor(vendorName, invoiceNo, isCreditNote)
         : entry.description;
+      const absoluteBase = Math.abs(base);
+      const absoluteVat = Math.abs(vat);
+      const absoluteTotal = Math.abs(base + vat);
       await updateEntry(entry.id, {
         date: invoiceDate,
         journalType: entry.journalType,
         description: keepOrNew,
-        lines: [
+        lines: isCreditNote ? [
+          { accountId: expenseLine.accountId, credit: toBaht(absoluteBase), partnerId: expenseLine.partnerId, branchId: expenseLine.branchId, memo: expenseLine.memo, docNo: expenseLine.docNo },
+          { accountId: vatLine.accountId, credit: toBaht(absoluteVat), partnerId: vatLine.partnerId, branchId: vatLine.branchId, memo: vatLine.memo, docNo: vatLine.docNo },
+          { accountId: settlementLine.accountId, debit: toBaht(absoluteTotal), partnerId: settlementLine.partnerId, branchId: settlementLine.branchId, memo: settlementLine.memo, docNo: settlementLine.docNo },
+        ] : [
           { accountId: expenseLine.accountId, debit: toBaht(base), partnerId: expenseLine.partnerId, branchId: expenseLine.branchId, memo: expenseLine.memo, docNo: expenseLine.docNo },
           { accountId: vatLine.accountId, debit: toBaht(vat), partnerId: vatLine.partnerId, branchId: vatLine.branchId, memo: vatLine.memo, docNo: vatLine.docNo },
-          { accountId: creditLine.accountId, credit: toBaht(base + vat - (linkedWhtCalc?.amount ?? 0)), partnerId: creditLine.partnerId, branchId: creditLine.branchId, memo: creditLine.memo, docNo: creditLine.docNo },
+          { accountId: settlementLine.accountId, credit: toBaht(base + vat - (linkedWhtCalc?.amount ?? 0)), partnerId: settlementLine.partnerId, branchId: settlementLine.branchId, memo: settlementLine.memo, docNo: settlementLine.docNo },
           ...(linkedWht && whtLine && linkedWhtCalc
             ? [{ accountId: whtLine.accountId, credit: toBaht(linkedWhtCalc.amount), partnerId: whtLine.partnerId, branchId: whtLine.branchId, memo: whtLine.memo, docNo: whtLine.docNo }]
             : []),
         ],
       });
-    } else if (identityChanged && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo)) {
-      await prisma.accJournalEntry.update({ where: { id: entry.id }, data: { description: entryDescriptionFor(vendorName, invoiceNo) } });
+    } else if (identityChanged && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)) {
+      await prisma.accJournalEntry.update({ where: { id: entry.id }, data: { description: entryDescriptionFor(vendorName, invoiceNo, isCreditNote) } });
     }
   }
 

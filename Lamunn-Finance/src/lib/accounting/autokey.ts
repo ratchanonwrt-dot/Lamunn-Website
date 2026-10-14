@@ -11,8 +11,9 @@ export const AUTOKEY_MIME_TYPES = ["application/pdf", "image/jpeg", "image/png"]
 
 const lineSchema = z.object({
   accountCode: z.string(),
-  debitSatang: z.number().int().nonnegative(),
-  creditSatang: z.number().int().nonnegative(),
+  // ยอมรับค่าลบจากการอ่านเอกสารก่อน แล้ว normalize ไปฝั่งตรงข้ามทันทีหลัง parse
+  debitSatang: z.number().int(),
+  creditSatang: z.number().int(),
   memo: z.string(),
   docNo: z.string().nullable(),
 });
@@ -80,8 +81,8 @@ const resultProperties = {
       required: ["accountCode", "debitSatang", "creditSatang", "memo", "docNo"],
       properties: {
         accountCode: { type: "string" },
-        debitSatang: { type: "integer", minimum: 0 },
-        creditSatang: { type: "integer", minimum: 0 },
+        debitSatang: { type: "integer" },
+        creditSatang: { type: "integer" },
         memo: { type: "string" },
         docNo: { type: "string", nullable: true },
       },
@@ -160,6 +161,32 @@ export function normalizeAutokeyCreditNote(draft: AutokeyResult, accounts: reado
   };
 }
 
+/** AI บางครั้งคืนจำนวนติดลบแม้เราสั่งให้ใช้จำนวนบวก จึงย้ายค่าลบไปฝั่งตรงข้ามก่อนตรวจใบลดหนี้
+ * เช่น debit -700 กลายเป็น credit 700 โดยไม่มีจำนวนติดลบหลุดไปถึง post.ts */
+export function normalizeAutokeySignedLines(draft: AutokeyResult): AutokeyResult {
+  return {
+    ...draft,
+    lines: draft.lines.map((line) => {
+      let debitSatang = line.debitSatang;
+      let creditSatang = line.creditSatang;
+      if (debitSatang < 0) {
+        creditSatang += Math.abs(debitSatang);
+        debitSatang = 0;
+      }
+      if (creditSatang < 0) {
+        debitSatang += Math.abs(creditSatang);
+        creditSatang = 0;
+      }
+      const netDebit = debitSatang - creditSatang;
+      return {
+        ...line,
+        debitSatang: Math.max(netDebit, 0),
+        creditSatang: Math.max(-netDebit, 0),
+      };
+    }),
+  };
+}
+
 export async function analyzeAccountingDocument(file: Buffer, mimeType: string): Promise<AutokeyBatchResult> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) throw new Error("ยังไม่ได้ตั้งค่า GEMINI_API_KEY ในระบบ");
@@ -223,7 +250,8 @@ export async function analyzeAccountingDocument(file: Buffer, mimeType: string):
   for (let index = 0; index < result.drafts.length; index += 1) {
     const draft = result.drafts[index];
     draft.date = normalizeAutokeyDate(draft.date);
-    result.drafts[index] = { ...normalizeAutokeyCreditNote(draft, accounts), pageNumber: draft.pageNumber };
+    const positiveSides = normalizeAutokeySignedLines(draft);
+    result.drafts[index] = { ...normalizeAutokeyCreditNote(positiveSides, accounts), pageNumber: draft.pageNumber };
   }
   result.drafts.sort((a, b) => a.pageNumber - b.pageNumber);
   const expectedNumbers = Array.from({ length: expectedPageCount ?? result.drafts.length }, (_, index) => index + 1);
