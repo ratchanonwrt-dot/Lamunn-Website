@@ -141,12 +141,12 @@ export async function buildOutputVatReport(start: Date, end: Date): Promise<Outp
 
 export interface InputVatRow {
   id: string;
-  /** DOC = ใบกำกับภาษีซื้อที่บันทึกไว้, JOURNAL = ใบสำคัญจาก AI Autokey */
-  kind: "DOC" | "JOURNAL";
+  /** แยกต้นทางให้ชัด เพราะใบสำคัญที่คนคีย์เองต้องไม่เป็นแหล่งของรายงานภาษีซื้อ */
+  kind: "DOC" | "AI_AUTOKEY";
   date: Date;
   /** เลขที่ใบกำกับตามใบของผู้ขาย — แถว AI จะไม่เข้ารายงานจนกว่าจะกรอกที่บรรทัด (ไม่ใช้เลขที่ใบสำคัญแทน) */
   invoiceNo: string;
-  /** เลขที่ใบสำคัญต้นทาง (เฉพาะแถวจากสมุดรายวัน) — ไว้ให้กดไปดู ไม่ใช่เลขที่ใบกำกับ */
+  /** เลขที่รายการต้นทางของ AI — ใช้ย้อนกลับไปตรวจ ไม่ใช่เลขที่ใบกำกับ */
   entryNo: string | null;
   vendorName: string;
   taxId: string | null;
@@ -166,7 +166,7 @@ export interface InputVatReport {
   claimableVat: number;
   nonClaimableVat: number;
   docCount: number;
-  journalCount: number;
+  aiAutokeyCount: number;
 }
 
 export async function buildInputVatReport(start: Date, end: Date): Promise<InputVatReport> {
@@ -198,7 +198,7 @@ export async function buildInputVatReport(start: Date, end: Date): Promise<Input
   for (const j of journalRows) {
     rows.push({
       id: j.lineId,
-      kind: "JOURNAL",
+      kind: "AI_AUTOKEY",
       date: j.date,
       invoiceNo: j.docNo ?? "",
       entryNo: j.entryNo,
@@ -222,7 +222,7 @@ export async function buildInputVatReport(start: Date, end: Date): Promise<Input
     claimableVat: rows.filter((r) => r.isClaimable).reduce((s, r) => s + r.vat, 0),
     nonClaimableVat: rows.filter((r) => !r.isClaimable).reduce((s, r) => s + r.vat, 0),
     docCount: rows.filter((r) => r.kind === "DOC").length,
-    journalCount: rows.filter((r) => r.kind === "JOURNAL").length,
+    aiAutokeyCount: rows.filter((r) => r.kind === "AI_AUTOKEY").length,
   };
 }
 
