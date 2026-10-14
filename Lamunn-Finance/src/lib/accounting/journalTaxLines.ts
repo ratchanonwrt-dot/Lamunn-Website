@@ -82,6 +82,18 @@ function partnerOf(entry: EntryWithLines) {
   return null;
 }
 
+function normalizedDocumentNo(value: string) {
+  return value.trim().toLocaleUpperCase("th-TH").replace(/\s+/g, "");
+}
+
+function normalizedTaxId(value: string | null | undefined) {
+  return value?.replace(/\D/g, "") || null;
+}
+
+function normalizedVendorName(value: string | null | undefined) {
+  return value?.trim().toLocaleLowerCase("th-TH").replace(/\s+/g, " ") || null;
+}
+
 /** ภาษีขายที่มาจากใบสำคัญที่คีย์เอง — ไม่รวมใบขายประจำวันและใบที่สร้างจากใบกำกับภาษี
  * (สองอย่างนั้นถูกนับผ่านตารางเอกสารอยู่แล้ว ถ้านับซ้ำยอดจะเบิ้ล) */
 export async function journalOutputVatRows(start: Date, end: Date): Promise<JournalTaxRow[]> {
@@ -118,11 +130,12 @@ export async function journalOutputVatRows(start: Date, end: Date): Promise<Jour
   return rows;
 }
 
-/** ภาษีซื้อที่มาจากใบสำคัญที่คีย์เอง — ไม่รวมใบที่ผูกกับใบกำกับภาษีซื้อไว้แล้ว
+/** ภาษีซื้อที่มาจาก AI Autokey — ไม่รวมใบที่คนบันทึกในทะเบียนภาษีซื้อไว้แล้ว
  *
  * ออกมา "หนึ่งแถวต่อหนึ่งบรรทัดภาษีซื้อ" ไม่ใช่ต่อใบสำคัญ — ใบสำคัญจ่ายเงินใบเดียวมักรวมใบกำกับ
  * หลายใบ (ค่าเช่า + ค่าบริการ + ค่าที่ดิน) ซึ่งรายงานภาษีซื้อต้องแสดงเลขที่ใบกำกับแยกกันทุกใบ
- * เลขที่ใบกำกับอ่านจาก docNo ของบรรทัดนั้น ถ้ายังไม่ได้กรอกจะเป็น null ให้หน้าจอเตือน (ไม่เอาเลขที่ใบสำคัญมาแทน)
+ * เลขที่ใบกำกับอ่านจาก docNo ของบรรทัดนั้น และยังไม่ส่งเข้ารายงานจนกว่าจะกรอกเลขนี้
+ * เพื่อให้ตรวจรายการซ้ำกับทะเบียนภาษีซื้อได้แน่นอน (ไม่เอาเลขที่ใบสำคัญมาแทน)
  *
  * ฐานภาษี = ยอดเดบิตของบัญชีอื่นในใบเดียวกันที่ไม่ใช่บัญชีภาษี (ค่าใช้จ่าย/สินทรัพย์ที่ซื้อมา)
  * ถ้ามีบรรทัดภาษีซื้อหลายบรรทัด ฐานจะถูกแบ่งตามสัดส่วนยอดภาษีของแต่ละบรรทัด (เศษปัดให้บรรทัดสุดท้าย
@@ -131,19 +144,26 @@ export async function journalInputVatRows(start: Date, end: Date): Promise<Journ
   const [entries, linkedInvoices] = await Promise.all([
     fetchEntriesTouching(start, end, ["INPUT"]),
     prisma.accPurchaseTaxInvoice.findMany({
-      where: { entryId: { not: null }, voided: false },
-      select: { entryId: true },
+      where: { voided: false },
+      select: { entryId: true, invoiceNo: true, invoiceDate: true, vendorTaxId: true, vendorName: true, baseAmount: true, vatAmount: true },
     }),
   ]);
   const linked = new Set(linkedInvoices.map((i) => i.entryId));
+  const invoicesByNo = new Map<string, typeof linkedInvoices>();
+  for (const invoice of linkedInvoices) {
+    const key = normalizedDocumentNo(invoice.invoiceNo);
+    invoicesByNo.set(key, [...(invoicesByNo.get(key) ?? []), invoice]);
+  }
   const rows: JournalTaxRow[] = [];
 
   for (const e of entries) {
-    if (linked.has(e.id)) continue;
+    // ใบสำคัญที่คนคีย์เองเป็นเพียงรายการบัญชี ไม่ใช่ทะเบียนภาษีซื้อ
+    // จึงรับเข้ารายงานอัตโนมัติเฉพาะเอกสารที่ผ่านขั้นตรวจของ AI Autokey เท่านั้น
+    if (e.sourceType !== "AI_AUTOKEY" || linked.has(e.id)) continue;
 
     const vatLines = e.lines
       .map((l) => ({ line: l, vat: toSatang(l.debit) - toSatang(l.credit) }))
-      .filter((x) => x.line.account.vatRole === "INPUT" && x.vat !== 0);
+      .filter((x) => x.line.account.vatRole === "INPUT" && x.vat !== 0 && Boolean(x.line.docNo?.trim()));
     if (vatLines.length === 0) continue;
 
     let base = 0;
@@ -162,6 +182,19 @@ export async function journalInputVatRows(start: Date, end: Date): Promise<Journ
         idx === vatLines.length - 1 ? base - allocated : totalVat === 0 ? 0 : Math.round((base * vat) / totalVat);
       allocated += lineBase;
       const p = line.partner ?? fallback;
+      const sameNumber = invoicesByNo.get(normalizedDocumentNo(line.docNo!)) ?? [];
+      const partnerTaxId = normalizedTaxId(p?.taxId);
+      const partnerName = normalizedVendorName(p?.name);
+      const isAlreadyRecorded = sameNumber.some((invoice) => {
+        const invoiceTaxId = normalizedTaxId(invoice.vendorTaxId);
+        if (partnerTaxId && invoiceTaxId) return partnerTaxId === invoiceTaxId;
+        const invoiceName = normalizedVendorName(invoice.vendorName);
+        if (partnerName && invoiceName && partnerName === invoiceName) return true;
+        if (invoice.invoiceDate.getTime() === e.date.getTime() && toSatang(invoice.vatAmount) === vat && toSatang(invoice.baseAmount) === lineBase) return true;
+        // ถ้าใบสำคัญไม่มีข้อมูลคู่ค้า เลขที่ตรงกันต้องถือว่าคนบันทึกทะเบียนไว้แล้ว
+        return !p;
+      });
+      if (isAlreadyRecorded) return;
       rows.push({
         entryId: e.id,
         entryNo: e.entryNo,

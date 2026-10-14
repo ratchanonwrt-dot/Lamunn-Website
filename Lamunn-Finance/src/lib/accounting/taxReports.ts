@@ -141,10 +141,10 @@ export async function buildOutputVatReport(start: Date, end: Date): Promise<Outp
 
 export interface InputVatRow {
   id: string;
-  /** DOC = ใบกำกับภาษีซื้อที่บันทึกไว้, JOURNAL = คีย์เองในสมุดรายวัน */
+  /** DOC = ใบกำกับภาษีซื้อที่บันทึกไว้, JOURNAL = ใบสำคัญจาก AI Autokey */
   kind: "DOC" | "JOURNAL";
   date: Date;
-  /** เลขที่ใบกำกับตามใบของผู้ขาย — แถวจากสมุดรายวันเป็น "" ถ้ายังไม่ได้กรอกที่บรรทัด (ไม่ใช้เลขที่ใบสำคัญแทน) */
+  /** เลขที่ใบกำกับตามใบของผู้ขาย — แถว AI จะไม่เข้ารายงานจนกว่าจะกรอกที่บรรทัด (ไม่ใช้เลขที่ใบสำคัญแทน) */
   invoiceNo: string;
   /** เลขที่ใบสำคัญต้นทาง (เฉพาะแถวจากสมุดรายวัน) — ไว้ให้กดไปดู ไม่ใช่เลขที่ใบกำกับ */
   entryNo: string | null;
@@ -175,7 +175,7 @@ export async function buildInputVatReport(start: Date, end: Date): Promise<Input
       where: { invoiceDate: { gte: start, lte: end }, voided: false },
       orderBy: [{ invoiceDate: "asc" }, { invoiceNo: "asc" }],
     }),
-    // ใบสำคัญที่บัญชีคีย์เองแล้วแตะบัญชีภาษีซื้อ — นับเป็นภาษีซื้อที่ขอเครดิตได้ตามปกติ
+    // AI Autokey ที่คนตรวจและผ่านรายการแล้ว — ใบสำคัญคีย์เองไม่ใช่ทะเบียนภาษีซื้อ
     journalInputVatRows(start, end),
   ]);
 
