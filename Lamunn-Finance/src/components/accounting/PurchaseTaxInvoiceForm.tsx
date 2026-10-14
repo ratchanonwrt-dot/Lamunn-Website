@@ -8,6 +8,7 @@ import AccountCombobox from "./AccountCombobox";
 import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
 import { addVatExclusive, fmtSatang, signedInputToSatang, splitVatInclusive, toSatang } from "@/lib/accounting/money";
 import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
+import PurchaseTaxClaimPeriodSelect from "./PurchaseTaxClaimPeriodSelect";
 
 interface PartnerOption {
   id: string;
@@ -49,6 +50,7 @@ export default function PurchaseTaxInvoiceForm({
   const [form, setForm] = useState({
     invoiceNo: "",
     invoiceDate: today(),
+    claimPeriod: today().slice(0, 7),
     partnerId: "",
     vendorName: "",
     vendorTaxId: "",
@@ -150,7 +152,33 @@ export default function PurchaseTaxInvoiceForm({
         </label>
         <label className={label}>
           วันที่บนใบกำกับ
-          <input type="date" required value={form.invoiceDate} onChange={(e) => setForm({ ...form, invoiceDate: e.target.value })} className={field} />
+          <input
+            type="date"
+            required
+            value={form.invoiceDate}
+            onChange={(e) => {
+              const invoiceDate = e.target.value;
+              const oldInvoiceMonth = form.invoiceDate.slice(0, 7);
+              const newInvoiceMonth = invoiceDate.slice(0, 7);
+              setForm({
+                ...form,
+                invoiceDate,
+                // ถ้ายังไม่เคยเลื่อนงวด ให้ขยับตามวันที่ใหม่; ถ้าเลือกเองแล้วต้องรักษาเดือนที่ผู้ใช้ตั้งใจเคลม
+                claimPeriod: form.claimPeriod === oldInvoiceMonth || form.claimPeriod < newInvoiceMonth ? newInvoiceMonth : form.claimPeriod,
+              });
+            }}
+            className={field}
+          />
+        </label>
+        <label className={label}>
+          เคลมในงวดภาษี
+          <PurchaseTaxClaimPeriodSelect
+            invoiceDate={form.invoiceDate}
+            value={form.claimPeriod}
+            onChange={(claimPeriod) => setForm({ ...form, claimPeriod })}
+            className={field}
+          />
+          <span className="mt-1 text-xs font-normal text-gray-500">วันที่ในรายงานยังเป็นวันที่จริงบนใบกำกับ</span>
         </label>
         <div className={label}>
           เลือกจากคู่ค้า (ถ้ามี)

@@ -1066,7 +1066,10 @@ model AccTaxInvoice {
 model AccPurchaseTaxInvoice {
   id          String   @id @default(cuid())
   invoiceNo   String // เลขที่ใบกำกับภาษีที่ผู้ขายออกให้ (ไม่ใช่เลขที่เราออกเอง)
-  invoiceDate DateTime @db.Date // วันที่บนใบกำกับ — ใช้จัดงวดในรายงานภาษีซื้อ
+  invoiceDate DateTime @db.Date // วันที่จริงที่พิมพ์บนใบกำกับ
+  // แยกงวดเคลมออกจากวันที่เอกสาร เพราะใบกำกับเดือนก่อนอาจนำมาใช้เครดิตภาษีในเดือนถัดไป
+  // null ใช้กับข้อมูลเก่าที่ต้องอิงเดือนของ invoiceDate เพื่อไม่ให้รายการเดิมหายจากรายงาน
+  claimPeriod DateTime? @db.Date
 
   partnerId       String?
   partner         AccPartner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
@@ -1094,6 +1097,7 @@ model AccPurchaseTaxInvoice {
   updatedAt DateTime @updatedAt
 
   @@index([invoiceDate])
+  @@index([claimPeriod])
   @@index([partnerId])
   @@map("acc_purchase_tax_invoices")
 }

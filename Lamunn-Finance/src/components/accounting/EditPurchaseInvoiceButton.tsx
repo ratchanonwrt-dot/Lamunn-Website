@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { useServerRefresh } from "./useServerRefresh";
 import { signedInputToSatang } from "@/lib/accounting/money";
+import PurchaseTaxClaimPeriodSelect from "./PurchaseTaxClaimPeriodSelect";
 
 interface InvoiceData {
   invoiceNo: string;
   invoiceDate: string;
+  claimPeriod: string;
   vendorName: string;
   vendorTaxId: string | null;
   vendorBranchTag: string | null;
@@ -67,6 +69,7 @@ export default function EditPurchaseInvoiceButton({ id }: { id: string }) {
       body: JSON.stringify({
         invoiceNo: form.invoiceNo,
         invoiceDate: form.invoiceDate,
+        claimPeriod: form.claimPeriod,
         vendorName: form.vendorName,
         vendorTaxId: form.vendorTaxId ?? "",
         vendorBranchTag: form.vendorBranchTag ?? "",
@@ -146,9 +149,27 @@ export default function EditPurchaseInvoiceButton({ id }: { id: string }) {
                       required
                       disabled={amountLocked}
                       value={form.invoiceDate}
-                      onChange={(e) => setForm({ ...form, invoiceDate: e.target.value })}
+                      onChange={(e) => {
+                        const invoiceDate = e.target.value;
+                        const invoiceMonth = invoiceDate.slice(0, 7);
+                        setForm({
+                          ...form,
+                          invoiceDate,
+                          claimPeriod: form.claimPeriod < invoiceMonth ? invoiceMonth : form.claimPeriod,
+                        });
+                      }}
                       className={field}
                     />
+                  </label>
+                  <label className={label}>
+                    เคลมในงวดภาษี
+                    <PurchaseTaxClaimPeriodSelect
+                      invoiceDate={form.invoiceDate}
+                      value={form.claimPeriod}
+                      onChange={(claimPeriod) => setForm({ ...form, claimPeriod })}
+                      className={field}
+                    />
+                    <span className="mt-1 text-xs font-normal text-gray-500">เปลี่ยนงวดได้โดยไม่เปลี่ยนวันที่ใบกำกับหรือใบสำคัญ</span>
                   </label>
                   <label className={`${label} sm:col-span-2`}>
                     ชื่อผู้ขาย (ตามใบกำกับ)

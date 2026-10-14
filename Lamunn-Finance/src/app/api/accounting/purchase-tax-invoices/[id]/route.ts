@@ -21,6 +21,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     invoice: {
       ...invoice,
       invoiceDate: invoice.invoiceDate.toISOString().slice(0, 10),
+      claimPeriod: (invoice.claimPeriod ?? invoice.invoiceDate).toISOString().slice(0, 7),
       baseAmount: Number(invoice.baseAmount),
       vatAmount: Number(invoice.vatAmount),
       totalAmount: Number(invoice.totalAmount),

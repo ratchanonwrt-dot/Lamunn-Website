@@ -5,6 +5,7 @@ import { splitVatInclusive, addVatExclusive, signedInputToSatang, toBaht, toSata
 import { AccountingError, updateEntry } from "./post";
 import { SYSTEM_ACCOUNTS } from "./chartOfAccounts";
 import { withholdingFromPercent } from "./withholdingMath";
+import { parsePurchaseTaxClaimPeriod } from "./purchaseTaxClaimPeriod";
 
 /** แก้ไขใบกำกับภาษีซื้อที่บันทึกไปแล้ว — ใช้กรณีคีย์เลขที่ใบกำกับ/ชื่อ/ยอดผิด
  *
@@ -19,6 +20,7 @@ import { withholdingFromPercent } from "./withholdingMath";
 export interface PurchaseInvoicePatch {
   invoiceNo?: string;
   invoiceDate?: string; // yyyy-mm-dd
+  claimPeriod?: string; // yyyy-mm
   vendorName?: string;
   vendorTaxId?: string | null;
   vendorBranchTag?: string | null;
@@ -52,6 +54,9 @@ export async function updatePurchaseInvoice(id: string, patch: PurchaseInvoicePa
   const note = patch.note !== undefined ? str(patch.note) || null : current.note;
   const isClaimable = patch.isClaimable !== undefined ? patch.isClaimable !== false : current.isClaimable;
   const invoiceDate = patch.invoiceDate ? parseDateOnly(patch.invoiceDate) : current.invoiceDate;
+  const claimPeriod = patch.claimPeriod !== undefined
+    ? parsePurchaseTaxClaimPeriod(patch.claimPeriod, invoiceDate)
+    : current.claimPeriod;
 
   if (!invoiceNo || !vendorName) throw new AccountingError("เลขที่ใบกำกับและชื่อผู้ขายเว้นว่างไม่ได้");
 
@@ -179,6 +184,7 @@ export async function updatePurchaseInvoice(id: string, patch: PurchaseInvoicePa
     data: {
       invoiceNo,
       invoiceDate,
+      claimPeriod,
       vendorName,
       vendorTaxId,
       vendorBranchTag,

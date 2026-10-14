@@ -172,7 +172,14 @@ export interface InputVatReport {
 export async function buildInputVatReport(start: Date, end: Date): Promise<InputVatReport> {
   const [invoices, journalRows] = await Promise.all([
     prisma.accPurchaseTaxInvoice.findMany({
-      where: { invoiceDate: { gte: start, lte: end }, voided: false },
+      where: {
+        voided: false,
+        OR: [
+          { claimPeriod: { gte: start, lte: end } },
+          // ข้อมูลก่อนเพิ่มงวดเคลมยังคงอิงวันที่ใบกำกับ รายการเก่าจึงไม่หายจากรายงาน
+          { claimPeriod: null, invoiceDate: { gte: start, lte: end } },
+        ],
+      },
       orderBy: [{ invoiceDate: "asc" }, { invoiceNo: "asc" }],
     }),
     // AI Autokey ที่คนตรวจและผ่านรายการแล้ว — ใบสำคัญคีย์เองไม่ใช่ทะเบียนภาษีซื้อ
