@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 import PartnerCombobox from "./PartnerCombobox";
 import AccountCombobox from "./AccountCombobox";
 import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
-import { addVatExclusive, fmtSatang, splitVatInclusive, toSatang } from "@/lib/accounting/money";
+import { addVatExclusive, fmtSatang, signedInputToSatang, splitVatInclusive, toSatang } from "@/lib/accounting/money";
 import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
 
 interface PartnerOption {
@@ -122,7 +122,8 @@ export default function PurchaseTaxInvoiceForm({
 
   const field = "mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900";
   const label = "text-xs text-gray-500";
-  const entered = toSatang(form.amount);
+  const entered = signedInputToSatang(form.amount);
+  const isCreditNote = entered < 0;
   const { base, vat } = form.amountIncludesVat
     ? splitVatInclusive(entered, vatRate)
     : addVatExclusive(entered, vatRate);
@@ -134,7 +135,13 @@ export default function PurchaseTaxInvoiceForm({
 
   return (
     <form onSubmit={submit} className="w-full rounded-xl border border-gray-200 bg-white p-5">
-      <p className="mb-4 text-sm font-semibold text-gray-800">บันทึกใบกำกับภาษีซื้อ</p>
+      <p className="mb-4 text-sm font-semibold text-gray-800">{isCreditNote ? "บันทึกใบลดหนี้" : "บันทึกใบกำกับภาษีซื้อ"}</p>
+
+      {isCreditNote && (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          ตรวจพบยอดติดลบ/วงเล็บ — ระบบจะลดฐานภาษีและภาษีซื้อ พร้อมกลับด้านเดบิต/เครดิตให้อัตโนมัติ
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className={label}>
@@ -171,7 +178,21 @@ export default function PurchaseTaxInvoiceForm({
 
         <label className={label}>
           ยอดเงิน
-          <input required inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className={field} />
+          <input
+            required
+            inputMode="decimal"
+            value={form.amount}
+            onChange={(e) => {
+              const amount = e.target.value;
+              setForm({
+                ...form,
+                amount,
+                ...(signedInputToSatang(amount) < 0 ? { whtIncomeType: "", whtRatePercent: "", whtBaseAmount: "" } : {}),
+              });
+            }}
+            placeholder="เช่น 1070 หรือ (1070)"
+            className={field}
+          />
         </label>
         <label className={label}>
           ยอดที่กรอก
@@ -206,7 +227,7 @@ export default function PurchaseTaxInvoiceForm({
         </span>
       </label>
 
-      <div className="mt-4 rounded-lg border border-violet-200 bg-violet-50/50 p-3">
+      {!isCreditNote && <div className="mt-4 rounded-lg border border-violet-200 bg-violet-50/50 p-3">
         <p className="mb-1 text-sm font-medium text-gray-800">หักภาษี ณ ที่จ่าย (ถ้ามี)</p>
         <p className="mb-3 text-xs text-gray-500">
           เมื่อเลือกประเภท ระบบจะสร้างรายการ ภ.ง.ด.53 และหนังสือรับรอง 50 ทวิให้อัตโนมัติ โดยไม่บันทึกรายได้หรือค่าใช้จ่ายซ้ำ
@@ -281,7 +302,7 @@ export default function PurchaseTaxInvoiceForm({
             </>
           )}
         </div>
-      </div>
+      </div>}
 
 
       <div className="mt-4 rounded-lg border border-brand-200 bg-brand-50/50 p-3">
@@ -294,13 +315,13 @@ export default function PurchaseTaxInvoiceForm({
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className={label}>
-            บัญชีค่าใช้จ่าย/สินทรัพย์ (เดบิต)
+            บัญชีค่าใช้จ่าย/สินทรัพย์ ({isCreditNote ? "เครดิตเพื่อลดยอด" : "เดบิต"})
             <div className="mt-1">
               <AccountCombobox accounts={expenseAccounts} value={form.expenseAccountId} onChange={(id) => setForm({ ...form, expenseAccountId: id })} />
             </div>
           </div>
           <div className={label}>
-            จ่ายด้วย / เจ้าหนี้ (เครดิต)
+            {isCreditNote ? "รับคืน / ลดเจ้าหนี้ (เดบิต)" : "จ่ายด้วย / เจ้าหนี้ (เครดิต)"}
             <div className="mt-1">
               <AccountCombobox accounts={creditAccounts} value={form.creditAccountId} onChange={(id) => setForm({ ...form, creditAccountId: id })} />
             </div>
@@ -312,7 +333,7 @@ export default function PurchaseTaxInvoiceForm({
 
       <div className="mt-4 flex gap-2">
         <button type="submit" disabled={busy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
-          {busy ? "กำลังบันทึก..." : "บันทึก"}
+          {busy ? "กำลังบันทึก..." : isCreditNote ? "บันทึกใบลดหนี้" : "บันทึก"}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
           ยกเลิก

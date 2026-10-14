@@ -3,7 +3,7 @@ import { prisma } from "@lamunn/db-finance";
 import { requireSectionApi } from "@/lib/permissions";
 import { parseDateOnly } from "@/lib/dates";
 import { getAllSettings } from "@/lib/settings";
-import { splitVatInclusive, addVatExclusive, toBaht, toSatang } from "@/lib/accounting/money";
+import { splitVatInclusive, addVatExclusive, signedInputToSatang, toBaht, toSatang } from "@/lib/accounting/money";
 import { createEntry, AccountingError } from "@/lib/accounting/post";
 import { SYSTEM_ACCOUNTS } from "@/lib/accounting/chartOfAccounts";
 import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
@@ -41,8 +41,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "กรอกเลขที่ใบกำกับ วันที่ ชื่อผู้ขาย และยอดเงินให้ครบ" }, { status: 400 });
   }
 
-  const amountSatang = toSatang(amount);
-  if (amountSatang <= 0) return NextResponse.json({ error: "ยอดเงินต้องมากกว่า 0" }, { status: 400 });
+  const amountSatang = signedInputToSatang(amount);
+  if (amountSatang === 0) return NextResponse.json({ error: "ยอดเงินต้องไม่เป็น 0" }, { status: 400 });
+  const isCreditNote = amountSatang < 0;
 
   const settings = await getAllSettings();
   const vatRate = Number(settings.vatRate);
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "ถ้าต้องการลงบัญชีอัตโนมัติ กรุณาเลือกบัญชีเดบิตและเครดิตให้ครบทั้งสองช่อง" }, { status: 400 });
   }
   if (whtEnabled) {
+    if (isCreditNote) return NextResponse.json({ error: "ใบลดหนี้ไม่สร้างภาษีหัก ณ ที่จ่าย กรุณาเลือก 'ไม่หักภาษี ณ ที่จ่าย'" }, { status: 400 });
     if (!allowedIncomeType) return NextResponse.json({ error: "ประเภทเงินได้หัก ณ ที่จ่ายไม่ถูกต้อง" }, { status: 400 });
     if (!String(vendorTaxId ?? "").trim() || !/^\d{13}$/.test(String(vendorTaxId).replace(/\D/g, ""))) {
       return NextResponse.json({ error: "กรุณากรอกเลขประจำตัวผู้เสียภาษีผู้ขาย 13 หลักเพื่อออกหนังสือรับรอง" }, { status: 400 });
@@ -108,19 +110,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `ไม่พบบัญชีภาษีหัก ณ ที่จ่ายค้างนำส่งรหัส ${SYSTEM_ACCOUNTS.WHT_PAYABLE} ในผังบัญชี` }, { status: 400 });
     }
     try {
+      const absoluteBase = Math.abs(base);
+      const absoluteVat = Math.abs(vat);
+      const absoluteTotal = Math.abs(base + vat);
       const entry = await createEntry({
         date: invoiceDateValue,
         journalType: "PURCHASE",
-        description: `ซื้อ ${String(vendorName).trim()} ใบกำกับ ${String(invoiceNo).trim()}`,
+        description: `${isCreditNote ? "ใบลดหนี้" : "ซื้อ"} ${String(vendorName).trim()} ใบกำกับ ${String(invoiceNo).trim()}`,
         userId: staff.staffId,
-        lines: [
+        lines: isCreditNote ? [
+          { accountId: expenseAccountId, credit: toBaht(absoluteBase), partnerId: partnerId || null, memo: description || undefined },
+          { accountId: inputVatAccount.id, credit: toBaht(absoluteVat), memo: "ลดภาษีซื้อ", docNo: String(invoiceNo).trim() },
+          { accountId: creditAccountId, debit: toBaht(absoluteTotal), partnerId: partnerId || null, memo: "ลดเจ้าหนี้/เงินรับคืน" },
+        ] : [
           { accountId: expenseAccountId, debit: toBaht(base), partnerId: partnerId || null, memo: description || undefined },
-          { accountId: inputVatAccount.id, debit: toBaht(vat), memo: "ภาษีซื้อ" },
-          {
-            accountId: creditAccountId,
-            credit: toBaht(base + vat - (whtEnabled ? wht.amount : 0)),
-            partnerId: partnerId || null,
-          },
+          { accountId: inputVatAccount.id, debit: toBaht(vat), memo: "ภาษีซื้อ", docNo: String(invoiceNo).trim() },
+          { accountId: creditAccountId, credit: toBaht(base + vat - (whtEnabled ? wht.amount : 0)), partnerId: partnerId || null },
           ...(whtEnabled && whtPayableAccount
             ? [{ accountId: whtPayableAccount.id, credit: toBaht(wht.amount), partnerId: partnerId || null, memo: "ภาษีหัก ณ ที่จ่าย" }]
             : []),

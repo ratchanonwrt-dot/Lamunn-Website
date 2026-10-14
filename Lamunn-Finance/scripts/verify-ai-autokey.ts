@@ -19,7 +19,7 @@ let certificateId: string | null = null;
 const ruleIds: string[] = [];
 
 async function main() {
-  const [{ prisma }, { createEntry, postEntry }, { buildInputVatReport }, { normalizeAutokeyDate, normalizeAutokeyCreditNote, autokeyResultSchema }] = await Promise.all([
+  const [{ prisma }, { createEntry, postEntry }, { buildInputVatReport }, { normalizeAutokeyDate, normalizeAutokeyCreditNote, normalizeAutokeySignedLines, autokeyResultSchema }] = await Promise.all([
     import("@lamunn/db-finance"),
     import("../src/lib/accounting/post"),
     import("../src/lib/accounting/taxReports"),
@@ -50,6 +50,15 @@ async function main() {
     const purchaseCreditNote = normalizeAutokeyCreditNote(autokeyResultSchema.parse(creditNoteBase), accountHints);
     check(purchaseCreditNote.lines[0].creditSatang === 10000 && purchaseCreditNote.lines[1].creditSatang === 700 && purchaseCreditNote.lines[2].debitSatang === 10700, "ยอดติดลบ/วงเล็บของใบซื้อกลับด้านเป็นลดค่าใช้จ่าย ภาษีซื้อ และเจ้าหนี้");
     check(purchaseCreditNote.description.startsWith("ใบลดหนี้:"), "คำอธิบายร่างระบุชัดว่าเป็นใบลดหนี้");
+    const signedPurchaseCreditNote = normalizeAutokeyCreditNote(normalizeAutokeySignedLines(autokeyResultSchema.parse({
+      ...creditNoteBase,
+      lines: [
+        { accountCode: "EXP", debitSatang: -10000, creditSatang: 0, memo: "[test] สินค้า", docNo: null },
+        { accountCode: "INPUT", debitSatang: -700, creditSatang: 0, memo: "[test] ภาษีซื้อ", docNo: "[test]-CN-NEG" },
+        { accountCode: "AP", debitSatang: 0, creditSatang: -10700, memo: "[test] เจ้าหนี้", docNo: null },
+      ],
+    })), accountHints);
+    check(signedPurchaseCreditNote.lines.every((line) => line.debitSatang >= 0 && line.creditSatang >= 0) && signedPurchaseCreditNote.lines[0].creditSatang === 10000 && signedPurchaseCreditNote.lines[2].debitSatang === 10700, "ค่าลบที่ AI คืนมาถูกย้ายไปฝั่งตรงข้ามก่อนสร้างร่าง");
 
     const salesCreditNote = normalizeAutokeyCreditNote(autokeyResultSchema.parse({
       ...creditNoteBase, journalType: "SALES", description: "[test] ใบลดหนี้ขาย",

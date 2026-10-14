@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useServerRefresh } from "./useServerRefresh";
+import { signedInputToSatang } from "@/lib/accounting/money";
 
 interface InvoiceData {
   invoiceNo: string;
@@ -87,6 +88,7 @@ export default function EditPurchaseInvoiceButton({ id }: { id: string }) {
   }
 
   const amountLocked = entry?.status === "POSTED";
+  const isCreditNote = signedInputToSatang(amount) < 0;
   const field = "mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50 disabled:text-gray-400";
   const label = "text-xs text-gray-500";
 
@@ -117,6 +119,12 @@ export default function EditPurchaseInvoiceButton({ id }: { id: string }) {
                     {amountLocked
                       ? " ซึ่งผ่านรายการแล้ว — แก้ได้เฉพาะเลขที่/ชื่อ/รายการ ถ้าจะแก้ยอดเงินหรือวันที่ ให้กด \"ยกเลิกผ่านรายการ\" ในสมุดรายวันก่อน"
                       : " (ยังเป็นร่าง) — แก้ยอดเงินหรือวันที่แล้ว ระบบจะปรับบรรทัดในใบสำคัญให้ตรงกัน"}
+                  </p>
+                )}
+
+                {isCreditNote && (
+                  <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                    ยอดนี้เป็นใบลดหนี้ ระบบจะเก็บฐานและ VAT เป็นค่าลบ พร้อมกลับด้านใบสำคัญที่ยังเป็นร่าง
                   </p>
                 )}
 
@@ -173,6 +181,7 @@ export default function EditPurchaseInvoiceButton({ id }: { id: string }) {
                         setAmount(e.target.value);
                         setAmountDirty(true);
                       }}
+                      placeholder="เช่น 1070 หรือ (1070)"
                       className={field}
                     />
                   </label>

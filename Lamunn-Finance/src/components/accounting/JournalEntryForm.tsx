@@ -6,6 +6,7 @@ import { Plus, Trash2 } from "lucide-react";
 import AccountCombobox from "@/components/accounting/AccountCombobox";
 import PartnerCombobox from "@/components/accounting/PartnerCombobox";
 import { useServerRefresh } from "@/components/accounting/useServerRefresh";
+import { signedInputToSatang } from "@/lib/accounting/money";
 
 interface AccountOption {
   id: string;
@@ -55,9 +56,10 @@ const JOURNAL_TYPES = [
 const emptyLine = (): Line => ({ accountId: "", debit: "", credit: "", branchId: "", partnerId: "", memo: "", docNo: "" });
 
 function satang(v: string): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+  return signedInputToSatang(v);
 }
+
+const inputMoney = (s: number) => (Math.abs(s) / 100).toFixed(2);
 
 const fmt = (s: number) => (s / 100).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -122,6 +124,13 @@ export default function JournalEntryForm({
 
   function update(i: number, patch: Partial<Line>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  }
+
+  function moveNegativeToOppositeSide(i: number, side: "debit" | "credit") {
+    const amount = satang(lines[i][side]);
+    if (amount >= 0) return;
+    const opposite = side === "debit" ? "credit" : "debit";
+    update(i, { [side]: "", [opposite]: inputMoney(amount) });
   }
 
   async function submit(postNow: boolean) {
@@ -236,6 +245,7 @@ export default function JournalEntryForm({
                     inputMode="decimal"
                     value={l.debit}
                     onChange={(e) => update(i, { debit: e.target.value, credit: e.target.value ? "" : l.credit })}
+                    onBlur={() => moveNegativeToOppositeSide(i, "debit")}
                     className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-right text-sm tabular-nums text-gray-900"
                   />
                 </td>
@@ -244,6 +254,7 @@ export default function JournalEntryForm({
                     inputMode="decimal"
                     value={l.credit}
                     onChange={(e) => update(i, { credit: e.target.value, debit: e.target.value ? "" : l.debit })}
+                    onBlur={() => moveNegativeToOppositeSide(i, "credit")}
                     className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-right text-sm tabular-nums text-gray-900"
                   />
                 </td>
@@ -314,6 +325,8 @@ export default function JournalEntryForm({
           </tfoot>
         </table>
       </div>
+
+      <p className="mt-2 text-xs text-gray-400">ใส่ยอดติดลบหรือวงเล็บได้ ระบบจะย้ายจำนวนไปฝั่งเดบิต/เครดิตตรงข้ามให้อัตโนมัติ</p>
 
       <button
         type="button"
