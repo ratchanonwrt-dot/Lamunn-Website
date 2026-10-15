@@ -4,9 +4,22 @@ interface Series {
   label: string;
   color: string;
   points: number[]; // one value per day index (1..N)
+  /** เส้นประ — ใช้กับเส้นค่าเฉลี่ย/แนวโน้ม ให้แยกจากเส้นยอดจริงได้ด้วยตา */
+  dashed?: boolean;
 }
 
-export default function LineChart({ series, width = 720, height = 220 }: { series: Series[]; width?: number; height?: number }) {
+/** xLabels: ป้ายแกน X ต่อจุด (เช่น "14/10") — ไม่ใส่ = ใช้เลขลำดับวัน 1..N แบบเดิม (กราฟรายเดือน) */
+export default function LineChart({
+  series,
+  width = 720,
+  height = 220,
+  xLabels,
+}: {
+  series: Series[];
+  width?: number;
+  height?: number;
+  xLabels?: string[];
+}) {
   const padding = { top: 12, right: 12, bottom: 24, left: 48 };
   const innerW = width - padding.left - padding.right;
   const innerH = height - padding.top - padding.bottom;
@@ -47,7 +60,7 @@ export default function LineChart({ series, width = 720, height = 220 }: { serie
               className="fill-gray-400"
               style={{ fontSize: 10 }}
             >
-              {i + 1}
+              {xLabels?.[i] ?? i + 1}
             </text>
           ))}
 
@@ -60,6 +73,7 @@ export default function LineChart({ series, width = 720, height = 220 }: { serie
               fill="none"
               stroke={s.color}
               strokeWidth={2}
+              strokeDasharray={s.dashed ? "6 4" : undefined}
               strokeLinecap="round"
               strokeLinejoin="round"
             />

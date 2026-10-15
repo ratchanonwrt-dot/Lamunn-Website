@@ -20,6 +20,8 @@ import LineChart from "@/components/charts/LineChart";
 import ReportSection from "@/components/ReportSection";
 import { computeBranchDailyStats } from "@/lib/branchDailyStats";
 import BranchDailyAnalysis, { ANALYSIS_SORTS, type AnalysisSort, type AnalysisParams } from "./BranchDailyAnalysis";
+import SalesExplorer, { type ExplorerParams } from "./SalesExplorer";
+import { computeSalesExplorer } from "@/lib/salesExplorer";
 
 function pct(current: number, previous: number): number | null {
   if (previous === 0) return current === 0 ? 0 : null;
@@ -54,19 +56,20 @@ function ReportsSkeleton() {
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: { year?: string; month?: string; aFrom?: string; aTo?: string; low?: string; div?: string; aSort?: string };
+  searchParams: { year?: string; month?: string; aFrom?: string; aTo?: string; low?: string; div?: string; aSort?: string; xBr?: string | string[]; xFrom?: string; xTo?: string };
 }) {
   await requireSectionPage("REPORTS");
   const now = new Date();
   const year = Number(searchParams.year) || now.getUTCFullYear();
   const month = Number(searchParams.month) || now.getUTCMonth() + 1;
   const analysis = analysisParams(searchParams, year, month);
+  const explorer = explorerParams(searchParams, year, month);
   return (
     <div>
       <h1 className="mb-6 text-xl font-bold text-gray-800">ภาพรวมและวิเคราะห์ยอดขาย</h1>
       <MonthFilterBar basePath="/reports" year={year} month={month} />
       <Suspense fallback={<ReportsSkeleton />}>
-        <ReportsData year={year} month={month} analysis={analysis.params} analysisRequested={analysis.requested} />
+        <ReportsData year={year} month={month} analysis={analysis.params} analysisRequested={analysis.requested} explorer={explorer.params} explorerRequested={explorer.requested} />
       </Suspense>
     </div>
   );
@@ -119,16 +122,60 @@ function analysisParams(
   };
 }
 
+/** ค่าตั้งของหมวด "ดูยอดขายตามสาขา + Trend" — ค่าเริ่มต้น: ทุกสาขา 30 วันล่าสุดถึงเมื่อวาน (เวลาไทย)
+ * ไม่รวมวันนี้เพราะยอดยังเข้าไม่ครบ จะทำให้เส้น Trend ดิ่งปลอมตอนท้าย */
+function explorerParams(
+  sp: { xBr?: string | string[]; xFrom?: string; xTo?: string },
+  year: number,
+  month: number
+): { params: ExplorerParams; requested: boolean } {
+  const bkk = new Date(Date.now() + 7 * 3600 * 1000);
+  const today = new Date(Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate()));
+  const yesterday = new Date(today.getTime() - 86400000);
+  const back = (days: number) => iso(new Date(yesterday.getTime() - (days - 1) * 86400000));
+  const { start, end } = monthRange(year, month - 1);
+  const monthTo = end < yesterday ? end : yesterday < start ? start : yesterday;
+
+  let from = ISO_DATE.test(sp.xFrom ?? "") ? sp.xFrom! : back(30);
+  let to = ISO_DATE.test(sp.xTo ?? "") ? sp.xTo! : iso(yesterday);
+  if (to < from) [from, to] = [to, from];
+  const maxFrom = iso(new Date(new Date(`${to}T00:00:00Z`).getTime() - 365 * 86400000));
+  if (from < maxFrom) from = maxFrom;
+
+  const branchIds = (Array.isArray(sp.xBr) ? sp.xBr : sp.xBr ? [sp.xBr] : []).filter(Boolean);
+  return {
+    requested: Boolean(sp.xBr || sp.xFrom || sp.xTo),
+    params: {
+      year,
+      month,
+      branchIds,
+      from,
+      to,
+      presets: [
+        { label: "7 วัน", from: back(7), to: iso(yesterday) },
+        { label: "14 วัน", from: back(14), to: iso(yesterday) },
+        { label: "30 วัน", from: back(30), to: iso(yesterday) },
+        { label: "90 วัน", from: back(90), to: iso(yesterday) },
+        { label: "เดือนที่เลือก", from: iso(start), to: iso(monthTo) },
+      ],
+    },
+  };
+}
+
 async function ReportsData({
   year,
   month,
   analysis,
   analysisRequested,
+  explorer,
+  explorerRequested,
 }: {
   year: number;
   month: number;
   analysis: AnalysisParams;
   analysisRequested: boolean;
+  explorer: ExplorerParams;
+  explorerRequested: boolean;
 }) {
   const now = new Date();
   const { start, end } = monthRange(year, month - 1);
@@ -301,6 +348,16 @@ async function ReportsData({
   );
   const lowBranchCount = dailyStats.filter((s) => s.lowDates.length > 0).length;
   const lowDayCount = dailyStats.reduce((a, s) => a + s.lowDates.length, 0);
+
+  // --- ดูยอดขายตามสาขา/ช่วงวัน + Trend (lib/salesExplorer.ts) — ใช้ข้อมูลก้อนเดียวกัน ไม่ยิงคิวรีเพิ่ม ---
+  const explorerResult = computeSalesExplorer(branches, allSalesRows, explorer.branchIds, explorer.from, explorer.to);
+  const explorerLabel =
+    explorer.branchIds.length === 0
+      ? "ทุกสาขา"
+      : explorer.branchIds.length <= 2
+        ? branches.filter((b) => explorer.branchIds.includes(b.id)).map((b) => b.name).join(", ")
+        : `${explorer.branchIds.length} สาขา`;
+  const explorerTrendText = { up: "ขาขึ้น", down: "ขาลง", flat: "ทรงตัว", none: "ข้อมูลไม่พอ" }[explorerResult.trend.direction];
 
   // --- แยกช่องทาง (เดือนนี้) ---
   let storefrontTotal = 0;
@@ -494,6 +551,16 @@ async function ReportsData({
         summary={`${dailyStats.length} สาขา · มีวันยอดต่ำกว่า ${formatBaht(analysis.low)} บาท ${lowBranchCount} สาขา รวม ${lowDayCount} วัน`}
       >
         <BranchDailyAnalysis stats={dailyStats} p={analysis} />
+      </ReportSection>
+
+      <ReportSection
+        id="sales-explorer"
+        tone="brand"
+        defaultOpen={explorerRequested}
+        title="ดูยอดขายตามสาขา / ช่วงวัน — แยกวัน · แยกช่องทาง · วิเคราะห์ Trend"
+        summary={`${explorerLabel} · ${explorer.from === explorer.to ? explorer.from : `${explorer.from} ถึง ${explorer.to}`} · รวม ${formatBaht(explorerResult.totals.total)} บาท · ${explorerTrendText}`}
+      >
+        <SalesExplorer allBranches={branches} r={explorerResult} p={explorer} />
       </ReportSection>
 
       <ReportSection title={`ยอดขายรายเดือน — ปี ${year + 543}`} summary={`รวมทั้งปีถึงเดือนที่เลือก ${formatBaht(yearTotal)} บาท`}>
