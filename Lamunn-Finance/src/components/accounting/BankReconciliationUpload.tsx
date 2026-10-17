@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Building2, CheckCircle2, FileSpreadsheet, Loader2, UploadCloud } from "lucide-react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { BookOpenCheck, Building2, CheckCircle2, Loader2, UploadCloud } from "lucide-react";
 import {
+  BANK_RECONCILIATION_ACCOUNT_CODE,
   parseReconciliationTable,
   reconcileBankRows,
   reconciliationAmountLabel,
@@ -14,32 +16,13 @@ import {
 import { fmtSatang } from "@/lib/accounting/money";
 import { useServerRefresh } from "./useServerRefresh";
 
-type UploadKind = "bank" | "ledger";
-
-type SelectedFiles = Record<UploadKind, File | null>;
+const MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 
 const DIRECTION_LABELS: Record<ReconciliationDirection, string> = {
   in: "เงินเข้า",
   out: "เงินออก",
   both: "ทั้งเงินเข้าและเงินออก",
 };
-
-const UPLOADS = [
-  {
-    kind: "bank" as const,
-    title: "ไฟล์รายการเดินบัญชีธนาคาร",
-    hint: "Statement ที่ดาวน์โหลดจากธนาคาร",
-    icon: Building2,
-    tone: "border-blue-200 bg-blue-50/60 text-blue-700 hover:border-blue-400",
-  },
-  {
-    kind: "ledger" as const,
-    title: "ไฟล์บัญชี",
-    hint: "รายการบัญชีเงินฝากจากโปรแกรมบัญชี",
-    icon: FileSpreadsheet,
-    tone: "border-emerald-200 bg-emerald-50/60 text-emerald-700 hover:border-emerald-400",
-  },
-];
 
 function fileSizeLabel(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -126,30 +109,45 @@ async function readFileTable(file: File): Promise<unknown[][]> {
   return rows;
 }
 
-export default function BankReconciliationUpload() {
-  const [files, setFiles] = useState<SelectedFiles>({ bank: null, ledger: null });
+export default function BankReconciliationUpload({ year, month }: { year: number; month: number }) {
+  const router = useRouter();
+  const [filterPending, startFilterTransition] = useTransition();
+  const [bankFile, setBankFile] = useState<File | null>(null);
   const [results, setResults] = useState<ReconciliationResultRow[] | null>(null);
   const [direction, setDirection] = useState<ReconciliationDirection>("both");
   const [error, setError] = useState("");
   const [processing, setProcessing] = useState(false);
   const { refreshing, refresh } = useServerRefresh();
-  const ready = Boolean(files.bank && files.ledger);
+  const ready = Boolean(bankFile);
 
-  const selectFile = (kind: UploadKind, file: File | null) => {
-    setFiles((current) => ({ ...current, [kind]: file }));
+  const selectFile = (file: File | null) => {
+    setBankFile(file);
     setResults(null);
     setError("");
   };
 
+  const changePeriod = (nextYear: number, nextMonth: number) => {
+    setResults(null);
+    setError("");
+    const query = new URLSearchParams({ year: String(nextYear), month: String(nextMonth) });
+    startFilterTransition(() => router.push(`/accounting/bank-reconciliation?${query}`));
+  };
+
   const reconcile = async () => {
-    if (!files.bank || !files.ledger) return;
+    if (!bankFile) return;
     setProcessing(true);
     setError("");
     try {
-      const [bankTable, ledgerTable] = await Promise.all([readFileTable(files.bank), readFileTable(files.ledger)]);
+      const [bankTable, ledgerResponse] = await Promise.all([
+        readFileTable(bankFile),
+        fetch(`/api/accounting/bank-reconciliation/ledger?year=${year}&month=${month}`, { cache: "no-store" }),
+      ]);
       const bankRows = parseReconciliationTable(bankTable, "bank");
-      const ledgerRows = parseReconciliationTable(ledgerTable, "ledger");
-      if (!bankRows.length || !ledgerRows.length) throw new Error("ไม่พบรายการที่มีวันที่และจำนวนเงินในไฟล์ใดไฟล์หนึ่ง");
+      const payload = await ledgerResponse.json().catch(() => null) as { rows?: ReconciliationItem[]; error?: string } | null;
+      if (!ledgerResponse.ok) throw new Error(payload?.error || "ไม่สามารถดึงบัญชีแยกประเภทได้");
+      const ledgerRows = payload?.rows ?? [];
+      if (!bankRows.length) throw new Error("ไม่พบรายการที่มีวันที่และจำนวนเงินในไฟล์ธนาคาร");
+      if (!ledgerRows.length) throw new Error(`ไม่พบรายการที่ผ่านบัญชี ${BANK_RECONCILIATION_ACCOUNT_CODE} ในเดือนที่เลือก`);
       setResults(reconcileBankRows(bankRows, ledgerRows, direction));
       refresh();
     } catch (caught) {
@@ -165,45 +163,74 @@ export default function BankReconciliationUpload() {
   return (
     <div className="space-y-5">
       <div className="grid gap-4 lg:grid-cols-2">
-        {UPLOADS.map(({ kind, title, hint, icon: Icon, tone }) => {
-          const file = files[kind];
-          return (
-            <section key={kind} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="mb-4 flex items-start gap-3">
                 <span className="rounded-lg bg-gray-100 p-2 text-gray-600">
-                  <Icon size={20} aria-hidden="true" />
+                  <Building2 size={20} aria-hidden="true" />
                 </span>
                 <div>
-                  <h2 className="font-semibold text-gray-900">{title}</h2>
-                  <p className="mt-0.5 text-sm text-gray-500">{hint}</p>
+                  <h2 className="font-semibold text-gray-900">ไฟล์รายการเดินบัญชีธนาคาร</h2>
+                  <p className="mt-0.5 text-sm text-gray-500">Statement ที่ดาวน์โหลดจากธนาคาร</p>
                 </div>
               </div>
 
-              <label className={`flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-5 py-7 text-center transition-colors ${tone}`}>
-                {file ? <CheckCircle2 size={32} aria-hidden="true" /> : <UploadCloud size={32} aria-hidden="true" />}
-                <span className="mt-3 text-sm font-semibold">{file ? "เลือกไฟล์แล้ว" : "คลิกเพื่อเลือกไฟล์"}</span>
+              <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/60 px-5 py-7 text-center text-blue-700 transition-colors hover:border-blue-400">
+                {bankFile ? <CheckCircle2 size={32} aria-hidden="true" /> : <UploadCloud size={32} aria-hidden="true" />}
+                <span className="mt-3 text-sm font-semibold">{bankFile ? "เลือกไฟล์แล้ว" : "คลิกเพื่อเลือกไฟล์"}</span>
                 <span className="mt-1 text-xs opacity-75">รองรับ Excel (.xlsx) และ CSV</span>
                 <input
                   type="file"
                   accept=".xlsx,.csv"
                   className="sr-only"
-                  onChange={(event) => selectFile(kind, event.target.files?.[0] ?? null)}
+                  onChange={(event) => selectFile(event.target.files?.[0] ?? null)}
                 />
               </label>
 
               <div className="mt-3 min-h-11 rounded-lg bg-gray-50 px-3 py-2 text-sm">
-                {file ? (
+                {bankFile ? (
                   <div className="flex items-center justify-between gap-3">
-                    <span className="truncate font-medium text-gray-700">{file.name}</span>
-                    <span className="shrink-0 text-xs text-gray-400">{fileSizeLabel(file.size)}</span>
+                    <span className="truncate font-medium text-gray-700">{bankFile.name}</span>
+                    <span className="shrink-0 text-xs text-gray-400">{fileSizeLabel(bankFile.size)}</span>
                   </div>
                 ) : (
                   <span className="text-gray-400">ยังไม่ได้เลือกไฟล์</span>
                 )}
               </div>
-            </section>
-          );
-        })}
+        </section>
+
+        <section className="rounded-xl border border-emerald-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-start gap-3">
+            <span className="rounded-lg bg-emerald-50 p-2 text-emerald-700">
+              <BookOpenCheck size={20} aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="font-semibold text-gray-900">บัญชีแยกประเภท {BANK_RECONCILIATION_ACCOUNT_CODE}</h2>
+              <p className="mt-0.5 text-sm text-gray-500">ดึงรายการที่ผ่านบัญชีจากระบบโดยอัตโนมัติ ไม่ต้องอัปโหลดไฟล์บัญชี</p>
+            </div>
+          </div>
+          <div className="flex min-h-44 flex-col justify-center rounded-xl border border-emerald-200 bg-emerald-50/60 p-5">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-sm font-medium text-gray-700">
+                เดือน
+                <select value={month} onChange={(event) => changePeriod(year, Number(event.target.value))} disabled={filterPending} className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+                  {MONTHS.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
+                </select>
+              </label>
+              <label className="text-sm font-medium text-gray-700">
+                ปี
+                <select value={year} onChange={(event) => changePeriod(Number(event.target.value), month)} disabled={filterPending} className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+                  {Array.from(new Set([year, ...Array.from({ length: 8 }, (_, index) => new Date().getUTCFullYear() + 1 - index)]))
+                    .sort((left, right) => right - left)
+                    .map((value) => <option key={value} value={value}>{value + 543} ({value})</option>)}
+                </select>
+              </label>
+            </div>
+            <p className="mt-4 flex items-center gap-2 text-sm font-medium text-emerald-800">
+              {filterPending && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}
+              ระบบจะดึงเฉพาะรายการ POSTED ของงวดที่เลือกเมื่อกดตรวจสอบและจับคู่
+            </p>
+          </div>
+        </section>
       </div>
 
       <section className="rounded-xl border border-gray-200 bg-white p-5">
@@ -211,7 +238,7 @@ export default function BankReconciliationUpload() {
           <div>
             <h2 className="font-semibold text-gray-900">พร้อมตรวจสอบและจับคู่รายการ</h2>
             <p className="mt-1 text-sm text-gray-500">
-              {ready ? "เลือกไฟล์ครบทั้ง 2 ฝั่งแล้ว" : "เลือกไฟล์ธนาคารและไฟล์บัญชีให้ครบก่อนเริ่มกระทบยอด"}
+              {ready ? `พร้อมเทียบไฟล์ธนาคารกับบัญชี ${BANK_RECONCILIATION_ACCOUNT_CODE}` : "เลือกไฟล์ธนาคารก่อนเริ่มกระทบยอด"}
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-3">
@@ -233,7 +260,7 @@ export default function BankReconciliationUpload() {
             </label>
             <button
               type="button"
-              disabled={!ready || processing || refreshing}
+              disabled={!ready || processing || refreshing || filterPending}
               onClick={reconcile}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500"
             >
@@ -244,7 +271,7 @@ export default function BankReconciliationUpload() {
         </div>
         {error && <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
         <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          รอบนี้ตรวจ{DIRECTION_LABELS[direction]} ไฟล์ประมวลผลในเบราว์เซอร์ ไม่อัปโหลด ไม่บันทึก และไม่นำไปลงบัญชี
+          รอบนี้ตรวจ{DIRECTION_LABELS[direction]} โดยอ่านบัญชี {BANK_RECONCILIATION_ACCOUNT_CODE} แบบอ่านอย่างเดียว ไม่บันทึกและไม่นำไปลงบัญชี
         </p>
       </section>
 
@@ -255,7 +282,7 @@ export default function BankReconciliationUpload() {
             <p className="mt-0.5 text-sm text-gray-500">
               {summary
                 ? `ตรงกัน ${summary.matchedCount.toLocaleString("th-TH")} · ไม่ตรงกัน ${summary.mismatchedCount.toLocaleString("th-TH")} · ไม่พบ ${summary.notFoundCount.toLocaleString("th-TH")} รายการ`
-                : "เลือกไฟล์ทั้งสองฝั่งแล้วกดตรวจสอบและจับคู่"}
+                : "เลือกไฟล์ธนาคารแล้วกดตรวจสอบและจับคู่"}
             </p>
           </div>
           <div className="flex items-center gap-3 text-xs">
