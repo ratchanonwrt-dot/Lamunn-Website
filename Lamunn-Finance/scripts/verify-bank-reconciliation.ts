@@ -1,7 +1,7 @@
 /** พิสูจน์การอ่านและจับคู่รายการกระทบยอดโดยไม่แตะฐานข้อมูลหรือสร้างใบสำคัญ
  * รัน: npx tsx scripts/verify-bank-reconciliation.ts
  */
-import { parseReconciliationTable, reconcileBankRows, summarizeReconciliationRows } from "../src/lib/accounting/bankReconciliation";
+import { filterReconciliationRows, parseReconciliationTable, reconcileBankRows, summarizeReconciliationRows } from "../src/lib/accounting/bankReconciliation";
 
 let failures = 0;
 function check(label: string, actual: unknown, expected: unknown) {
@@ -98,6 +98,10 @@ function main() {
   check("ไม่มีคู่เป็นสีเหลือง", statusResult.filter((row) => row.status === "not-found").length, 1);
   check("สรุปจำนวนแต่ละสถานะ", [statusSummary.matchedCount, statusSummary.mismatchedCount, statusSummary.notFoundCount], [1, 2, 1]);
   check("สรุปผลต่างเงินเข้าเป็นสตางค์", statusSummary.inDifference, 35_000);
+  check("กรองเฉพาะรายการตรงกัน", filterReconciliationRows(statusResult, "matched").map((row) => row.status), ["matched"]);
+  check("กรองเฉพาะรายการไม่ตรงกัน", filterReconciliationRows(statusResult, "mismatched").map((row) => row.status), ["mismatched", "mismatched"]);
+  check("กรองเฉพาะรายการไม่พบคู่", filterReconciliationRows(statusResult, "not-found").map((row) => row.status), ["not-found"]);
+  check("เลือกทั้งหมดไม่ตัดรายการ", filterReconciliationRows(statusResult, "all").length, statusResult.length);
 
   console.log("\n=== ล้างข้อมูลทดสอบ ===");
   bank.length = 0;
