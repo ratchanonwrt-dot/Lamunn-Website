@@ -6,9 +6,12 @@ import {
   parseReconciliationTable,
   reconcileBankRows,
   reconciliationAmountLabel,
+  summarizeReconciliationRows,
   type ReconciliationDirection,
+  type ReconciliationItem,
   type ReconciliationResultRow,
 } from "@/lib/accounting/bankReconciliation";
+import { fmtSatang } from "@/lib/accounting/money";
 import { useServerRefresh } from "./useServerRefresh";
 
 type UploadKind = "bank" | "ledger";
@@ -42,6 +45,30 @@ function fileSizeLabel(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function sideLabel(item: ReconciliationItem | null, kind: UploadKind) {
+  if (!item) return "—";
+  if (kind === "bank") return item.amount > 0 ? "เครดิต" : "เดบิต";
+  return item.amount > 0 ? "เดบิต" : "เครดิต";
+}
+
+function resultTone(row: ReconciliationResultRow) {
+  if (row.status === "matched") return "border-emerald-200 bg-emerald-50 text-emerald-900";
+  if (row.status === "mismatched") return "border-rose-200 bg-rose-50 text-rose-900";
+  return "border-amber-200 bg-amber-50 text-amber-900";
+}
+
+function statusBadge(row: ReconciliationResultRow) {
+  if (row.status === "matched") return "bg-emerald-100 text-emerald-700";
+  if (row.status === "mismatched") return "bg-rose-100 text-rose-700";
+  return "bg-amber-100 text-amber-800";
+}
+
+function statusLabel(row: ReconciliationResultRow) {
+  if (row.status === "not-found") return "ไม่พบคู่";
+  if (row.status === "mismatched") return row.matchKind === "amount-mismatch" ? "ยอดไม่ตรงกัน" : "รายละเอียดไม่ตรงกัน";
+  return row.daysApart ? `ตรงกัน · วันที่ต่าง ${row.daysApart} วัน` : "ตรงกัน";
 }
 
 function parseCsv(text: string): unknown[][] {
@@ -134,8 +161,7 @@ export default function BankReconciliationUpload() {
     }
   };
 
-  const matchedCount = results?.filter((row) => row.matched).length ?? 0;
-  const unmatchedCount = results ? results.length - matchedCount : 0;
+  const summary = results ? summarizeReconciliationRows(results) : null;
 
   return (
     <div className="space-y-5">
@@ -228,7 +254,9 @@ export default function BankReconciliationUpload() {
           <div>
             <h2 className="font-semibold text-gray-900">ผลการกระทบยอด</h2>
             <p className="mt-0.5 text-sm text-gray-500">
-              {results ? `ตรงกัน ${matchedCount.toLocaleString("th-TH")} รายการ · ไม่ตรงกัน ${unmatchedCount.toLocaleString("th-TH")} รายการ` : "เลือกไฟล์ทั้งสองฝั่งแล้วกดตรวจสอบและจับคู่"}
+              {summary
+                ? `ตรงกัน ${summary.matchedCount.toLocaleString("th-TH")} · ไม่ตรงกัน ${summary.mismatchedCount.toLocaleString("th-TH")} · ไม่พบ ${summary.notFoundCount.toLocaleString("th-TH")} รายการ`
+                : "เลือกไฟล์ทั้งสองฝั่งแล้วกดตรวจสอบและจับคู่"}
             </p>
           </div>
           <div className="flex items-center gap-3 text-xs">
@@ -239,20 +267,23 @@ export default function BankReconciliationUpload() {
               <span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> ไม่ตรงกัน
             </span>
             <span className="flex items-center gap-1.5 text-amber-700">
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> วันที่คลาดเคลื่อน
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> ไม่พบคู่
             </span>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[44rem] text-sm">
+          <table className="w-full min-w-[68rem] text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">วันที่</th>
                 <th className="px-4 py-3 text-left font-medium">รายการธนาคาร</th>
+                <th className="px-4 py-3 text-center font-medium">เดบิต/เครดิต</th>
                 <th className="px-4 py-3 text-right font-medium">ยอดธนาคาร</th>
                 <th className="px-4 py-3 text-left font-medium">รายการบัญชี</th>
+                <th className="px-4 py-3 text-center font-medium">เดบิต/เครดิต</th>
                 <th className="px-4 py-3 text-right font-medium">ยอดบัญชี</th>
+                <th className="px-4 py-3 text-left font-medium">คำที่ตรงกัน</th>
                 <th className="px-4 py-3 text-center font-medium">สถานะ</th>
               </tr>
             </thead>
@@ -260,33 +291,67 @@ export default function BankReconciliationUpload() {
               {(results ?? []).map((row) => (
                 <tr
                   key={row.id}
-                  className={row.matchKind === "near-date"
-                    ? "border-t border-amber-200 bg-amber-50 text-amber-900"
-                    : row.matched
-                      ? "border-t border-gray-100 text-gray-700"
-                      : "border-t border-rose-200 bg-rose-50 text-rose-800"}
+                  className={`border-t ${resultTone(row)}`}
                 >
                   <td className="whitespace-nowrap px-4 py-3">{row.dateLabel}</td>
                   <td className="px-4 py-3 font-medium">{row.bank?.detail || "—"}</td>
+                  <td className="px-4 py-3 text-center">{sideLabel(row.bank, "bank")}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{reconciliationAmountLabel(row.bank)}</td>
                   <td className="px-4 py-3 font-medium">{row.ledger?.detail || "—"}</td>
+                  <td className="px-4 py-3 text-center">{sideLabel(row.ledger, "ledger")}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{reconciliationAmountLabel(row.ledger)}</td>
+                  <td className="px-4 py-3 text-xs">{row.commonWords.length ? row.commonWords.join(", ") : "—"}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${row.matchKind === "near-date" ? "bg-amber-100 text-amber-800" : row.matched ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
-                      {row.matchKind === "near-date" ? `วันที่ต่าง ${row.daysApart} วัน` : row.matched ? "ตรงกัน" : "ไม่ตรงกัน"}
+                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadge(row)}`}>
+                      {statusLabel(row)}
                     </span>
                   </td>
                 </tr>
               ))}
               {results?.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">ไม่พบรายการสำหรับกระทบยอด</td></tr>
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-gray-400">ไม่พบรายการสำหรับกระทบยอด</td></tr>
               )}
               {!results && (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">ยังไม่ได้เริ่มตรวจสอบ</td></tr>
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-gray-400">ยังไม่ได้เริ่มตรวจสอบ</td></tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {summary && (
+          <div className="border-t border-gray-200 bg-gray-50 px-5 py-5">
+            <h3 className="font-semibold text-gray-900">สรุปผลต่าง</h3>
+            <div className="mt-3 overflow-x-auto rounded-lg border border-gray-200 bg-white">
+              <table className="w-full min-w-[36rem] text-sm">
+                <thead className="bg-gray-100 text-xs text-gray-600">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">ประเภท</th>
+                    <th className="px-4 py-3 text-right font-medium">ยอดธนาคาร</th>
+                    <th className="px-4 py-3 text-right font-medium">ยอดบัญชี</th>
+                    <th className="px-4 py-3 text-right font-medium">ผลต่าง</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-gray-700">
+                  {[
+                    ["เงินเข้า", summary.bankIn, summary.ledgerIn, summary.inDifference],
+                    ["เงินออก", summary.bankOut, summary.ledgerOut, summary.outDifference],
+                    ["ยอดสุทธิ", summary.bankNet, summary.ledgerNet, summary.netDifference],
+                  ].map(([name, bank, account, difference]) => (
+                    <tr key={String(name)} className={name === "ยอดสุทธิ" ? "bg-blue-50 font-semibold text-blue-900" : ""}>
+                      <td className="px-4 py-3">{String(name)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{fmtSatang(Number(bank), { zeroDash: false })}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{fmtSatang(Number(account), { zeroDash: false })}</td>
+                      <td className={`px-4 py-3 text-right font-semibold tabular-nums ${Number(difference) === 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                        {fmtSatang(Number(difference), { zeroDash: false })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-xs text-gray-500">ผลต่างคำนวณจากยอดธนาคารลบยอดบัญชี และไม่สร้างรายการบัญชีใหม่</p>
+          </div>
+        )}
       </section>
     </div>
   );

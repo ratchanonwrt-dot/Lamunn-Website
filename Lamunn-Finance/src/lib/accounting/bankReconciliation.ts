@@ -17,9 +17,27 @@ export type ReconciliationResultRow = {
   dateLabel: string;
   bank: ReconciliationItem | null;
   ledger: ReconciliationItem | null;
+  status: "matched" | "mismatched" | "not-found";
   matched: boolean;
-  matchKind: "same-date" | "near-date" | null;
+  matchKind: "same-date" | "near-date" | "amount-mismatch" | "detail-mismatch" | null;
   daysApart: number | null;
+  commonWords: string[];
+  amountDifference: number;
+};
+
+export type ReconciliationSummary = {
+  matchedCount: number;
+  mismatchedCount: number;
+  notFoundCount: number;
+  bankIn: number;
+  ledgerIn: number;
+  inDifference: number;
+  bankOut: number;
+  ledgerOut: number;
+  outDifference: number;
+  bankNet: number;
+  ledgerNet: number;
+  netDifference: number;
 };
 
 type ColumnMap = {
@@ -202,28 +220,28 @@ export function parseReconciliationTable(table: unknown[][], source: Reconciliat
 
 const GENERIC_DETAIL_WORDS = new Set([
   "โอนเงิน", "รับโอนเงิน", "จ่าย", "รับ", "โอนไป", "โอนจาก", "วันที่", "บริษัท", "บจ", "จำกัด",
-  "นางสาว", "นส", "นาย", "ค่าจ้าง", "ไลฟ์", "ขายสินค้า", "หัก", "ณ", "ที่จ่าย",
+  "นางสาว", "นส", "นาย", "ค่าจ้าง", "ไลฟ์", "ขายสินค้า", "หัก", "ณ", "ที่จ่าย", "test",
 ]);
 
 function detailTokens(value: string): string[] {
   return value
     .toLowerCase()
     .replace(/\+{2,}/g, "")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    // สระและวรรณยุกต์ไทยเป็น Unicode Mark ถ้าตัดออกคำเดียวกันจะกลายเป็นเศษคำและจับคู่ผิด
+    .replace(/[^\p{L}\p{N}\p{M}]+/gu, " ")
     .split(/\s+/)
     .map((token) => token.trim())
     .filter((token) => token.length >= 2 && !GENERIC_DETAIL_WORDS.has(token) && !/^x\d+$/i.test(token));
 }
 
-function detailSimilarity(left: string, right: string): number {
+function detailCommonWords(left: string, right: string): string[] {
   const leftTokens = detailTokens(left);
   const rightTokens = detailTokens(right);
-  if (!leftTokens.length || !rightTokens.length) return 0;
-  const matched = leftTokens.filter((leftToken) => rightTokens.some((rightToken) => (
+  if (!leftTokens.length || !rightTokens.length) return [];
+  return [...new Set(leftTokens.filter((leftToken) => rightTokens.some((rightToken) => (
     leftToken === rightToken
     || (Math.min(leftToken.length, rightToken.length) >= 4 && (leftToken.startsWith(rightToken) || rightToken.startsWith(leftToken)))
-  ))).length;
-  return Math.round((matched / Math.min(leftTokens.length, rightTokens.length)) * 100);
+  ))))].slice(0, 3);
 }
 
 function daysBetween(left: string, right: string): number {
@@ -243,22 +261,36 @@ export function reconcileBankRows(
     bankRows = bankRows.filter(accepts);
     ledgerRows = ledgerRows.filter(accepts);
   }
-  const candidates: Array<{ bankIndex: number; ledgerIndex: number; daysApart: number; score: number }> = [];
+  const candidates: Array<{
+    bankIndex: number;
+    ledgerIndex: number;
+    daysApart: number;
+    commonWords: string[];
+    status: "matched" | "mismatched";
+    matchKind: "same-date" | "near-date" | "amount-mismatch" | "detail-mismatch";
+    score: number;
+  }> = [];
   for (let bankIndex = 0; bankIndex < bankRows.length; bankIndex++) {
     for (let ledgerIndex = 0; ledgerIndex < ledgerRows.length; ledgerIndex++) {
       const bank = bankRows[bankIndex];
       const ledger = ledgerRows[ledgerIndex];
-      if (bank.amount !== ledger.amount) continue;
       const daysApart = daysBetween(bank.dateKey, ledger.dateKey);
       if (daysApart > 1) continue;
-      const similarity = detailSimilarity(bank.detail, ledger.detail);
-      // วันที่คลาดเคลื่อนยอมรับเฉพาะเมื่อรายละเอียดช่วยยืนยัน เพื่อไม่จับยอดซ้ำแบบเดาสุ่ม
-      if (daysApart === 1 && similarity < 25) continue;
+      const commonWords = detailCommonWords(bank.detail, ledger.detail);
+      const sameAmount = bank.amount === ledger.amount;
+      const matched = sameAmount && commonWords.length > 0;
+      // ถ้ายอดหรือคำอธิบายไม่ตรง จะจับเป็นคู่สีแดงเฉพาะเมื่อวันที่/คำสำคัญช่วยยืนยันว่าเป็นรายการเดียวกัน
+      if (!matched && commonWords.length === 0 && !(sameAmount && daysApart === 0)) continue;
       candidates.push({
         bankIndex,
         ledgerIndex,
         daysApart,
-        score: (daysApart === 0 ? 1_000 : 500) + similarity,
+        commonWords,
+        status: matched ? "matched" : "mismatched",
+        matchKind: matched
+          ? (daysApart === 0 ? "same-date" : "near-date")
+          : (sameAmount ? "detail-mismatch" : "amount-mismatch"),
+        score: (matched ? 10_000 : 5_000) + (daysApart === 0 ? 1_000 : 500) + commonWords.length * 100,
       });
     }
   }
@@ -279,24 +311,76 @@ export function reconcileBankRows(
       dateLabel: bank.dateLabel,
       bank,
       ledger,
-      matched: true,
-      matchKind: candidate.daysApart === 0 ? "same-date" : "near-date",
+      status: candidate.status,
+      matched: candidate.status === "matched",
+      matchKind: candidate.matchKind,
       daysApart: candidate.daysApart,
+      commonWords: candidate.commonWords,
+      amountDifference: bank.amount - ledger.amount,
     });
   }
 
   for (let bankIndex = 0; bankIndex < bankRows.length; bankIndex++) {
     if (usedBank.has(bankIndex)) continue;
     const bank = bankRows[bankIndex];
-    results.push({ id: `bank-${bank.rowNumber}`, dateKey: bank.dateKey, dateLabel: bank.dateLabel, bank, ledger: null, matched: false, matchKind: null, daysApart: null });
+    results.push({
+      id: `bank-${bank.rowNumber}`,
+      dateKey: bank.dateKey,
+      dateLabel: bank.dateLabel,
+      bank,
+      ledger: null,
+      status: "not-found",
+      matched: false,
+      matchKind: null,
+      daysApart: null,
+      commonWords: [],
+      amountDifference: bank.amount,
+    });
   }
   for (let ledgerIndex = 0; ledgerIndex < ledgerRows.length; ledgerIndex++) {
     if (usedLedger.has(ledgerIndex)) continue;
     const ledger = ledgerRows[ledgerIndex];
-    results.push({ id: `ledger-${ledger.rowNumber}`, dateKey: ledger.dateKey, dateLabel: ledger.dateLabel, bank: null, ledger, matched: false, matchKind: null, daysApart: null });
+    results.push({
+      id: `ledger-${ledger.rowNumber}`,
+      dateKey: ledger.dateKey,
+      dateLabel: ledger.dateLabel,
+      bank: null,
+      ledger,
+      status: "not-found",
+      matched: false,
+      matchKind: null,
+      daysApart: null,
+      commonWords: [],
+      amountDifference: -ledger.amount,
+    });
   }
 
   return results.sort((left, right) => left.dateKey.localeCompare(right.dateKey) || left.id.localeCompare(right.id));
+}
+
+export function summarizeReconciliationRows(rows: ReconciliationResultRow[]): ReconciliationSummary {
+  const bankAmounts = rows.flatMap((row) => row.bank ? [row.bank.amount] : []);
+  const ledgerAmounts = rows.flatMap((row) => row.ledger ? [row.ledger.amount] : []);
+  const bankIn = bankAmounts.filter((amount) => amount > 0).reduce((sum, amount) => sum + amount, 0);
+  const ledgerIn = ledgerAmounts.filter((amount) => amount > 0).reduce((sum, amount) => sum + amount, 0);
+  const bankOut = Math.abs(bankAmounts.filter((amount) => amount < 0).reduce((sum, amount) => sum + amount, 0));
+  const ledgerOut = Math.abs(ledgerAmounts.filter((amount) => amount < 0).reduce((sum, amount) => sum + amount, 0));
+  const bankNet = bankIn - bankOut;
+  const ledgerNet = ledgerIn - ledgerOut;
+  return {
+    matchedCount: rows.filter((row) => row.status === "matched").length,
+    mismatchedCount: rows.filter((row) => row.status === "mismatched").length,
+    notFoundCount: rows.filter((row) => row.status === "not-found").length,
+    bankIn,
+    ledgerIn,
+    inDifference: bankIn - ledgerIn,
+    bankOut,
+    ledgerOut,
+    outDifference: bankOut - ledgerOut,
+    bankNet,
+    ledgerNet,
+    netDifference: bankNet - ledgerNet,
+  };
 }
 
 export function reconciliationAmountLabel(item: ReconciliationItem | null): string {
