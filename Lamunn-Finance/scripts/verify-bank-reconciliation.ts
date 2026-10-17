@@ -1,7 +1,7 @@
 /** พิสูจน์การอ่านและจับคู่รายการกระทบยอดโดยไม่แตะฐานข้อมูลหรือสร้างใบสำคัญ
  * รัน: npx tsx scripts/verify-bank-reconciliation.ts
  */
-import { parseReconciliationTable, reconcileBankRows } from "../src/lib/accounting/bankReconciliation";
+import { parseReconciliationTable, reconcileBankRows, summarizeReconciliationRows } from "../src/lib/accounting/bankReconciliation";
 
 let failures = 0;
 function check(label: string, actual: unknown, expected: unknown) {
@@ -49,6 +49,21 @@ function main() {
     ["11/01/2094", "[test] เงินประกันเซ็นทรัล", "บริษัท สรรพสินค้าเซ็นทรัล จำกัด", 0, 10700],
   ], "ledger");
   const duplicateResult = reconcileBankRows(duplicateBank, duplicateLedger);
+  const statusBank = parseReconciliationTable([
+    ["วันที่", "รายละเอียด", "จำนวนเงิน"],
+    ["01/02/2094", "[test] ค่าเช่า เซ็นทรัล", 100],
+    ["02/02/2094", "[test] ค่าธรรมเนียมธนาคาร", 200],
+    ["03/02/2094", "[test] ยอดขายหน้าร้าน", 300],
+    ["10/02/2094", "[test] ไม่พบในบัญชี", 400],
+  ], "bank");
+  const statusLedger = parseReconciliationTable([
+    ["วันที่", "รายละเอียด", "จำนวนเงิน"],
+    ["01/02/2094", "[test] ค่าเช่า เซ็นทรัล สาขา", 100],
+    ["02/02/2094", "[test] ค่าธรรมเนียมธนาคาร", 250],
+    ["03/02/2094", "[test] ซื้อวัตถุดิบ", 300],
+  ], "ledger");
+  const statusResult = reconcileBankRows(statusBank, statusLedger);
+  const statusSummary = summarizeReconciliationRows(statusResult);
 
   console.log("\n=== อ่านไฟล์เป็นสตางค์ ===");
   check("เงินเข้าธนาคารเป็นบวก", bank[0].amount, 125_050);
@@ -56,7 +71,7 @@ function main() {
   check("เครดิตบัญชีเงินฝากเป็นลบ", ledger[1].amount, -1_500);
   check("อ่านหัวตารางที่มีคอลัมน์ว่างคั่นได้", sparse[0].amount, 50_000);
 
-  console.log("\n=== จับคู่ด้วยวันที่และจำนวนเงิน ===");
+  console.log("\n=== จับคู่ด้วยยอดและคำอธิบาย ===");
   check("เลือกเงินเข้าจับคู่ได้ 1 รายการ", incomingResult.filter((row) => row.matched).length, 1);
   check("เลือกเงินเข้าไม่แสดงเงินออก", incomingResult.some((row) => (row.bank?.amount ?? row.ledger?.amount ?? 0) < 0), false);
   check("เลือกเงินออกจับคู่ได้ 1 รายการ", outgoingResult.filter((row) => row.matched).length, 1);
@@ -65,6 +80,15 @@ function main() {
   check("เลือกทั้งคู่จับคู่ได้ 2 รายการ", allResult.filter((row) => row.matched).length, 2);
   check("ยอดซ้ำจับด้วยชื่อคู่ค้าและเหลือคนที่ไม่มีรายการธนาคาร", duplicateResult.filter((row) => !row.matched && row.ledger).map((row) => row.ledger?.detail), ["[test] ค่าจ้างไลฟ์ — นางสาว ปาณิศา อัตถากร"]);
   check("วันที่คลาดหนึ่งวันจับได้เมื่อรายละเอียดสอดคล้อง", duplicateResult.filter((row) => row.matchKind === "near-date").map((row) => row.ledger?.amount), [-1_070_000]);
+
+  console.log("\n=== สีสถานะและผลต่าง ===");
+  check("ยอดและคำสำคัญตรงกันเป็นสีเขียว", statusResult.filter((row) => row.status === "matched").length, 1);
+  check("แสดงคำที่ตรงกันไม่เกิน 3 คำ", statusResult.find((row) => row.status === "matched")?.commonWords, ["ค่าเช่า", "เซ็นทรัล"]);
+  check("ยอดต่างแต่รายละเอียดตรงเป็นสีแดง", statusResult.some((row) => row.matchKind === "amount-mismatch" && row.status === "mismatched"), true);
+  check("ยอดตรงแต่รายละเอียดต่างเป็นสีแดง", statusResult.some((row) => row.matchKind === "detail-mismatch" && row.status === "mismatched"), true);
+  check("ไม่มีคู่เป็นสีเหลือง", statusResult.filter((row) => row.status === "not-found").length, 1);
+  check("สรุปจำนวนแต่ละสถานะ", [statusSummary.matchedCount, statusSummary.mismatchedCount, statusSummary.notFoundCount], [1, 2, 1]);
+  check("สรุปผลต่างเงินเข้าเป็นสตางค์", statusSummary.inDifference, 35_000);
 
   console.log("\n=== ล้างข้อมูลทดสอบ ===");
   bank.length = 0;
@@ -76,7 +100,10 @@ function main() {
   duplicateBank.length = 0;
   duplicateLedger.length = 0;
   duplicateResult.length = 0;
-  check("ข้อมูลในหน่วยความจำถูกล้าง", [bank.length, ledger.length, incomingResult.length, outgoingResult.length, allResult.length, sparse.length, duplicateBank.length, duplicateLedger.length, duplicateResult.length], [0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  statusBank.length = 0;
+  statusLedger.length = 0;
+  statusResult.length = 0;
+  check("ข้อมูลในหน่วยความจำถูกล้าง", [bank.length, ledger.length, incomingResult.length, outgoingResult.length, allResult.length, sparse.length, duplicateBank.length, duplicateLedger.length, duplicateResult.length, statusBank.length, statusLedger.length, statusResult.length], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
   console.log(failures === 0 ? "\n✅ ผ่านทั้งหมด\n" : `\n❌ ไม่ผ่าน ${failures} ข้อ\n`);
   process.exit(failures === 0 ? 0 : 1);
