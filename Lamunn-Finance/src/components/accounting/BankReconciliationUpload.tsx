@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { BookOpenCheck, Building2, CheckCircle2, Loader2, UploadCloud } from "lucide-react";
 import {
   BANK_RECONCILIATION_ACCOUNT_CODE,
+  filterReconciliationRows,
   parseReconciliationTable,
   reconcileBankRows,
   reconciliationAmountLabel,
@@ -12,6 +13,7 @@ import {
   type ReconciliationDirection,
   type ReconciliationItem,
   type ReconciliationResultRow,
+  type ReconciliationStatusFilter,
 } from "@/lib/accounting/bankReconciliation";
 import { fmtSatang } from "@/lib/accounting/money";
 import { useServerRefresh } from "./useServerRefresh";
@@ -109,7 +111,15 @@ async function readFileTable(file: File): Promise<unknown[][]> {
   return rows;
 }
 
-export default function BankReconciliationUpload({ year, month }: { year: number; month: number }) {
+export default function BankReconciliationUpload({
+  year,
+  month,
+  statusFilter,
+}: {
+  year: number;
+  month: number;
+  statusFilter: ReconciliationStatusFilter;
+}) {
   const router = useRouter();
   const [filterPending, startFilterTransition] = useTransition();
   const [bankFile, setBankFile] = useState<File | null>(null);
@@ -126,10 +136,14 @@ export default function BankReconciliationUpload({ year, month }: { year: number
     setError("");
   };
 
-  const changePeriod = (nextYear: number, nextMonth: number) => {
-    setResults(null);
+  const changeFilters = (nextYear: number, nextMonth: number, nextStatus: ReconciliationStatusFilter) => {
+    if (nextYear !== year || nextMonth !== month) setResults(null);
     setError("");
-    const query = new URLSearchParams({ year: String(nextYear), month: String(nextMonth) });
+    const query = new URLSearchParams({
+      year: String(nextYear),
+      month: String(nextMonth),
+      status: nextStatus,
+    });
     startFilterTransition(() => router.push(`/accounting/bank-reconciliation?${query}`));
   };
 
@@ -159,6 +173,7 @@ export default function BankReconciliationUpload({ year, month }: { year: number
   };
 
   const summary = results ? summarizeReconciliationRows(results) : null;
+  const visibleResults = results ? filterReconciliationRows(results, statusFilter) : null;
 
   return (
     <div className="space-y-5">
@@ -212,13 +227,13 @@ export default function BankReconciliationUpload({ year, month }: { year: number
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-sm font-medium text-gray-700">
                 เดือน
-                <select value={month} onChange={(event) => changePeriod(year, Number(event.target.value))} disabled={filterPending} className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+                <select value={month} onChange={(event) => changeFilters(year, Number(event.target.value), statusFilter)} disabled={filterPending} className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
                   {MONTHS.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
                 </select>
               </label>
               <label className="text-sm font-medium text-gray-700">
                 ปี
-                <select value={year} onChange={(event) => changePeriod(Number(event.target.value), month)} disabled={filterPending} className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+                <select value={year} onChange={(event) => changeFilters(Number(event.target.value), month, statusFilter)} disabled={filterPending} className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
                   {Array.from(new Set([year, ...Array.from({ length: 8 }, (_, index) => new Date().getUTCFullYear() + 1 - index)]))
                     .sort((left, right) => right - left)
                     .map((value) => <option key={value} value={value}>{value + 543} ({value})</option>)}
@@ -281,20 +296,36 @@ export default function BankReconciliationUpload({ year, month }: { year: number
             <h2 className="font-semibold text-gray-900">ผลการกระทบยอด</h2>
             <p className="mt-0.5 text-sm text-gray-500">
               {summary
-                ? `ตรงกัน ${summary.matchedCount.toLocaleString("th-TH")} · ไม่ตรงกัน ${summary.mismatchedCount.toLocaleString("th-TH")} · ไม่พบ ${summary.notFoundCount.toLocaleString("th-TH")} รายการ`
+                ? `แสดง ${(visibleResults?.length ?? 0).toLocaleString("th-TH")} จาก ${results?.length.toLocaleString("th-TH")} รายการ · ตรงกัน ${summary.matchedCount.toLocaleString("th-TH")} · ไม่ตรงกัน ${summary.mismatchedCount.toLocaleString("th-TH")} · ไม่พบ ${summary.notFoundCount.toLocaleString("th-TH")}`
                 : "เลือกไฟล์ธนาคารแล้วกดตรวจสอบและจับคู่"}
             </p>
           </div>
-          <div className="flex items-center gap-3 text-xs">
-            <span className="flex items-center gap-1.5 text-emerald-700">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> ตรงกัน
-            </span>
-            <span className="flex items-center gap-1.5 text-rose-700">
-              <span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> ไม่ตรงกัน
-            </span>
-            <span className="flex items-center gap-1.5 text-amber-700">
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> ไม่พบคู่
-            </span>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-xs font-medium text-gray-600">
+              สถานะ
+              <select
+                value={statusFilter}
+                onChange={(event) => changeFilters(year, month, event.target.value as ReconciliationStatusFilter)}
+                disabled={filterPending}
+                className="mt-1 block min-w-40 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800"
+              >
+                <option value="all">ทั้งหมด</option>
+                <option value="matched">ตรงกัน</option>
+                <option value="mismatched">ไม่ตรงกัน</option>
+                <option value="not-found">ไม่พบคู่</option>
+              </select>
+            </label>
+            <div className="flex items-center gap-3 pb-2 text-xs">
+              <span className="flex items-center gap-1.5 text-emerald-700">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> ตรงกัน
+              </span>
+              <span className="flex items-center gap-1.5 text-rose-700">
+                <span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> ไม่ตรงกัน
+              </span>
+              <span className="flex items-center gap-1.5 text-amber-700">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> ไม่พบคู่
+              </span>
+            </div>
           </div>
         </div>
 
@@ -314,7 +345,7 @@ export default function BankReconciliationUpload({ year, month }: { year: number
               </tr>
             </thead>
             <tbody>
-              {(results ?? []).map((row) => (
+              {(visibleResults ?? []).map((row) => (
                 <tr
                   key={row.id}
                   className={`border-t ${resultTone(row)}`}
@@ -334,7 +365,7 @@ export default function BankReconciliationUpload({ year, month }: { year: number
                   </td>
                 </tr>
               ))}
-              {results?.length === 0 && (
+              {visibleResults?.length === 0 && results && (
                 <tr><td colSpan={9} className="px-4 py-10 text-center text-gray-400">ไม่พบรายการสำหรับกระทบยอด</td></tr>
               )}
               {!results && (

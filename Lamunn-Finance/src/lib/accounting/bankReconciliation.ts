@@ -2,6 +2,7 @@ import { fmtSatang } from "./money";
 
 export type ReconciliationSource = "bank" | "ledger";
 export type ReconciliationDirection = "in" | "out" | "both";
+export type ReconciliationStatusFilter = "all" | ReconciliationResultRow["status"];
 export const BANK_RECONCILIATION_ACCOUNT_CODE = "11122.01";
 
 export type ReconciliationItem = {
@@ -40,6 +41,13 @@ export type ReconciliationSummary = {
   ledgerNet: number;
   netDifference: number;
 };
+
+export function filterReconciliationRows(
+  rows: ReconciliationResultRow[],
+  status: ReconciliationStatusFilter,
+): ReconciliationResultRow[] {
+  return status === "all" ? rows : rows.filter((row) => row.status === status);
+}
 
 type ColumnMap = {
   date: number;
