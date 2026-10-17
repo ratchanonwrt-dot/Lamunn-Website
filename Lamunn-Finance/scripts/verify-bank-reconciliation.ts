@@ -28,6 +28,11 @@ function main() {
     ["2094-01-02", "[test] ค่าธรรมเนียมธนาคาร", 0, 15],
     ["2094-01-04", "[test] รายการเฉพาะบัญชี", 99, ""],
   ], "ledger");
+  const bankDebitCredit = parseReconciliationTable([
+    ["วันที่", "รายละเอียด", "เดบิต", "เครดิต"],
+    ["05/01/2094", "[test] เงินเข้าจากเดบิต", 700, 0],
+    ["06/01/2094", "[test] เงินออกจากเครดิต", 0, 80],
+  ], "bank");
   const incomingResult = reconcileBankRows(bank, ledger, "in");
   const outgoingResult = reconcileBankRows(bank, ledger, "out");
   const allResult = reconcileBankRows(bank, ledger, "both");
@@ -69,6 +74,8 @@ function main() {
   check("เงินเข้าธนาคารเป็นบวก", bank[0].amount, 125_050);
   check("เงินออกธนาคารเป็นลบ", bank[1].amount, -1_500);
   check("เครดิตบัญชีเงินฝากเป็นลบ", ledger[1].amount, -1_500);
+  check("เดบิตไฟล์ธนาคารเป็นเงินเข้า", bankDebitCredit[0].amount, 70_000);
+  check("เครดิตไฟล์ธนาคารเป็นเงินออก", bankDebitCredit[1].amount, -8_000);
   check("อ่านหัวตารางที่มีคอลัมน์ว่างคั่นได้", sparse[0].amount, 50_000);
 
   console.log("\n=== จับคู่ด้วยยอดและคำอธิบาย ===");
@@ -76,6 +83,8 @@ function main() {
   check("เลือกเงินเข้าไม่แสดงเงินออก", incomingResult.some((row) => (row.bank?.amount ?? row.ledger?.amount ?? 0) < 0), false);
   check("เลือกเงินออกจับคู่ได้ 1 รายการ", outgoingResult.filter((row) => row.matched).length, 1);
   check("เลือกเงินออกไม่แสดงเงินเข้า", outgoingResult.some((row) => (row.bank?.amount ?? row.ledger?.amount ?? 0) > 0), false);
+  check("dropdown เงินเข้ารับเดบิตไฟล์ธนาคาร", reconcileBankRows(bankDebitCredit, [], "in").map((row) => row.bank?.amount), [70_000]);
+  check("dropdown เงินออกรับเครดิตไฟล์ธนาคาร", reconcileBankRows(bankDebitCredit, [], "out").map((row) => row.bank?.amount), [-8_000]);
   check("เลือกทั้งคู่แสดงรายการครบทั้งสองทิศทาง", allResult.length, 4);
   check("เลือกทั้งคู่จับคู่ได้ 2 รายการ", allResult.filter((row) => row.matched).length, 2);
   check("ยอดซ้ำจับด้วยชื่อคู่ค้าและเหลือคนที่ไม่มีรายการธนาคาร", duplicateResult.filter((row) => !row.matched && row.ledger).map((row) => row.ledger?.detail), ["[test] ค่าจ้างไลฟ์ — นางสาว ปาณิศา อัตถากร"]);
@@ -93,6 +102,7 @@ function main() {
   console.log("\n=== ล้างข้อมูลทดสอบ ===");
   bank.length = 0;
   ledger.length = 0;
+  bankDebitCredit.length = 0;
   incomingResult.length = 0;
   outgoingResult.length = 0;
   allResult.length = 0;
@@ -103,7 +113,7 @@ function main() {
   statusBank.length = 0;
   statusLedger.length = 0;
   statusResult.length = 0;
-  check("ข้อมูลในหน่วยความจำถูกล้าง", [bank.length, ledger.length, incomingResult.length, outgoingResult.length, allResult.length, sparse.length, duplicateBank.length, duplicateLedger.length, duplicateResult.length, statusBank.length, statusLedger.length, statusResult.length], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  check("ข้อมูลในหน่วยความจำถูกล้าง", [bank.length, ledger.length, bankDebitCredit.length, incomingResult.length, outgoingResult.length, allResult.length, sparse.length, duplicateBank.length, duplicateLedger.length, duplicateResult.length, statusBank.length, statusLedger.length, statusResult.length], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
   console.log(failures === 0 ? "\n✅ ผ่านทั้งหมด\n" : `\n❌ ไม่ผ่าน ${failures} ข้อ\n`);
   process.exit(failures === 0 ? 0 : 1);
