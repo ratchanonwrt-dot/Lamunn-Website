@@ -1,8 +1,21 @@
 import BankReconciliationUpload from "@/components/accounting/BankReconciliationUpload";
 import { requireSectionPage } from "@/lib/permissions";
 
-export default async function BankReconciliationPage() {
+export default async function BankReconciliationPage({
+  searchParams,
+}: {
+  searchParams: { year?: string; month?: string };
+}) {
   await requireSectionPage("ACCOUNTING");
+  const now = new Date();
+  const requestedYear = Number(searchParams.year);
+  const requestedMonth = Number(searchParams.month);
+  const year = Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= 2200
+    ? requestedYear
+    : now.getUTCFullYear();
+  const month = Number.isInteger(requestedMonth) && requestedMonth >= 1 && requestedMonth <= 12
+    ? requestedMonth
+    : now.getUTCMonth() + 1;
 
   return (
     <div>
@@ -13,7 +26,7 @@ export default async function BankReconciliationPage() {
       <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
         หน้านี้ใช้ตรวจสอบและกระทบยอดเท่านั้น — จะไม่สร้างใบสำคัญ ไม่แก้สมุดรายวัน และไม่นำรายการไปลงบัญชี
       </div>
-      <BankReconciliationUpload />
+      <BankReconciliationUpload year={year} month={month} />
     </div>
   );
 }

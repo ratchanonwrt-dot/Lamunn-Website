@@ -2,6 +2,7 @@ import { fmtSatang } from "./money";
 
 export type ReconciliationSource = "bank" | "ledger";
 export type ReconciliationDirection = "in" | "out" | "both";
+export const BANK_RECONCILIATION_ACCOUNT_CODE = "11122.01";
 
 export type ReconciliationItem = {
   rowNumber: number;
