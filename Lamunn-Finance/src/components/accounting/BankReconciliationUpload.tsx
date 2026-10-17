@@ -47,9 +47,8 @@ function fileSizeLabel(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function sideLabel(item: ReconciliationItem | null, kind: UploadKind) {
+function sideLabel(item: ReconciliationItem | null) {
   if (!item) return "—";
-  if (kind === "bank") return item.amount > 0 ? "เครดิต" : "เดบิต";
   return item.amount > 0 ? "เดบิต" : "เครดิต";
 }
 
@@ -295,10 +294,10 @@ export default function BankReconciliationUpload() {
                 >
                   <td className="whitespace-nowrap px-4 py-3">{row.dateLabel}</td>
                   <td className="px-4 py-3 font-medium">{row.bank?.detail || "—"}</td>
-                  <td className="px-4 py-3 text-center">{sideLabel(row.bank, "bank")}</td>
+                  <td className="px-4 py-3 text-center">{sideLabel(row.bank)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{reconciliationAmountLabel(row.bank)}</td>
                   <td className="px-4 py-3 font-medium">{row.ledger?.detail || "—"}</td>
-                  <td className="px-4 py-3 text-center">{sideLabel(row.ledger, "ledger")}</td>
+                  <td className="px-4 py-3 text-center">{sideLabel(row.ledger)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{reconciliationAmountLabel(row.ledger)}</td>
                   <td className="px-4 py-3 text-xs">{row.commonWords.length ? row.commonWords.join(", ") : "—"}</td>
                   <td className="px-4 py-3 text-center">

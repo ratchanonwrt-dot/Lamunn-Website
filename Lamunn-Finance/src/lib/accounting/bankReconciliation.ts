@@ -165,7 +165,7 @@ function parseDate(value: unknown): Pick<ReconciliationItem, "dateKey" | "dateLa
   return { dateKey, dateLabel };
 }
 
-function amountFromRow(row: unknown[], columns: ColumnMap, source: ReconciliationSource): number | null {
+function amountFromRow(row: unknown[], columns: ColumnMap, _source: ReconciliationSource): number | null {
   const direct = columns.amount === undefined ? null : parseMoney(row[columns.amount]);
   if (direct !== null) return direct;
 
@@ -177,13 +177,9 @@ function amountFromRow(row: unknown[], columns: ColumnMap, source: Reconciliatio
 
   const debit = columns.debit === undefined ? null : parseMoney(row[columns.debit]);
   const credit = columns.credit === undefined ? null : parseMoney(row[columns.credit]);
-  if (source === "bank") {
-    if (credit !== null && credit !== 0) return Math.abs(credit);
-    if (debit !== null && debit !== 0) return -Math.abs(debit);
-  } else {
-    if (debit !== null && debit !== 0) return Math.abs(debit);
-    if (credit !== null && credit !== 0) return -Math.abs(credit);
-  }
+  // รายงานนี้มองจากบัญชีเงินฝาก จึงใช้เดบิตเป็นเงินเข้าและเครดิตเป็นเงินออกเหมือนกันทั้งสองไฟล์
+  if (debit !== null && debit !== 0) return Math.abs(debit);
+  if (credit !== null && credit !== 0) return -Math.abs(credit);
   return debit !== null || credit !== null ? 0 : null;
 }
 
