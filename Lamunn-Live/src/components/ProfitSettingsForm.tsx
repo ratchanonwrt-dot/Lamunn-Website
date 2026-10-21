@@ -31,7 +31,7 @@ export default function ProfitSettingsForm({ adsPct, platformFeePct, shippingCos
 
   return (
     <form onSubmit={save} className="flex flex-wrap items-center gap-2 text-xs text-muted">
-      <span>หักจากยอดขาย:</span>
+      <span title="ค่าขนส่งและต้นทุนวัตถุดิบ: ใช้กับกะที่ยังไม่กรอกออเดอร์เท่านั้น">หักจากยอดขาย:</span>
       <label className="inline-flex items-center gap-1">
         ค่า Ads <input type="number" step="0.1" min={0} max={100} disabled={!canEdit} value={ads} onChange={(e) => setAds(e.target.value)} className={inputCls} />%
       </label>
@@ -39,10 +39,10 @@ export default function ProfitSettingsForm({ adsPct, platformFeePct, shippingCos
         ค่าธรรมเนียม TikTok <input type="number" step="0.1" min={0} max={100} disabled={!canEdit} value={fee} onChange={(e) => setFee(e.target.value)} className={inputCls} />%
       </label>
       <label className="inline-flex items-center gap-1">
-        ค่าขนส่ง <input type="number" step="0.1" min={0} max={100} disabled={!canEdit} value={ship} onChange={(e) => setShip(e.target.value)} className={inputCls} />%
+        ค่าขนส่ง (ประมาณ) <input type="number" step="0.1" min={0} max={100} disabled={!canEdit} value={ship} onChange={(e) => setShip(e.target.value)} className={inputCls} />%
       </label>
       <label className="inline-flex items-center gap-1">
-        ต้นทุนวัตถุดิบ <input type="number" step="0.1" min={0} max={100} disabled={!canEdit} value={cogs} onChange={(e) => setCogs(e.target.value)} className={inputCls} />%
+        ต้นทุนวัตถุดิบ (ประมาณ) <input type="number" step="0.1" min={0} max={100} disabled={!canEdit} value={cogs} onChange={(e) => setCogs(e.target.value)} className={inputCls} />%
       </label>
       {canEdit && (
         <button type="submit" disabled={busy || (ads === String(adsPct) && fee === String(platformFeePct) && ship === String(shippingCostPct) && cogs === String(cogsPct))} className="rounded-lg bg-ink px-3 py-1.5 font-semibold text-white hover:bg-brand-600 disabled:opacity-40">

@@ -171,6 +171,11 @@ model LiveShift {
   payOverride Float?
   payNote     String? // หมายเหตุเรื่องค่าตอบแทน (ไม่บังคับ)
 
+  // ออเดอร์จริงของกะ (กรอกหลังไลฟ์) — ใช้คิดค่าขนส่งและต้นทุนวัตถุดิบจริงในหน้าสรุปกำไร
+  // ว่างทั้งหมด = ยังไม่กรอก ระบบใช้ % ประมาณแทน
+  orderCount   Int?   // จำนวนออเดอร์ (พัสดุ)
+  shippingCost Float? // ค่าส่งรวมของกะ (บาท)
+
   createdByStaffId String?
   createdByStaff   StaffUser? @relation(fields: [createdByStaffId], references: [id], onDelete: SetNull)
 
@@ -179,6 +184,7 @@ model LiveShift {
 
   slots   LiveSlot[]
   request SlotRequest? // ถ้ากะนี้เกิดจากการอนุมัติคำขอจากเว็บจอง
+  orderLines ShiftOrderLine[]
 
   @@index([date])
   @@index([streamerId])
@@ -320,4 +326,35 @@ model DailyPayout {
 
   @@unique([date, streamerId])
   @@map("daily_payouts")
+}
+
+// สินค้า/ชุดที่ขายในไลฟ์ พร้อมต้นทุนวัตถุดิบต่อชุด — ใช้เป็นรายการให้เลือกตอนกรอกออเดอร์ของกะ
+model LiveProduct {
+  id         String   @id @default(cuid())
+  name       String
+  costPerSet Float // ต้นทุนวัตถุดิบต่อ 1 ชุด (บาท)
+  isActive   Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  orderLines ShiftOrderLine[]
+
+  @@map("live_products")
+}
+
+// จำนวนชุดที่ลูกค้าสั่งในกะ — เก็บชื่อและต้นทุนต่อชุด ณ ตอนกรอกไว้ด้วย แก้ต้นทุนสินค้าทีหลังตัวเลขย้อนหลังจึงไม่เปลี่ยน
+model ShiftOrderLine {
+  id          String       @id @default(cuid())
+  shiftId     String
+  shift       LiveShift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     LiveProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName String
+  quantity    Int
+  unitCost    Float
+  createdAt   DateTime     @default(now())
+
+  @@index([shiftId])
+  @@map("shift_order_lines")
 }

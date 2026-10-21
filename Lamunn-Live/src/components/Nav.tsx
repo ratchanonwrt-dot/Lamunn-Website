@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import AppSwitcher from "./AppSwitcher";
 import clsx from "clsx";
-import { LayoutDashboard, CalendarDays, Inbox, Radio, BarChart3, Wallet, Banknote, TrendingUp, Users, Tv, UserCog, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, CalendarDays, Inbox, Radio, BarChart3, Wallet, Banknote, TrendingUp, Package, Users, Tv, UserCog, LogOut, Menu, X } from "lucide-react";
 
 const roleLabel: Record<string, string> = {
   SUPER_ADMIN: "ผู้ดูแลระบบสูงสุด",
@@ -31,6 +31,7 @@ const mainLinks = [
 const otherLinks = [
   { href: "/streamers", label: "คนไลฟ์", icon: Users, roles: EDITOR_ROLES },
   { href: "/channels", label: "ช่องทางไลฟ์", icon: Tv, roles: EDITOR_ROLES },
+  { href: "/products", label: "สินค้า / ต้นทุน", icon: Package, roles: EDITOR_ROLES },
   { href: "/staff", label: "ผู้ใช้งาน", icon: UserCog, roles: ["SUPER_ADMIN"] },
 ];
 

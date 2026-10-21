@@ -26,6 +26,10 @@ export interface ProfitShiftInput {
   channelName: string | null;
   payOverride: number | null;
   slots: { startTime: string; endTime: string; sales: number }[];
+  // ออเดอร์จริง — กรอกแล้วอย่างใดอย่างหนึ่ง ถือว่าใช้ตัวเลขจริงของกะนั้น (ช่องที่ว่างนับเป็น 0)
+  orderCount: number | null;
+  shippingCost: number | null;
+  orderLines: { quantity: number; unitCost: number }[];
 }
 
 export interface ProfitTotals {
@@ -39,6 +43,10 @@ export interface ProfitTotals {
   shipping: number; // ค่าขนส่ง
   cogs: number; // ต้นทุนวัตถุดิบ
   profit: number; // กำไรจริง
+  sets: number; // ชุดที่ขาย (เฉพาะกะที่กรอกออเดอร์)
+  orders: number; // จำนวนออเดอร์ (เฉพาะกะที่กรอกออเดอร์)
+  actualShifts: number; // กะที่ใช้ค่าส่ง/ต้นทุนจริงจากออเดอร์
+  estimatedShifts: number; // กะที่ยังไม่กรอกออเดอร์ ใช้ % ประมาณ
   margin: number | null; // กำไร % ของยอดขาย
   salesPerHour: number | null;
   profitPerHour: number | null;
@@ -57,7 +65,7 @@ export interface ProfitReport {
   keepRatio: number; // เหลือหลังหักทุก % (Ads, ค่าธรรมเนียม, ขนส่ง, ต้นทุน) ต่อยอดขาย 1 บาท — ไว้คิดจุดคุ้มทุน
 }
 
-const empty = (): Omit<ProfitTotals, "margin" | "salesPerHour" | "profitPerHour" | "roi"> => ({ shifts: 0, hours: 0, sales: 0, ads: 0, fee: 0, income: 0, pay: 0, shipping: 0, cogs: 0, profit: 0 });
+const empty = (): Omit<ProfitTotals, "margin" | "salesPerHour" | "profitPerHour" | "roi"> => ({ shifts: 0, hours: 0, sales: 0, ads: 0, fee: 0, income: 0, pay: 0, shipping: 0, cogs: 0, profit: 0, sets: 0, orders: 0, actualShifts: 0, estimatedShifts: 0 });
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 function finish(t: ReturnType<typeof empty>): ProfitTotals {
@@ -72,6 +80,10 @@ function finish(t: ReturnType<typeof empty>): ProfitTotals {
     shipping: r2(t.shipping),
     cogs: r2(t.cogs),
     profit: r2(t.profit),
+    sets: t.sets,
+    orders: t.orders,
+    actualShifts: t.actualShifts,
+    estimatedShifts: t.estimatedShifts,
     margin: t.sales > 0 ? (t.profit / t.sales) * 100 : null,
     salesPerHour: t.hours > 0 ? t.sales / t.hours : null,
     profitPerHour: t.hours > 0 ? t.profit / t.hours : null,
@@ -79,10 +91,16 @@ function finish(t: ReturnType<typeof empty>): ProfitTotals {
   };
 }
 
-type Line = { hours: number; sales: number; ads: number; fee: number; pay: number; shipping: number; cogs: number };
+type Line = { hours: number; sales: number; ads: number; fee: number; pay: number; shipping: number; cogs: number; sets?: number; orders?: number; actual?: boolean };
 
 function add(t: ReturnType<typeof empty>, x: Line, countShift: boolean) {
-  if (countShift) t.shifts += 1;
+  if (countShift) {
+    t.shifts += 1;
+    if (x.actual) t.actualShifts += 1;
+    else t.estimatedShifts += 1;
+    t.sets += x.sets ?? 0;
+    t.orders += x.orders ?? 0;
+  }
   t.hours += x.hours;
   t.sales += x.sales;
   t.ads += x.ads;
@@ -119,7 +137,23 @@ export function buildProfitReport(shifts: ProfitShiftInput[], settings: PaySetti
     const hours = sh.slots.reduce((a, s) => a + slotHours(s.startTime, s.endTime), 0);
     const sales = sh.slots.reduce((a, s) => a + s.sales, 0);
     const pay = applyOverride(computePay(sales, hours, settings, sh.date), sh.payOverride).pay;
-    const line: Line = { hours, sales, pay, ...costsOf(sales) };
+    // ค่าส่ง/ต้นทุนวัตถุดิบ: ใช้ออเดอร์จริงถ้ากรอกแล้ว ไม่งั้นประมาณจาก % ของยอดขาย
+    const actual = sh.orderLines.length > 0 || sh.shippingCost !== null || sh.orderCount !== null;
+    const est = costsOf(sales);
+    const line: Line = actual
+      ? {
+          hours,
+          sales,
+          pay,
+          ads: est.ads,
+          fee: est.fee,
+          shipping: sh.shippingCost ?? 0,
+          cogs: sh.orderLines.reduce((a, l) => a + l.quantity * l.unitCost, 0),
+          sets: sh.orderLines.reduce((a, l) => a + l.quantity, 0),
+          orders: sh.orderCount ?? 0,
+          actual: true,
+        }
+      : { hours, sales, pay, ...est, actual: false };
 
     add(total, line, true);
     const st = streamer.get(sh.streamerId) ?? { label: sh.streamerName, t: empty() };
@@ -140,7 +174,9 @@ export function buildProfitReport(shifts: ProfitShiftInput[], settings: PaySetti
       const startH = Number(s.startTime.slice(0, 2));
       if (!Number.isFinite(startH)) continue;
       const ht = hour.get(startH) ?? empty();
-      add(ht, { hours: sh_h, sales: s.sales, pay: hours > 0 ? (pay * sh_h) / hours : 0, ...costsOf(s.sales) }, false);
+      // ค่าส่ง/ต้นทุนของกะกระจายลงแต่ละชั่วโมงตามสัดส่วนยอดขาย (ยอดเป็นศูนย์ทั้งกะ → ตามชั่วโมง)
+      const w = sales > 0 ? s.sales / sales : hours > 0 ? sh_h / hours : 0;
+      add(ht, { hours: sh_h, sales: s.sales, pay: hours > 0 ? (pay * sh_h) / hours : 0, ads: s.sales * adsR, fee: s.sales * feeR, shipping: line.shipping * w, cogs: line.cogs * w }, false);
       hour.set(startH, ht);
     }
   }
