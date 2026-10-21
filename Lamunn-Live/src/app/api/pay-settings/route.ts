@@ -12,7 +12,7 @@ export async function GET() {
 
 /**
  * แก้อัตราค่าตอบแทน / % ที่ใช้คิดกำไร (ผู้จัดการขึ้นไป) — ส่งเฉพาะช่องที่จะแก้
- * body: { payMode?, hourlyRate?, hourlyFrom?, shippingPct?, commissionPct?, minHourly?, adsPct?, platformFeePct? }
+ * body: { payMode?, hourlyRate?, hourlyFrom?, shippingPct?, commissionPct?, minHourly?, adsPct?, platformFeePct?, shippingCostPct?, cogsPct? }
  */
 export async function PATCH(req: NextRequest) {
   const staff = await requireStaff(EDITOR_ROLES);
@@ -27,9 +27,11 @@ export async function PATCH(req: NextRequest) {
     hourlyRate: "ค่าจ้างต่อชั่วโมง",
     adsPct: "% ค่า Ads",
     platformFeePct: "% ค่าธรรมเนียม TikTok",
+    shippingCostPct: "% ค่าขนส่ง",
+    cogsPct: "% ต้นทุนวัตถุดิบ",
   };
   const isMoney = (k: string) => k === "minHourly" || k === "hourlyRate";
-  for (const key of ["shippingPct", "commissionPct", "minHourly", "hourlyRate", "adsPct", "platformFeePct"] as const) {
+  for (const key of ["shippingPct", "commissionPct", "minHourly", "hourlyRate", "adsPct", "platformFeePct", "shippingCostPct", "cogsPct"] as const) {
     if (body[key] === undefined) continue;
     const n = Number(body[key]);
     if (!Number.isFinite(n) || n < 0) return NextResponse.json({ error: `${labels[key]} ต้องเป็นตัวเลข 0 ขึ้นไป` }, { status: 400 });
@@ -46,10 +48,11 @@ export async function PATCH(req: NextRequest) {
     if (body.hourlyFrom && !d) return NextResponse.json({ error: "วันที่เริ่มใช้ไม่ถูกต้อง" }, { status: 400 });
     data.hourlyFrom = d;
   }
-  const adsPct = typeof data.adsPct === "number" ? data.adsPct : undefined;
-  const feePct = typeof data.platformFeePct === "number" ? data.platformFeePct : undefined;
   const current = await getPaySettings();
-  if ((adsPct ?? current.adsPct) + (feePct ?? current.platformFeePct) > 100) return NextResponse.json({ error: "ค่า Ads + ค่าธรรมเนียม รวมกันต้องไม่เกิน 100%" }, { status: 400 });
+  const pick = (k: "adsPct" | "platformFeePct" | "shippingCostPct" | "cogsPct") => (typeof data[k] === "number" ? (data[k] as number) : current[k]);
+  if (pick("adsPct") + pick("platformFeePct") + pick("shippingCostPct") + pick("cogsPct") > 100) {
+    return NextResponse.json({ error: "ค่า Ads + ค่าธรรมเนียม + ค่าขนส่ง + ต้นทุนวัตถุดิบ รวมกันต้องไม่เกิน 100%" }, { status: 400 });
+  }
   const settings = await prisma.paySetting.update({ where: { id: "default" }, data });
   return NextResponse.json({ settings });
 }

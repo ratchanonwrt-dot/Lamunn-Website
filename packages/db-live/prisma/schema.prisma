@@ -200,6 +200,9 @@ model PaySetting {
   // ใช้คิดกำไรในหน้า "สรุปกำไร": หักจากยอดขายก่อนเป็นเงินได้จริง (% ของยอดขาย)
   adsPct         Float    @default(10)
   platformFeePct Float    @default(12)
+  // ต้นทุนที่ต้องหักต่อจากเงินได้ก่อนเป็นกำไรจริง (% ของยอดขาย) — ค่าขนส่งแยกจาก shippingPct ของสูตรคอมเดิม ไม่ให้แก้แล้วกระทบค่าคอมย้อนหลัง
+  shippingCostPct Float   @default(20)
+  cogsPct         Float   @default(0)
   updatedAt     DateTime @updatedAt
 
   @@map("pay_settings")

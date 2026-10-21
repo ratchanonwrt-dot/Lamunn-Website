@@ -64,7 +64,9 @@ export default async function ProfitPage({ searchParams }: { searchParams: { ran
     { label: `ค่า Ads ${formatNum(settings.adsPct, 1)}%`, value: t.ads, cls: "bg-orange-300" },
     { label: `ค่าธรรมเนียม TikTok ${formatNum(settings.platformFeePct, 1)}%`, value: t.fee, cls: "bg-amber-200" },
     { label: "ค่าจ้างคนไลฟ์", value: t.pay, cls: "bg-stone-400" },
-    { label: t.profit >= 0 ? "กำไร" : "ขาดทุน", value: Math.abs(t.profit), cls: t.profit >= 0 ? "bg-emerald-500" : "bg-red-500" },
+    { label: `ค่าขนส่ง ${formatNum(settings.shippingCostPct, 1)}%`, value: t.shipping, cls: "bg-sky-300" },
+    { label: `ต้นทุนวัตถุดิบ ${formatNum(settings.cogsPct, 1)}%`, value: t.cogs, cls: "bg-violet-300" },
+    { label: t.profit >= 0 ? "กำไรจริง" : "ขาดทุน", value: Math.abs(t.profit), cls: t.profit >= 0 ? "bg-emerald-500" : "bg-red-500" },
   ];
   const maxAbsDay = Math.max(1, ...rep.byDay.map((d) => Math.abs(d.profit)));
   const maxAbsHour = Math.max(1, ...rep.byHour.map((d) => Math.abs(d.profit)));
@@ -75,10 +77,10 @@ export default async function ProfitPage({ searchParams }: { searchParams: { ran
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">สรุปกำไร — ไลฟ์คุ้มไหม</h1>
           <p className="text-sm text-muted">
-            ยอดขาย − ค่า Ads − ค่าธรรมเนียม TikTok = เงินได้จริง · เงินได้จริง − ค่าจ้างคนไลฟ์ = กำไร
+            ยอดขาย − ค่า Ads − ค่าธรรมเนียม TikTok = เงินได้ · เงินได้ − ค่าจ้างคนไลฟ์ − ค่าขนส่ง − ต้นทุนวัตถุดิบ = กำไรจริง
           </p>
         </div>
-        <ProfitSettingsForm adsPct={settings.adsPct} platformFeePct={settings.platformFeePct} />
+        <ProfitSettingsForm adsPct={settings.adsPct} platformFeePct={settings.platformFeePct} shippingCostPct={settings.shippingCostPct} cogsPct={settings.cogsPct} />
       </div>
 
       {/* ช่วงวันที่ */}
@@ -104,6 +106,12 @@ export default async function ProfitPage({ searchParams }: { searchParams: { ran
         {settings.payMode === "HOURLY" && <> · ค่าจ้างเหมาชั่วโมงละ {formatBaht(settings.hourlyRate)} ฿{settings.hourlyFrom && <> (ตั้งแต่ {formatThaiDateShort(settings.hourlyFrom)})</>}</>}
       </p>
 
+      {settings.cogsPct === 0 && (
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800">
+          ยังไม่ได้ใส่ % ต้นทุนวัตถุดิบ (ตอนนี้ 0%) — กำไรด้านล่างจึงยังสูงกว่าความจริง ใส่ % ที่ช่อง &quot;ต้นทุนวัตถุดิบ&quot; ด้านบนแล้วกดบันทึก
+        </p>
+      )}
+
       {rep.pending.shifts > 0 && (
         <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
           ยังไม่กรอกยอด {rep.pending.shifts} กะ ({formatNum(rep.pending.plannedHours, 1)} ชม. ค่าจ้างประมาณ {formatBaht(rep.pending.estimatedPay)} ฿) — ไม่ได้นับในตัวเลขด้านล่าง กรอกยอดในหน้ากะแล้วตัวเลขจะครบ
@@ -116,28 +124,30 @@ export default async function ProfitPage({ searchParams }: { searchParams: { ran
         <>
           {/* คำตอบ: คุ้มไหม */}
           <section className={clsx("mb-5 rounded-2xl border p-5 shadow-card", worth ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50")}>
-            <p className={clsx("text-sm font-semibold", worth ? "text-emerald-800" : "text-red-800")}>{worth ? "คุ้ม — ไลฟ์ช่วงนี้มีกำไร" : "ยังไม่คุ้ม — ช่วงนี้ขาดทุน"}</p>
+            <p className={clsx("text-sm font-semibold", worth ? "text-emerald-800" : "text-red-800")}>{worth ? "คุ้ม — ไลฟ์ช่วงนี้มีกำไรจริง" : "ยังไม่คุ้ม — ช่วงนี้ขาดทุน"} (หลังหักค่าจ้าง ค่าขนส่ง และต้นทุนวัตถุดิบแล้ว)</p>
             <p className={clsx("font-display text-4xl font-semibold tabular-nums", worth ? "text-emerald-700" : "text-red-700")}>{baht(t.profit)}</p>
             <p className="mt-1 text-sm text-ink/80">
               กำไร {pct(t.margin)} ของยอดขาย · ค่าจ้าง 1 บาท ได้กำไรกลับมา {t.roi === null ? "–" : `${formatNum(t.roi / 100, 2)} บาท`} · กำไรเฉลี่ย {t.profitPerHour === null ? "–" : baht(t.profitPerHour)} ต่อชั่วโมงไลฟ์
             </p>
             {rep.breakEvenSalesPerHour !== null && (
               <p className="mt-2 text-xs text-muted">
-                จุดคุ้มทุน: ต้องขายได้อย่างน้อย <b className="text-ink">{formatBaht(rep.breakEvenSalesPerHour)} ฿ ต่อชั่วโมง</b> (ค่าจ้าง {formatBaht(settings.hourlyRate)} ÷ เงินได้จริง {formatNum(rep.incomeRatio * 100, 0)}% ของยอดขาย) · ตอนนี้ขายเฉลี่ย{" "}
+                จุดคุ้มทุน: ต้องขายได้อย่างน้อย <b className="text-ink">{formatBaht(rep.breakEvenSalesPerHour)} ฿ ต่อชั่วโมง</b> (ค่าจ้าง {formatBaht(settings.hourlyRate)} ÷ ส่วนที่เหลือหลังหักทุก % = {formatNum(rep.keepRatio * 100, 0)}% ของยอดขาย) · ตอนนี้ขายเฉลี่ย{" "}
                 <b className={clsx((t.salesPerHour ?? 0) >= rep.breakEvenSalesPerHour ? "text-emerald-700" : "text-red-700")}>{t.salesPerHour === null ? "–" : `${formatBaht(t.salesPerHour)} ฿`}</b> ต่อชั่วโมง
               </p>
             )}
           </section>
 
           {/* ตัวเลขหลัก */}
-          <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
             {[
               { label: "ยอดขาย", value: baht(t.sales) },
               { label: `− ค่า Ads ${formatNum(settings.adsPct, 1)}%`, value: baht(-t.ads), tone: "text-orange-700" },
               { label: `− ค่าธรรมเนียม TikTok ${formatNum(settings.platformFeePct, 1)}%`, value: baht(-t.fee), tone: "text-amber-700" },
-              { label: "= เงินได้จริง", value: baht(t.income), strong: true },
+              { label: "= เงินได้", value: baht(t.income), strong: true },
               { label: "− ค่าจ้างคนไลฟ์", value: baht(-t.pay), sub: `${pct(t.sales > 0 ? (t.pay / t.sales) * 100 : null)} ของยอดขาย`, tone: "text-stone-600" },
-              { label: "= กำไร", value: baht(t.profit), strong: true, tone: worth ? "text-emerald-700" : "text-red-700" },
+              { label: `− ค่าขนส่ง ${formatNum(settings.shippingCostPct, 1)}%`, value: baht(-t.shipping), tone: "text-sky-700" },
+              { label: `− ต้นทุนวัตถุดิบ ${formatNum(settings.cogsPct, 1)}%`, value: baht(-t.cogs), tone: "text-violet-700", sub: settings.cogsPct === 0 ? "ยังไม่ได้ใส่ %" : undefined },
+              { label: "= กำไรจริง", value: baht(t.profit), strong: true, tone: worth ? "text-emerald-700" : "text-red-700", sub: `${pct(t.margin)} ของยอดขาย` },
             ].map((c) => (
               <div key={c.label} className="rounded-2xl border border-line bg-white p-3 shadow-card">
                 <p className="truncate text-[11px] text-stone-400">{c.label}</p>
@@ -178,7 +188,7 @@ export default async function ProfitPage({ searchParams }: { searchParams: { ran
             <section className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
               <header className="border-b border-line bg-paper/60 px-4 py-2.5">
                 <p className="font-display text-[15px] font-semibold text-ink">ช่วงเวลาไหนคุ้ม (รวมทุกวันในช่วงที่เลือก)</p>
-                <p className="text-[11px] text-muted">ยอดขายตามที่กรอกรายชั่วโมง · ค่าจ้างกระจายตามชั่วโมง</p>
+                <p className="text-[11px] text-muted">กำไรจริงรายชั่วโมง · ยอดขายตามที่กรอกรายชั่วโมง · ค่าจ้างกระจายตามชั่วโมง</p>
               </header>
               <ul className="divide-y divide-line/60 text-sm">
                 {rep.byHour.map((h) => (
@@ -196,7 +206,7 @@ export default async function ProfitPage({ searchParams }: { searchParams: { ran
           {/* รายวัน */}
           <section className="mt-5 overflow-hidden rounded-2xl border border-line bg-white shadow-card">
             <header className="border-b border-line bg-paper/60 px-4 py-2.5">
-              <p className="font-display text-[15px] font-semibold text-ink">กำไรรายวัน</p>
+              <p className="font-display text-[15px] font-semibold text-ink">กำไรจริงรายวัน</p>
             </header>
             <ul className="divide-y divide-line/60 text-sm">
               {rep.byDay.map((d) => {
@@ -217,7 +227,7 @@ export default async function ProfitPage({ searchParams }: { searchParams: { ran
             <section className="mt-5 overflow-hidden rounded-2xl border border-line bg-white shadow-card">
               <header className="border-b border-line bg-paper/60 px-4 py-2.5">
                 <p className="font-display text-[15px] font-semibold text-ink">รายช่องทาง</p>
-                <p className="text-[11px] text-muted">ใช้ % ค่า Ads และค่าธรรมเนียมเดียวกันทุกช่องทาง</p>
+                <p className="text-[11px] text-muted">ใช้ % ค่า Ads ค่าธรรมเนียม ค่าขนส่ง และต้นทุนวัตถุดิบเดียวกันทุกช่องทาง</p>
               </header>
               <TotalsTable rows={rep.byChannel} first="ช่องทาง" />
             </section>
@@ -250,7 +260,7 @@ function TotalsTable({ rows, first }: { rows: (ProfitTotals & { key: string; lab
             <th className="px-3 py-2 text-right font-medium">ยอดขาย</th>
             <th className="px-3 py-2 text-right font-medium">ขาย/ชม.</th>
             <th className="px-3 py-2 text-right font-medium">ค่าจ้าง</th>
-            <th className="px-3 py-2 text-right font-medium">กำไร</th>
+            <th className="px-3 py-2 text-right font-medium">กำไรจริง</th>
             <th className="px-3 py-2 text-right font-medium">%กำไร</th>
             <th className="px-3 py-2"></th>
           </tr>
