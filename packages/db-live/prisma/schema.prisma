@@ -192,6 +192,14 @@ model PaySetting {
   shippingPct   Float    @default(20)  // หักค่าส่ง/ค่าส่งออกจากยอดขายก่อน (%)
   commissionPct Float    @default(4)   // คอมมิชชั่นจากยอดหลังหัก (%)
   minHourly     Float    @default(250) // ขั้นต่ำต่อชั่วโมง (บาท) — ถ้าคอมมิชชั่นไม่ถึงต้องจ่ายเท่านี้
+  // ระบบจ่าย: COMMISSION = คอม% เทียบขั้นต่ำ (แบบเดิม) · HOURLY = จ่ายเหมาต่อชั่วโมง ไม่มีคอมมิชชั่น
+  // hourlyFrom = วันที่เริ่มใช้แบบเหมา — กะก่อนวันนั้นยังคิดแบบเดิม ตัวเลขย้อนหลังจึงไม่เปลี่ยน
+  payMode       String    @default("COMMISSION")
+  hourlyRate    Float     @default(250)
+  hourlyFrom    DateTime? @db.Date
+  // ใช้คิดกำไรในหน้า "สรุปกำไร": หักจากยอดขายก่อนเป็นเงินได้จริง (% ของยอดขาย)
+  adsPct         Float    @default(10)
+  platformFeePct Float    @default(12)
   updatedAt     DateTime @updatedAt
 
   @@map("pay_settings")

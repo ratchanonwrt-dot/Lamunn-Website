@@ -24,7 +24,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: { s
     <div>
       <h1 className="mb-1 font-display text-2xl font-semibold tracking-tight text-ink">คำขอจองกะจากเว็บจอง</h1>
       <p className="mb-5 text-sm text-muted">
-        คนที่ขอมาจากเว็บจองจะมารอที่นี่ — อนุมัติแล้วระบบจะสร้างกะในตารางไลฟ์ให้ทันที (จับคู่คนไลฟ์จากเบอร์โทรอัตโนมัติ ถ้าไม่เจอให้เลือกเองหรือสร้างคนใหม่)
+        คนที่ขอมาจากเว็บจองจะมารอที่นี่ — ช่วงเดียวกันขอซ้อนกันได้ แอดมินเลือกว่าใครได้ไลฟ์ (คำขอที่ทับกันจะถูกปฏิเสธอัตโนมัติเมื่ออนุมัติคนหนึ่ง) อนุมัติแล้วระบบจะสร้างกะในตารางไลฟ์ให้ทันที (จับคู่คนไลฟ์จากเบอร์โทรอัตโนมัติ ถ้าไม่เจอให้เลือกเองหรือสร้างคนใหม่)
       </p>
       <RequestsManager
         status={status}
@@ -35,6 +35,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: { s
           date: r.date.toISOString().slice(0, 10),
           startTime: r.startTime,
           endTime: r.endTime,
+          channelId: r.channelId,
           channelName: r.channel?.name ?? null,
           requesterName: r.requesterName,
           requesterPhone: r.requesterPhone,

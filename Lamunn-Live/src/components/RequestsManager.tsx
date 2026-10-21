@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { useCanEdit } from "@/lib/RoleContext";
 import { formatThaiDateShort, thaiDays } from "@/lib/format";
+import { toRange, rangesOverlap } from "@/lib/schedule";
 
 type Status = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 
@@ -14,6 +15,7 @@ interface RequestRow {
   date: string;
   startTime: string;
   endTime: string;
+  channelId: string | null;
   channelName: string | null;
   requesterName: string;
   requesterPhone: string;
@@ -39,7 +41,19 @@ interface StreamerOpt {
 const digits = (s: string | null | undefined) => (s ?? "").replace(/[^\d]/g, "");
 const inputCls = "rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none transition focus:border-ink focus:ring-2 focus:ring-ink/10";
 
-function RequestCard({ r, streamers, onChanged }: { r: RequestRow; streamers: StreamerOpt[]; onChanged: () => void }) {
+/** คำขอที่รออนุมัติอื่น ๆ ที่ทับเวลากัน (วันเดียวกัน ช่องเดียวกัน) — แอดมินต้องเลือกคนใดคนหนึ่ง */
+function competitorsOf(r: RequestRow, all: RequestRow[]): RequestRow[] {
+  if (r.status !== "PENDING") return [];
+  const mine = toRange(r.startTime, r.endTime);
+  if (!mine) return [];
+  return all.filter((o) => {
+    if (o.id === r.id || o.status !== "PENDING" || o.date !== r.date || o.channelId !== r.channelId) return false;
+    const x = toRange(o.startTime, o.endTime);
+    return !!x && rangesOverlap(x, mine);
+  });
+}
+
+function RequestCard({ r, streamers, competitors, onChanged }: { r: RequestRow; streamers: StreamerOpt[]; competitors: RequestRow[]; onChanged: () => void }) {
   const canEdit = useCanEdit();
   // จับคู่คนไลฟ์จากเบอร์โทร (เทียบเฉพาะตัวเลข) หรือ LINE ID
   const matched = streamers.find((s) => (digits(s.phone) && digits(s.phone) === digits(r.requesterPhone)) || (s.lineId && r.requesterLine && s.lineId.toLowerCase() === r.requesterLine.toLowerCase()));
@@ -52,6 +66,7 @@ function RequestCard({ r, streamers, onChanged }: { r: RequestRow; streamers: St
 
   async function act(action: "approve" | "reject") {
     if (action === "reject" && !confirm(`ปฏิเสธคำขอของ ${r.requesterName}?`)) return;
+    if (action === "approve" && competitors.length > 0 && !confirm(`เลือก ${r.requesterName} (${r.startTime}–${r.endTime}) เป็นผู้ไลฟ์?\n\nคำขอที่ทับกันอีก ${competitors.length} รายการจะถูกปฏิเสธอัตโนมัติ:\n${competitors.map((c) => `• ${c.requesterName} ${c.startTime}–${c.endTime}`).join("\n")}`)) return;
     setBusy(true);
     setError(null);
     const res = await fetch(`/api/requests/${r.id}`, {
@@ -69,7 +84,7 @@ function RequestCard({ r, streamers, onChanged }: { r: RequestRow; streamers: St
   }
 
   return (
-    <li className={clsx("rounded-xl border bg-white p-4", r.status === "PENDING" ? "border-amber-200" : "border-line")}>
+    <li className={clsx("rounded-xl border bg-white p-4", r.status === "PENDING" ? (competitors.length > 0 ? "border-orange-300 ring-1 ring-orange-200" : "border-amber-200") : "border-line")}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-ink">
@@ -90,6 +105,11 @@ function RequestCard({ r, streamers, onChanged }: { r: RequestRow; streamers: St
             {r.requesterLine && <span className="text-muted"> · LINE: {r.requesterLine}</span>}
           </p>
           {r.note && <p className="mt-1 text-xs text-muted">📝 {r.note}</p>}
+          {competitors.length > 0 && (
+            <p className="mt-1.5 rounded-lg bg-orange-50 px-2 py-1 text-xs text-orange-800">
+              ขอช่วงเวลาทับกับอีก {competitors.length} คน: {competitors.map((c) => `${c.requesterName} ${c.startTime}–${c.endTime}`).join(" · ")} — เลือกอนุมัติได้คนเดียว ที่เหลือจะถูกปฏิเสธอัตโนมัติ
+            </p>
+          )}
           <p className="mt-1 text-[11px] text-stone-400">ส่งเมื่อ {new Date(r.createdAt).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" })}</p>
         </div>
         <div className="text-right">
@@ -192,7 +212,7 @@ export default function RequestsManager({
       ) : (
         <ul className="space-y-3">
           {requests.map((r) => (
-            <RequestCard key={r.id} r={r} streamers={streamers} onChanged={() => router.refresh()} />
+            <RequestCard key={r.id} r={r} streamers={streamers} competitors={competitorsOf(r, requests)} onChanged={() => router.refresh()} />
           ))}
         </ul>
       )}

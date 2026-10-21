@@ -12,7 +12,7 @@ export interface PublicBlock {
   endTime: string;
   s: number;
   e: number;
-  status: PublicBlockStatus; // booked = มีคนไลฟ์แล้ว (ไม่บอกชื่อ), requested = มีคนขอแล้ว รออนุมัติ, blocked = unavailable
+  status: PublicBlockStatus; // booked = มีคนไลฟ์แล้ว (ไม่บอกชื่อ), requested = คำขอของฉันที่รออนุมัติ (ของคนอื่นไม่ส่งมา), blocked = unavailable
   /** เป็นของเบอร์ที่จำไว้ — ใส่ requestId ให้จัดการได้ (คนอื่นไม่เห็น) */
   mine?: { requestId: string; status: "PENDING" | "APPROVED"; editable: boolean };
 }
@@ -47,7 +47,10 @@ export async function loadPublicWeek(weekParam: string | undefined, channelParam
 
   const [shifts, requests, blocks_, mine] = await Promise.all([
     prisma.liveShift.findMany({ where: { date: { gte: weekStart, lte: weekEnd }, channelId }, select: { id: true, date: true, startTime: true, endTime: true, slots: { select: { id: true } } } }),
-    prisma.slotRequest.findMany({ where: { date: { gte: weekStart, lte: weekEnd }, channelId, status: "PENDING" }, select: { id: true, date: true, startTime: true, endTime: true } }),
+    // คำขอที่รออนุมัติ: ส่งเฉพาะของเบอร์ที่จำไว้ — คนนอกเห็นแค่ "ว่าง" จนกว่าแอดมินจะอนุมัติ (แอดมินเลือกคนที่ดีที่สุดเอง)
+    phone
+      ? prisma.slotRequest.findMany({ where: { date: { gte: weekStart, lte: weekEnd }, channelId, status: "PENDING", requesterPhone: phone }, select: { id: true, date: true, startTime: true, endTime: true } })
+      : Promise.resolve([]),
     prisma.scheduleBlock.findMany({ where: { date: { gte: weekStart, lte: weekEnd }, OR: [{ channelId }, { channelId: null }] }, select: { date: true, startTime: true, endTime: true, label: true } }),
     phone
       ? prisma.slotRequest.findMany({ where: { requesterPhone: phone, date: { gte: weekStart, lte: weekEnd }, status: { in: ["PENDING", "APPROVED"] } }, select: { id: true, status: true, shiftId: true } })
@@ -81,8 +84,9 @@ export async function loadPublicWeek(weekParam: string | undefined, channelParam
     }
     blocks.sort((a, b) => a.s - b.s);
     const gapRule = gapRuleApplies(iso);
-    // "ว่าง" สำหรับคนนอก = ไม่ทับกะ/คำขอ (+ระยะเว้น 30 นาทีถ้ากติกามีผล) และไม่ทับบล็อก unavailable
-    const people = blocks.filter((b) => b.status !== "blocked").map((b) => ({ s: b.s, e: b.e }));
+    // "ว่าง" สำหรับคนนอก = ไม่ทับกะที่ยืนยันแล้ว (+ระยะเว้น 30 นาทีถ้ากติกามีผล) และไม่ทับบล็อก unavailable
+    // ช่วงที่มีคนขอแล้วแต่ยังรออนุมัติยังนับว่า "ว่าง" — ขอซ้อนได้ แอดมินเป็นคนเลือก
+    const people = blocks.filter((b) => b.status === "booked").map((b) => ({ s: b.s, e: b.e }));
     const taken = [...(gapRule ? padRanges(people) : people), ...blocks.filter((b) => b.status === "blocked").map((b) => ({ s: b.s, e: b.e }))];
     return {
       date: iso,

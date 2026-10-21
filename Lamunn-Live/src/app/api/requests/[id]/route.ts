@@ -4,7 +4,30 @@ import { requireStaff, EDITOR_ROLES } from "@/lib/requireStaff";
 import { checkShiftConflicts } from "@/lib/shiftValidation";
 import { attachShiftToSession, syncSessionTimes } from "@/lib/shiftSession";
 import { optionalText } from "@/lib/validation";
-import { pickUnusedColor } from "@/lib/schedule";
+import { pickUnusedColor, toRange, rangesOverlap } from "@/lib/schedule";
+
+/**
+ * จองทับกันได้: เมื่อแอดมินเลือกผู้ไลฟ์ของช่วงนี้แล้ว คำขออื่นที่รออยู่และทับเวลากับกะที่อนุมัติ (วันเดียวกัน ช่องเดียวกัน)
+ * จะถูกปฏิเสธอัตโนมัติ เพราะอนุมัติซ้อนไม่ได้อยู่แล้ว — คนขอจะเห็นผลในเว็บจองทันที
+ */
+async function rejectCompetitors(opts: { date: Date; channelId: string | null; startTime: string; endTime: string; keepId: string; staffId: string }) {
+  const range = toRange(opts.startTime, opts.endTime);
+  if (!range) return [];
+  const pending = await prisma.slotRequest.findMany({
+    where: { date: opts.date, channelId: opts.channelId, status: "PENDING", id: { not: opts.keepId } },
+    select: { id: true, requesterName: true, startTime: true, endTime: true },
+  });
+  const losers = pending.filter((q) => {
+    const r = toRange(q.startTime, q.endTime);
+    return r && rangesOverlap(r, range);
+  });
+  if (losers.length === 0) return [];
+  await prisma.slotRequest.updateMany({
+    where: { id: { in: losers.map((q) => q.id) }, status: "PENDING" },
+    data: { status: "REJECTED", reviewNote: `ทีมงานเลือกผู้ไลฟ์คนอื่นในช่วง ${opts.startTime}–${opts.endTime}`, reviewedByStaffId: opts.staffId, reviewedAt: new Date() },
+  });
+  return losers.map((q) => ({ id: q.id, name: q.requesterName, time: `${q.startTime}–${q.endTime}` }));
+}
 
 /**
  * อนุมัติ / ปฏิเสธ คำขอจองกะ (ผู้จัดการขึ้นไป)
@@ -52,7 +75,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       });
     });
     await syncSessionTimes(replaces.sessionId);
-    return NextResponse.json({ request: updated, shiftId: replaces.id });
+    const autoRejected = await rejectCompetitors({ date: replaces.date, channelId: replaces.channelId, startTime: request.startTime, endTime: request.endTime, keepId: params.id, staffId: staff.staffId });
+    return NextResponse.json({ request: updated, shiftId: replaces.id, autoRejected });
   }
 
   // ---- คำขอปกติ: เลือกคนไลฟ์ (ที่ส่งมา / สร้างใหม่จากข้อมูลคำขอ) แล้วสร้างกะ ----
@@ -78,5 +102,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     where: { id: params.id },
     data: { status: "APPROVED", streamerId, shiftId: shift.id, reviewNote: note, reviewedByStaffId: staff.staffId, reviewedAt: new Date() },
   });
-  return NextResponse.json({ request: updated, shiftId: shift.id });
+  const autoRejected = await rejectCompetitors({ date: request.date, channelId: request.channelId, startTime: request.startTime, endTime: request.endTime, keepId: params.id, staffId: staff.staffId });
+  return NextResponse.json({ request: updated, shiftId: shift.id, autoRejected });
 }

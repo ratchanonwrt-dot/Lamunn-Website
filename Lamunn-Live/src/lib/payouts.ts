@@ -19,6 +19,7 @@ export interface PayoutRow {
   hours: number;
   sales: number;
   amount: number; // ยอดจ่ายที่คำนวณได้ตอนนี้ (เฉพาะกะที่กรอกยอดแล้ว)
+  net: number; // ยอดขายหลังหักค่าส่ง — ใช้คิด % คอมจริง
   shiftCount: number; // กะที่กรอกยอดแล้ว
   pendingShifts: number; // กะของวันนั้นที่ยังไม่กรอกยอด
   overridden: boolean; // มีกะที่แอดมินกำหนดยอดเอง
@@ -61,6 +62,7 @@ export async function computeDailyPayouts(from: Date, to: Date): Promise<PayoutR
     hours: 0,
     sales: 0,
     amount: 0,
+    net: 0,
     shiftCount: 0,
     pendingShifts: 0,
     overridden: false,
@@ -84,10 +86,11 @@ export async function computeDailyPayouts(from: Date, to: Date): Promise<PayoutR
     } else {
       const hours = sh.slots.reduce((a, sl) => a + slotHours(sl.startTime, sl.endTime), 0);
       const sales = sh.slots.reduce((a, sl) => a + sl.sales, 0);
-      const pay = applyOverride(computePay(sales, hours, settings), sh.payOverride);
+      const pay = applyOverride(computePay(sales, hours, settings, sh.date), sh.payOverride);
       row.hours += hours;
       row.sales += sales;
       row.amount += pay.pay;
+      row.net += pay.net;
       row.shiftCount += 1;
       if (pay.overridden) row.overridden = true;
     }
@@ -116,6 +119,7 @@ export async function computeDailyPayouts(from: Date, to: Date): Promise<PayoutR
     r.hours = round2(r.hours);
     r.sales = round2(r.sales);
     r.amount = round2(r.amount);
+    r.net = round2(r.net);
     // กะที่ยังไม่มีชั่วโมงจริง (ยังไม่กรอก) — ใช้ชั่วโมงตามแผนเพื่อให้เห็นภาพ ไม่รวมในยอด
     return r;
   });

@@ -20,6 +20,16 @@ export interface GridShift {
   hours: number;
   sales: number;
   hasResults: boolean;
+  pay: number; // ยอดที่จ่ายจริง (เหมา / ขั้นต่ำ / ยอดที่แอดมินกำหนดเอง)
+  effectivePct: number | null; // ค่าจ้างคิดเป็นกี่ % ของยอดขาย (null = ยอดขายเป็นศูนย์)
+  payMode: "HOURLY" | "COMMISSION" | "MIXED";
+  hitMinimum: boolean;
+  payOverridden: boolean;
+}
+
+/** % คอมจริง ทศนิยม 1 ตำแหน่ง — ยอดขายเป็นศูนย์คิด % ไม่ได้ */
+function pctLabel(v: number | null): string {
+  return v === null ? "–%" : `${v.toFixed(1)}%`;
 }
 
 export interface GridRequest {
@@ -60,6 +70,33 @@ interface Option {
 }
 
 const HOUR_PX = 34;
+/** จัดช่วงที่ทับกันให้วางเคียงกัน: คืน lane ของแต่ละช่วง และจำนวน lane ของกลุ่มที่มันอยู่ */
+function laneLayout<T extends { s: number; e: number }>(items: T[]): { item: T; lane: number; lanes: number }[] {
+  const sorted = [...items].sort((a, b) => a.s - b.s || b.e - a.e);
+  const out: { item: T; lane: number; lanes: number }[] = [];
+  let group: { item: T; lane: number; lanes: number }[] = [];
+  let laneEnds: number[] = [];
+  let groupEnd = -Infinity;
+  const flush = () => {
+    for (const g of group) g.lanes = laneEnds.length;
+    out.push(...group);
+    group = [];
+    laneEnds = [];
+  };
+  for (const it of sorted) {
+    if (it.s >= groupEnd && group.length) flush();
+    let lane = laneEnds.findIndex((end) => end <= it.s);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(it.e);
+    } else laneEnds[lane] = it.e;
+    group.push({ item: it, lane, lanes: 1 });
+    groupEnd = Math.max(groupEnd, it.e);
+  }
+  if (group.length) flush();
+  return out;
+}
+
 const HOURS = Array.from({ length: (GRID_END_MIN - DAY_START_MIN) / 60 + 1 }, (_, i) => DAY_START_MIN + i * 60);
 const COL_HEIGHT = ((GRID_END_MIN - DAY_START_MIN) / 60) * HOUR_PX;
 const inputCls = "w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none transition focus:border-ink focus:ring-2 focus:ring-ink/10";
@@ -251,19 +288,20 @@ export default function ScheduleGrid({
                     </button>
                   );
                 })}
-                {d.requests.map((q) => {
+                {laneLayout(d.requests).map(({ item: q, lane, lanes }) => {
                   const top = ((Math.max(q.s, DAY_START_MIN) - DAY_START_MIN) / 60) * HOUR_PX;
                   const bottom = ((Math.min(q.e, GRID_END_MIN) - DAY_START_MIN) / 60) * HOUR_PX;
+                  // คำขอที่ทับกันวางเคียงกันเป็นคอลัมน์ย่อย ให้แอดมินเห็นครบทุกคนแล้วเลือกเอง
                   return (
                     <a
                       key={q.id}
                       data-shift
                       href="/requests"
-                      className="absolute inset-x-1 overflow-hidden rounded-lg border-2 border-dashed border-orange-400 bg-orange-50 px-1.5 py-1 text-[11px] leading-tight text-orange-800"
-                      style={{ top: top + 1, height: Math.max(bottom - top - 2, 18) }}
-                      title={`คำขอจากเว็บจอง: ${q.requesterName} ${q.startTime}–${q.endTime} — รออนุมัติ`}
+                      className={clsx("absolute overflow-hidden rounded-lg border-2 border-dashed px-1.5 py-1 text-[11px] leading-tight", lanes > 1 ? "border-orange-500 bg-orange-100 text-orange-900" : "border-orange-400 bg-orange-50 text-orange-800")}
+                      style={{ top: top + 1, height: Math.max(bottom - top - 2, 18), left: `calc(4px + (100% - 8px) * ${lane} / ${lanes})`, width: `calc((100% - 8px) / ${lanes} - 2px)` }}
+                      title={`คำขอจากเว็บจอง: ${q.requesterName} ${q.startTime}–${q.endTime} — รออนุมัติ${lanes > 1 ? " (มีคนขอช่วงเดียวกัน — เลือกได้คนเดียว)" : ""}`}
                     >
-                      <p className="truncate font-semibold">คำขอ: {q.requesterName}</p>
+                      <p className="truncate font-semibold">{lanes > 1 ? "" : "คำขอ: "}{q.requesterName}</p>
                       <p className="truncate opacity-80">
                         {q.startTime}–{q.endTime} · รออนุมัติ
                       </p>
@@ -284,16 +322,32 @@ export default function ScheduleGrid({
                         streamerColor(colors[s.streamerId])
                       )}
                       style={{ top: top + 1, height: Math.max(bottom - top - 2, 18) }}
-                      title={`${s.streamerName} ${s.startTime}–${s.endTime}${s.channelName ? ` · ${s.channelName}` : ""}${s.hasResults ? ` · ขาย ${formatBaht(s.sales)} ฿` : " · ยังไม่กรอกยอด"}`}
+                      title={`${s.streamerName} ${s.startTime}–${s.endTime}${s.channelName ? ` · ${s.channelName}` : ""}${
+                        s.hasResults
+                          ? ` · ขาย ${formatBaht(s.sales)} ฿ · ค่าจ้าง ${formatBaht(s.pay)} ฿ = ${pctLabel(s.effectivePct)} ของยอดขาย${s.payOverridden ? " (แอดมินกำหนดยอดเอง)" : s.payMode === "HOURLY" ? " (เหมารายชั่วโมง)" : s.hitMinimum ? " (จ่ายขั้นต่ำรายชั่วโมง)" : ""}`
+                          : " · ยังไม่กรอกยอด"
+                      }`}
                     >
                       <p className="truncate text-[13px] font-bold leading-tight">{s.streamerName}</p>
                       <p className="truncate text-[11px] opacity-80">
                         {s.startTime}–{s.endTime}
                         {spills && " ↗"}
+                        {/* กะสั้นมีที่แค่สองบรรทัด — ต่อ % คอมจริงท้ายเวลาให้เห็นทุกกะที่กรอกยอดแล้ว */}
+                        {s.hasResults && bottom - top <= 44 && <span className="font-semibold"> · {pctLabel(s.effectivePct)}</span>}
                       </p>
                       {bottom - top > 44 && (
-                        <p className="truncate opacity-70">{s.hasResults ? `${formatBaht(s.sales)} ฿` : s.channelName ?? ""}</p>
+                        s.hasResults ? (
+                          <p className="truncate text-[12px] font-bold">ค่าจ้าง {pctLabel(s.effectivePct)}</p>
+                        ) : (
+                          <p className="truncate opacity-70">{s.channelName ?? ""}</p>
+                        )
                       )}
+                      {s.hasResults && bottom - top > 62 && (
+                        <p className="truncate opacity-75">
+                          จ่าย {formatBaht(s.pay)} ฿{s.payOverridden ? " (กำหนดเอง)" : s.payMode === "HOURLY" ? " (เหมา)" : s.hitMinimum ? " (ขั้นต่ำ)" : ""}
+                        </p>
+                      )}
+                      {s.hasResults && bottom - top > 78 && <p className="truncate opacity-60">ขาย {formatBaht(s.sales)} ฿</p>}
                     </a>
                   );
                 })}

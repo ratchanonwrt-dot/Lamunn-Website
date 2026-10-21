@@ -36,10 +36,16 @@ export default async function ShiftDetailPage({ params }: { params: { id: string
   const actualHours = shift.slots.reduce((a, s) => a + slotHours(s.startTime, s.endTime), 0);
   const sales = shift.slots.reduce((a, s) => a + s.sales, 0);
   const hasResults = shift.slots.length > 0;
-  const pay = applyOverride(computePay(sales, hasResults ? actualHours : plannedHours, settings), shift.payOverride);
+  const pay = applyOverride(computePay(sales, hasResults ? actualHours : plannedHours, settings, shift.date), shift.payOverride);
   const weekParam = isoDate(weekStartOf(shift.date));
 
-  const rows: { label: string; value: string; sub?: string; strong?: boolean; tone?: string }[] = [
+  const hoursSub = hasResults ? "ชั่วโมงจากช่วงที่กรอกจริง" : "ชั่วโมงตามที่วางกะไว้ (ยังไม่กรอกยอด)";
+  const rows: { label: string; value: string; sub?: string; strong?: boolean; tone?: string }[] = pay.mode === "HOURLY" ? [
+    { label: "ยอดขายที่กรอก", value: `${formatBaht(pay.sales)} ฿` },
+    { label: `เหมา ${formatBaht(pay.rate)} ฿ × ${formatNum(pay.hours, 2)} ชม.`, value: `${formatBaht(pay.minPay)} ฿`, sub: hoursSub },
+    { label: "ระบบคำนวณได้", value: `${formatBaht(pay.computedPay)} ฿` },
+    ...(pay.overridden ? [{ label: "แอดมินกำหนดยอดจ่ายเอง", value: `${formatBaht(pay.pay)} ฿`, sub: shift.payNote ?? undefined, strong: true }] : []),
+  ] : [
     { label: "ยอดขายที่กรอก", value: `${formatBaht(pay.sales)} ฿` },
     { label: `หักค่าส่ง ${formatNum(settings.shippingPct, 2)}%`, value: `− ${formatBaht(pay.sales - pay.net)} ฿` },
     { label: "ยอดหลังหัก", value: `${formatBaht(pay.net)} ฿` },
@@ -47,7 +53,7 @@ export default async function ShiftDetailPage({ params }: { params: { id: string
     {
       label: `ขั้นต่ำ ${formatBaht(settings.minHourly)} ฿ × ${formatNum(pay.hours, 2)} ชม.`,
       value: `${formatBaht(pay.minPay)} ฿`,
-      sub: hasResults ? "ชั่วโมงจากช่วงที่กรอกจริง" : "ชั่วโมงตามที่วางกะไว้ (ยังไม่กรอกยอด)",
+      sub: hoursSub,
     },
     { label: "ระบบคำนวณได้", value: `${formatBaht(pay.computedPay)} ฿` },
     ...(pay.overridden ? [{ label: "แอดมินกำหนดยอดจ่ายเอง", value: `${formatBaht(pay.pay)} ฿`, sub: shift.payNote ?? undefined, strong: true }] : []),
@@ -121,6 +127,11 @@ export default async function ShiftDetailPage({ params }: { params: { id: string
             <p className="text-2xl font-bold tabular-nums text-ink">{formatBaht(pay.pay)} ฿</p>
             {pay.overridden ? (
               <p className="mt-1 text-xs text-brand-800">แอดมินกำหนดยอดนี้เอง (ระบบคำนวณได้ {formatBaht(pay.computedPay)} ฿)</p>
+            ) : pay.mode === "HOURLY" ? (
+              <p className="mt-1 text-xs text-muted">
+                จ่ายเหมาชั่วโมงละ {formatBaht(pay.rate)} ฿ ไม่มีคอมมิชชั่นเพิ่ม
+                {hasResults ? <> · คิดเป็น <span className="font-semibold text-ink">{pay.costPct === null ? "-" : `${formatNum(pay.costPct, 1)}%`}</span> ของยอดขาย</> : " · ชั่วโมงตามที่วางกะไว้ จนกว่าจะกรอกยอด"}
+              </p>
             ) : !hasResults ? (
               <p className="mt-1 text-xs text-stone-400">ประมาณการจากขั้นต่ำ — กรอกยอดขายด้านล่างเพื่อคิดจริง</p>
             ) : pay.hitMinimum ? (
@@ -148,7 +159,8 @@ export default async function ShiftDetailPage({ params }: { params: { id: string
         shiftId={shift.id}
         startTime={shift.startTime}
         endTime={shift.endTime}
-        settings={{ shippingPct: settings.shippingPct, commissionPct: settings.commissionPct, minHourly: settings.minHourly }}
+        settings={{ shippingPct: settings.shippingPct, commissionPct: settings.commissionPct, minHourly: settings.minHourly, payMode: settings.payMode, hourlyRate: settings.hourlyRate, hourlyFrom: settings.hourlyFrom ? isoDate(settings.hourlyFrom) : null }}
+        shiftDate={isoDate(shift.date)}
         existing={shift.slots.map((s) => ({ startTime: s.startTime, endTime: s.endTime, viewers: s.viewers, sales: s.sales, peakViewers: s.peakViewers, orders: s.orders }))}
         payOverride={shift.payOverride}
       />

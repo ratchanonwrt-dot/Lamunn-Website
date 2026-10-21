@@ -4,7 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import clsx from "clsx";
+import { Download } from "lucide-react";
 import type { PayoutRow } from "@/lib/payouts";
+import { payoutCsv, payoutList } from "@/lib/payoutExport";
 import { formatBaht, formatNum, formatThaiDate, thaiDays } from "@/lib/format";
 
 const inputCls = "rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-ink focus:ring-2 focus:ring-ink/10";
@@ -56,6 +58,22 @@ export default function PayoutManager({ rows, from, to, canEdit }: { rows: Payou
     await call(`/api/payouts/${r.id}`, "DELETE");
   };
 
+  /** ดาวน์โหลดรายการที่ต้องจ่าย (อนุมัติแล้ว ยังไม่จ่าย) เป็นไฟล์ CSV เปิดด้วย Excel ได้ */
+  function exportList(source: PayoutRow[], label: string) {
+    const items = payoutList(source);
+    if (items.length === 0) {
+      setError("ไม่มีรายการที่อนุมัติแล้วและยังไม่จ่าย ในช่วงนี้ — กดอนุมัติก่อนแล้วค่อย export");
+      return;
+    }
+    setError(null);
+    const url = URL.createObjectURL(new Blob([payoutCsv(items)], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `live-payouts_${label}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   // จัดกลุ่มตามวัน (ใหม่สุดก่อน)
   const shown = onlyPending ? rows.filter((r) => r.status === "READY" || (r.status === "APPROVED" && r.changed)) : rows;
   const days = new Map<string, PayoutRow[]>();
@@ -83,6 +101,14 @@ export default function PayoutManager({ rows, from, to, canEdit }: { rows: Payou
         <label className="ml-2 inline-flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" checked={onlyPending} onChange={(e) => setOnlyPending(e.target.checked)} /> เฉพาะที่รออนุมัติ
         </label>
+        <button
+          onClick={() => exportList(rows, from === to ? from : `${from}_${to}`)}
+          disabled={totalApproved === 0}
+          title="ชื่อ · เลขบัญชี · ธนาคาร · ยอดที่ต้องจ่าย — เฉพาะที่อนุมัติแล้วและยังไม่จ่าย รวมหลายวันเป็นหนึ่งแถวต่อคน"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium text-ink shadow-card hover:bg-paper disabled:opacity-40"
+        >
+          <Download size={15} /> Export รายการจ่าย (ทั้งช่วง)
+        </button>
       </div>
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
@@ -117,11 +143,22 @@ export default function PayoutManager({ rows, from, to, canEdit }: { rows: Payou
                   {thaiDays[d.getUTCDay()]} {formatThaiDate(d)}
                   <span className="ml-2 text-xs font-normal text-muted">{list.length} คน · รวม {formatBaht(dayTotal)}</span>
                 </p>
-                {canEdit && readyCount > 0 && (
-                  <button disabled={busy !== null} onClick={() => approveDay(date)} className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-50">
-                    อนุมัติทั้งวัน ({readyCount})
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {list.some((r) => r.status === "APPROVED") && (
+                    <button
+                      onClick={() => exportList(list, date)}
+                      title="ชื่อ · เลขบัญชี · ธนาคาร · ยอดที่ต้องจ่าย ของวันนี้ (เฉพาะที่อนุมัติแล้วและยังไม่จ่าย)"
+                      className="inline-flex items-center gap-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-ink hover:bg-paper"
+                    >
+                      <Download size={13} /> Export วันนี้
+                    </button>
+                  )}
+                  {canEdit && readyCount > 0 && (
+                    <button disabled={busy !== null} onClick={() => approveDay(date)} className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-50">
+                      อนุมัติทั้งวัน ({readyCount})
+                    </button>
+                  )}
+                </div>
               </header>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[820px] text-sm">
@@ -172,6 +209,12 @@ export default function PayoutManager({ rows, from, to, canEdit }: { rows: Payou
                           <td className="px-3 py-2.5 text-right tabular-nums text-muted">{formatBaht(r.sales)}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums">
                             <p className="font-semibold text-ink">{formatBaht(r.status === "APPROVED" || r.status === "PAID" ? (r.approvedAmount ?? 0) : r.amount)}</p>
+                            {/* ค่าจ้าง % = ยอดที่จ่าย ÷ ยอดขาย (นิยามเดียวกับตารางไลฟ์และหน้าสรุปกำไร) */}
+                            {r.sales > 0 && (
+                              <p className="text-[11px] text-muted">
+                                ค่าจ้าง {(((r.status === "APPROVED" || r.status === "PAID" ? (r.approvedAmount ?? 0) : r.amount) / r.sales) * 100).toFixed(1)}% ของยอด
+                              </p>
+                            )}
                             {r.changed && r.status !== "PAID" && <p className="text-[11px] text-red-600">ยอดปัจจุบัน {formatBaht(r.amount)} — อนุมัติใหม่</p>}
                             {r.changed && r.status === "PAID" && <p className="text-[11px] text-red-600">ยอดปัจจุบัน {formatBaht(r.amount)} (จ่ายไปแล้ว)</p>}
                           </td>

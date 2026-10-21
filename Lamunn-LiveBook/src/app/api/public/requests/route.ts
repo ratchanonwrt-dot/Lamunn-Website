@@ -34,10 +34,9 @@ export async function POST(req: NextRequest) {
   if (typeof body.isReturning !== "boolean") return NextResponse.json({ error: "กรุณาระบุว่าเคยไลฟ์กับละมุนมาก่อนหรือไม่" }, { status: 400 });
 
   // อ่านทุกอย่างที่ต้องเช็กในรอบเดียว (ไม่ต้องรอทีละคำสั่ง)
-  const [ch, booked, pendingOthers, blocked, dup, pendingCount] = await Promise.all([
+  const [ch, booked, blocked, dup, pendingCount] = await Promise.all([
     prisma.channel.findFirst({ where: { id: channelId, isActive: true } }),
     prisma.liveShift.findMany({ where: { date, channelId }, select: { startTime: true, endTime: true } }),
-    prisma.slotRequest.findMany({ where: { date, channelId, status: "PENDING" }, select: { startTime: true, endTime: true } }),
     prisma.scheduleBlock.findMany({ where: { date, OR: [{ channelId }, { channelId: null }] }, select: { startTime: true, endTime: true } }),
     prisma.slotRequest.findFirst({ where: { date, channelId, requesterPhone, status: "PENDING" }, select: { startTime: true, endTime: true } }),
     prisma.slotRequest.count({ where: { requesterPhone, status: "PENDING" } }),
@@ -50,9 +49,10 @@ export async function POST(req: NextRequest) {
     const r = toRange(b.startTime, b.endTime);
     if (r && rangesOverlap(r, range)) return NextResponse.json({ error: `ช่วง ${b.startTime}–${b.endTime} มีคนไลฟ์แล้ว กรุณาเลือกช่วงอื่น` }, { status: 409 });
   }
-  // กติกาเว้นระยะ 30 นาที (คนนอก) — เทียบกับกะที่มีแล้วและคำขอที่รออยู่ของช่องเดียวกัน
+  // กติกาเว้นระยะ 30 นาที (คนนอก) — เทียบเฉพาะกะที่ยืนยันแล้ว
+  // คำขอที่รออนุมัติของคนอื่นไม่ขวาง: ขอซ้อนกันได้ แล้วแอดมินเลือกว่าใครได้ไลฟ์
   if (gapRuleApplies(date.toISOString().slice(0, 10))) {
-    const existing = [...booked, ...pendingOthers].map((x) => toRange(x.startTime, x.endTime)).filter((r): r is NonNullable<typeof r> => !!r);
+    const existing = booked.map((x) => toRange(x.startTime, x.endTime)).filter((r): r is NonNullable<typeof r> => !!r);
     const violation = findGapViolation(range, existing);
     if (violation) return NextResponse.json({ error: violation.message, code: "GAP" }, { status: 409 });
   }

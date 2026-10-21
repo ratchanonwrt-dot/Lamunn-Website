@@ -69,9 +69,6 @@ export default async function PublicSchedulePage({ searchParams }: { searchParam
               <span className="h-3 w-5 rounded border border-dashed border-brand-500 bg-brand-50" /> ว่าง
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-5 rounded bg-amber-200" /> มีคนขอแล้ว
-            </span>
-            <span className="inline-flex items-center gap-1.5">
               <span className="h-3 w-5 rounded bg-stone-300" /> มีคนไลฟ์แล้ว
             </span>
             <span className="inline-flex items-center gap-1.5">

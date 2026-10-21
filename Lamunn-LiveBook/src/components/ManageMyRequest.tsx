@@ -118,7 +118,7 @@ export default function ManageMyRequest({ target, onClose }: { target: ManageTar
                 )}
               </p>
             </div>
-            <p className="mt-2 text-[11px] text-stone-400">ต้องไม่ทับช่วงของคนอื่นและเว้นอย่างน้อย 30 นาที {target.status === "APPROVED" ? "· ย่อให้แคบลงภายในช่วงเดิม = มีผลทันที · ขยายหรือเลื่อนออกนอกช่วงเดิม = ต้องรอทีมงานอนุมัติ (ช่วงเดิมยังอยู่จนกว่าจะอนุมัติ) · ยกเลิกได้ทันที" : ""}</p>
+            <p className="mt-2 text-[11px] text-stone-400">ต้องไม่ทับช่วงที่มีคนไลฟ์แล้วและเว้นอย่างน้อย 30 นาที {target.status === "APPROVED" ? "· ย่อให้แคบลงภายในช่วงเดิม = มีผลทันที · ขยายหรือเลื่อนออกนอกช่วงเดิม = ต้องรอทีมงานอนุมัติ (ช่วงเดิมยังอยู่จนกว่าจะอนุมัติ) · ยกเลิกได้ทันที" : ""}</p>
             {error && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
             <div className="mt-4 flex flex-wrap gap-2">
               <button onClick={save} disabled={busy || !dirty} className="rounded-xl bg-ink px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-40">

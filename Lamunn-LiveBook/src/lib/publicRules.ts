@@ -3,8 +3,9 @@ import { toRange, rangesOverlap, minutesToLabel, type MinuteRange } from "@/lib/
 import { gapRuleApplies, findGapViolation } from "@/lib/bookingRules";
 
 /**
- * ตรวจว่าคนนอกขอ/แก้ช่วงนี้ได้ไหม: ไม่ทับกะจริง ไม่ทับบล็อก และเว้น 30 นาที (ตั้งแต่ 2026-09-20)
- * exclude = กะ/คำขอของตัวเองที่กำลังแก้ (ไม่ต้องเทียบกับตัวเอง)
+ * ตรวจว่าคนนอกขอ/แก้ช่วงนี้ได้ไหม: ไม่ทับกะที่ยืนยันแล้ว ไม่ทับบล็อก และเว้น 30 นาทีจากกะที่ยืนยันแล้ว (ตั้งแต่ 2026-09-20)
+ * คำขอที่ยังรออนุมัติของคนอื่นไม่ขวาง — ขอซ้อนกันได้ แล้วแอดมินเป็นคนเลือกว่าใครได้ไลฟ์
+ * exclude = กะของตัวเองที่กำลังแก้ (ไม่ต้องเทียบกับตัวเอง)
  */
 export async function validatePublicRange(opts: {
   date: Date;
@@ -14,10 +15,9 @@ export async function validatePublicRange(opts: {
   excludeRequestId?: string | null;
 }): Promise<{ error: string; code?: string } | null> {
   const { date, channelId, range } = opts;
-  const [bookedAll, blocked, pendingAll] = await Promise.all([
+  const [bookedAll, blocked] = await Promise.all([
     prisma.liveShift.findMany({ where: { date, channelId }, select: { id: true, startTime: true, endTime: true } }),
     prisma.scheduleBlock.findMany({ where: { date, OR: [{ channelId }, { channelId: null }] }, select: { startTime: true, endTime: true } }),
-    prisma.slotRequest.findMany({ where: { date, channelId, status: "PENDING" }, select: { id: true, startTime: true, endTime: true } }),
   ]);
   const booked = bookedAll.filter((b) => b.id !== opts.excludeShiftId);
   for (const b of booked) {
@@ -28,13 +28,8 @@ export async function validatePublicRange(opts: {
     const r = toRange(b.startTime, b.endTime);
     if (r && rangesOverlap(r, range)) return { error: `ช่วง ${b.startTime}–${b.endTime} ไม่เปิดให้จอง (unavailable)` };
   }
-  const pending = pendingAll.filter((q) => q.id !== opts.excludeRequestId);
-  for (const q of pending) {
-    const r = toRange(q.startTime, q.endTime);
-    if (r && rangesOverlap(r, range)) return { error: `ช่วง ${q.startTime}–${q.endTime} มีคนขอไว้แล้ว กรุณาเลือกช่วงอื่น` };
-  }
   if (gapRuleApplies(date.toISOString().slice(0, 10))) {
-    const existing = [...booked, ...pending].map((x) => toRange(x.startTime, x.endTime)).filter((r): r is MinuteRange => !!r);
+    const existing = booked.map((x) => toRange(x.startTime, x.endTime)).filter((r): r is MinuteRange => !!r);
     const v = findGapViolation(range, existing);
     if (v) return { error: v.message, code: "GAP" };
   }
