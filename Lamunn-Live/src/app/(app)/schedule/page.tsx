@@ -50,10 +50,10 @@ export default async function SchedulePage({ searchParams }: { searchParams: { w
   function shiftPay(s: (typeof shifts)[number]) {
     const sales = s.slots.reduce((a, sl) => a + sl.sales, 0);
     const hasResults = s.slots.length > 0;
-    if (!hasResults) return { sales, hasResults, pay: 0, effectivePct: null, hitMinimum: false, payOverridden: false };
+    if (!hasResults) return { sales, hasResults, pay: 0, effectivePct: null, hitMinimum: false, payOverridden: false, payMode: "HOURLY" as const };
     const hours = s.slots.reduce((a, sl) => a + slotHours(sl.startTime, sl.endTime), 0);
-    const p = applyOverride(computePay(sales, hours, settings), s.payOverride);
-    return { sales, hasResults, pay: p.pay, effectivePct: p.effectivePct, hitMinimum: p.hitMinimum, payOverridden: p.overridden };
+    const p = applyOverride(computePay(sales, hours, settings, s.date), s.payOverride);
+    return { sales, hasResults, pay: p.pay, effectivePct: p.costPct, hitMinimum: p.hitMinimum, payOverridden: p.overridden, payMode: p.mode };
   }
 
   const days: GridDay[] = Array.from({ length: 7 }, (_, i) => {

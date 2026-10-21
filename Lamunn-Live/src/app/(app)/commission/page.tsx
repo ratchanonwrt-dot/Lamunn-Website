@@ -49,7 +49,7 @@ export default async function CommissionPage({ searchParams }: { searchParams: {
     const actualHours = s.slots.reduce((a, sl) => a + slotHours(sl.startTime, sl.endTime), 0);
     const sales = s.slots.reduce((a, sl) => a + sl.sales, 0);
     const hasResults = s.slots.length > 0;
-    const payCalc = applyOverride(computePay(sales, hasResults ? actualHours : plannedHours, settings), s.payOverride);
+    const payCalc = applyOverride(computePay(sales, hasResults ? actualHours : plannedHours, settings, s.date), s.payOverride);
     const row: ShiftRow = {
       overridden: payCalc.overridden,
       computedPay: payCalc.computedPay,
@@ -77,25 +77,30 @@ export default async function CommissionPage({ searchParams }: { searchParams: {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">ค่าคอมมิชชั่นคนไลฟ์ (รายสัปดาห์)</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">ค่าตอบแทนคนไลฟ์ (รายสัปดาห์)</h1>
           <p className="text-sm text-muted">รวมจากกะในตารางไลฟ์ · ใช้เป็นยอดทำจ่ายรายสัปดาห์ (เตรียมส่งต่อระบบ HR)</p>
         </div>
         <WeekPicker weekStart={isoDate(weekStart)} label={label} isCurrent={isoDate(weekStart) === isoDate(weekStartOf(today))} />
       </div>
 
       <div className="mb-6">
-        <PaySettingsForm settings={{ shippingPct: settings.shippingPct, commissionPct: settings.commissionPct, minHourly: settings.minHourly }} />
+        <PaySettingsForm settings={{ shippingPct: settings.shippingPct, commissionPct: settings.commissionPct, minHourly: settings.minHourly, payMode: settings.payMode, hourlyRate: settings.hourlyRate, hourlyFrom: settings.hourlyFrom ? isoDate(settings.hourlyFrom) : null }} />
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {[
           { label: "ยอดขายรวมสัปดาห์", value: `${formatBaht(grand.sales)} ฿` },
-          { label: "ยอดหลังหักค่าส่ง", value: `${formatBaht(grand.net)} ฿` },
-          { label: `คอมมิชชั่น ${formatNum(settings.commissionPct, 2)}%`, value: `${formatBaht(grand.commission)} ฿` },
-          { label: "จ่ายเพิ่มเพื่อให้ถึงขั้นต่ำ", value: `${formatBaht(grand.topUp)} ฿`, tone: grand.topUp > 0 ? "text-amber-700" : undefined },
+          { label: "ชั่วโมงไลฟ์รวม", value: `${formatNum(grand.hours, 1)} ชม.` },
+          // ช่องคอม/ขั้นต่ำแสดงเฉพาะสัปดาห์ที่ยังมีกะคิดแบบคอมมิชชั่น — สัปดาห์ที่เหมาล้วนไม่ต้องรก
+          ...(grand.commission > 0 || grand.topUp > 0
+            ? [
+                { label: `คอมมิชชั่น ${formatNum(settings.commissionPct, 2)}%`, value: `${formatBaht(grand.commission)} ฿` },
+                { label: "จ่ายเพิ่มเพื่อให้ถึงขั้นต่ำ", value: `${formatBaht(grand.topUp)} ฿`, tone: grand.topUp > 0 ? "text-amber-700" : undefined },
+              ]
+            : [{ label: "แบบจ่าย", value: grand.mode === "COMMISSION" ? "คอม + ขั้นต่ำ" : `เหมา ${formatBaht(settings.hourlyRate)} ฿/ชม.` }]),
           { label: "ต้องจ่ายรวม", value: `${formatBaht(grand.pay)} ฿`, strong: true },
-          { label: "คิดเป็นคอมจริง", value: pct(grand.effectivePct), sub: "ของยอดหลังหัก" },
-        ].map((c) => (
+          { label: "ค่าจ้างคิดเป็น", value: pct(grand.costPct), sub: "ของยอดขาย" },
+        ].map((c: { label: string; value: string; sub?: string; strong?: boolean; tone?: string }) => (
           <div key={c.label} className="rounded-2xl border border-line bg-white shadow-card p-3">
             <p className="text-[11px] text-stone-400">{c.label}</p>
             <p className={clsx("mt-0.5 truncate text-lg font-semibold tabular-nums", c.tone ?? "text-ink", c.strong && "text-brand-700")}>{c.value}</p>
@@ -106,7 +111,7 @@ export default async function CommissionPage({ searchParams }: { searchParams: {
 
       {pendingCount > 0 && (
         <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          มี {pendingCount} กะที่ยังไม่ได้กรอกยอด — ตัวเลขของกะเหล่านั้นเป็นประมาณการจากขั้นต่ำ × ชั่วโมงที่วางไว้
+          มี {pendingCount} กะที่ยังไม่ได้กรอกยอด — ตัวเลขของกะเหล่านั้นเป็นประมาณการจากชั่วโมงที่วางไว้
         </p>
       )}
 
@@ -128,14 +133,14 @@ export default async function CommissionPage({ searchParams }: { searchParams: {
                     {g.hrEmployeeId && <span className="ml-2 rounded bg-stone-200 px-1.5 py-0.5 text-[10px] font-normal text-muted">HR: {g.hrEmployeeId}</span>}
                   </p>
                   <p className="text-xs text-muted">
-                    {g.rows.length} กะ · {formatNum(g.total.hours, 1)} ชม. · ขาย {formatBaht(g.total.sales)} ฿ · คอม {formatBaht(g.total.commission)} ฿
+                    {g.rows.length} กะ · {formatNum(g.total.hours, 1)} ชม. · ขาย {formatBaht(g.total.sales)} ฿{g.total.commission > 0 && <> · คอม {formatBaht(g.total.commission)} ฿</>}
                     {g.total.topUp > 0 && <span className="text-amber-700"> · เพิ่มขั้นต่ำ {formatBaht(g.total.topUp)} ฿</span>}
                   </p>
                 </div>
                 <div className="text-right">
                   <p className="text-[11px] text-stone-400">ต้องจ่าย</p>
                   <p className="text-xl font-bold tabular-nums text-ink">{formatBaht(g.total.pay)} ฿</p>
-                  <p className="text-[11px] text-muted">คอมจริง {pct(g.total.effectivePct)}</p>
+                  <p className="text-[11px] text-muted">= {pct(g.total.costPct)} ของยอดขาย</p>
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -147,11 +152,9 @@ export default async function CommissionPage({ searchParams }: { searchParams: {
                       <th className="px-3 py-1.5 font-medium">ช่องทาง</th>
                       <th className="px-3 py-1.5 text-right font-medium">ชม.</th>
                       <th className="px-3 py-1.5 text-right font-medium">ยอดขาย</th>
-                      <th className="px-3 py-1.5 text-right font-medium">หลังหักค่าส่ง</th>
-                      <th className="px-3 py-1.5 text-right font-medium">คอม {formatNum(settings.commissionPct, 2)}%</th>
-                      <th className="px-3 py-1.5 text-right font-medium">ขั้นต่ำ</th>
+                      <th className="px-3 py-1.5 font-medium">วิธีคิด</th>
                       <th className="px-3 py-1.5 text-right font-medium">จ่าย</th>
-                      <th className="px-3 py-1.5 text-right font-medium">คอมจริง</th>
+                      <th className="px-3 py-1.5 text-right font-medium">% ของยอดขาย</th>
                       <th className="px-3 py-1.5"></th>
                     </tr>
                   </thead>
@@ -171,14 +174,18 @@ export default async function CommissionPage({ searchParams }: { searchParams: {
                         <td className="px-3 py-2">{r.channel}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{formatNum(r.pay.hours, 1)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{r.hasResults ? formatBaht(r.pay.sales) : "-"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{r.hasResults ? formatBaht(r.pay.net) : "-"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{r.hasResults ? formatBaht(r.pay.commission) : "-"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{formatBaht(r.pay.minPay)}</td>
+                        <td className="px-3 py-2 text-xs text-muted">
+                          {r.pay.mode === "HOURLY"
+                            ? `เหมา ${formatBaht(r.pay.rate)} × ${formatNum(r.pay.hours, 1)} ชม.`
+                            : r.hasResults
+                              ? `คอม ${formatBaht(r.pay.commission)} / ขั้นต่ำ ${formatBaht(r.pay.minPay)}`
+                              : `ขั้นต่ำ ${formatBaht(r.pay.minPay)}`}
+                        </td>
                         <td className={clsx("px-3 py-2 text-right tabular-nums font-semibold", r.overridden ? "text-brand-800" : r.hasResults && r.pay.hitMinimum ? "text-amber-700" : "text-ink")}>
                           {formatBaht(r.pay.pay)}
-                          {!r.overridden && r.hasResults && r.pay.hitMinimum && <span className="ml-1 text-[10px] font-normal">ขั้นต่ำ</span>}
+                          {!r.overridden && r.hasResults && r.pay.mode === "COMMISSION" && r.pay.hitMinimum && <span className="ml-1 text-[10px] font-normal">ขั้นต่ำ</span>}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums">{r.hasResults ? pct(r.pay.effectivePct) : "-"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{r.hasResults ? pct(r.pay.costPct) : "-"}</td>
                         <td className="px-3 py-2 text-right">
                           <Link href={`/shifts/${r.id}`} className="text-xs font-medium text-brand-600 hover:underline">
                             {r.hasResults ? "เปิด" : "กรอกยอด"}

@@ -45,6 +45,7 @@ export default function ShiftResultsForm({
   settings,
   existing,
   payOverride = null,
+  shiftDate,
 }: {
   shiftId: string;
   startTime: string;
@@ -52,6 +53,7 @@ export default function ShiftResultsForm({
   settings: PaySettings;
   existing: ExistingSlot[];
   payOverride?: number | null; // ยอดที่แอดมินกำหนดเอง (ถ้ามี) — ต้องแสดงตัวเลขเดียวกับกล่องค่าตอบแทน
+  shiftDate?: string; // YYYY-MM-DD — เลือกแบบเหมา/แบบคอมตามวันที่เริ่มใช้
 }) {
   const router = useRouter();
   const hasExisting = existing.length > 0;
@@ -93,8 +95,8 @@ export default function ShiftResultsForm({
     const w = filled.reduce((a, r) => a + r.hours, 0);
     const vw = filled.reduce((a, r) => a + Number(r.viewers) * r.hours, 0);
     const sales = perHourMode ? rows.reduce((a, r) => a + (Number(r.sales) || 0), 0) : Number(totalSales) || 0;
-    return { avgViewers: w > 0 ? vw / w : null, filled: filled.length, sales, pay: computePay(sales, totalHours, settings) };
-  }, [rows, totalSales, perHourMode, totalHours, settings]);
+    return { avgViewers: w > 0 ? vw / w : null, filled: filled.length, sales, pay: computePay(sales, totalHours, settings, shiftDate) };
+  }, [rows, totalSales, perHourMode, totalHours, settings, shiftDate]);
 
   function setRow(i: number, key: "viewers" | "sales", v: string) {
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, [key]: v } : r)));
@@ -221,6 +223,13 @@ export default function ShiftResultsForm({
               <dt className="text-muted">ยอดขาย</dt>
               <dd className="tabular-nums text-ink">{formatBaht(preview.sales)} ฿</dd>
             </div>
+            {preview.pay.mode === "HOURLY" ? (
+              <div className="flex justify-between">
+                <dt className="text-muted">เหมา {formatBaht(preview.pay.rate)} × {formatNum(totalHours, 2)} ชม.</dt>
+                <dd className="tabular-nums text-ink">{formatBaht(preview.pay.minPay)} ฿</dd>
+              </div>
+            ) : (
+            <>
             <div className="flex justify-between">
               <dt className="text-muted">หลังหักค่าส่ง {formatNum(settings.shippingPct, 2)}%</dt>
               <dd className="tabular-nums text-ink">{formatBaht(preview.pay.net)} ฿</dd>
@@ -233,6 +242,8 @@ export default function ShiftResultsForm({
               <dt className="text-muted">ขั้นต่ำ {formatBaht(settings.minHourly)} × {formatNum(totalHours, 2)} ชม.</dt>
               <dd className="tabular-nums text-ink">{formatBaht(preview.pay.minPay)} ฿</dd>
             </div>
+            </>
+            )}
           </dl>
           <div className="mt-3 border-t border-line pt-3">
             <p className="text-[11px] text-stone-400">จ่ายคนไลฟ์</p>
@@ -247,7 +258,9 @@ export default function ShiftResultsForm({
               <>
                 <p className={clsx("text-xl font-bold tabular-nums", preview.pay.hitMinimum ? "text-amber-700" : "text-ink")}>{formatBaht(preview.pay.pay)} ฿</p>
                 <p className="text-xs text-muted">
-                  {preview.pay.hitMinimum
+                  {preview.pay.mode === "HOURLY"
+                    ? `เหมาชั่วโมงละ ${formatBaht(preview.pay.rate)} ฿ ไม่มีคอมเพิ่ม · = ${preview.pay.costPct === null ? "-" : formatNum(preview.pay.costPct, 1) + "%"} ของยอดขาย`
+                    : preview.pay.hitMinimum
                     ? `ไม่ถึงขั้นต่ำ จ่ายตามขั้นต่ำ = คอมจริง ${preview.pay.effectivePct === null ? "-" : formatNum(preview.pay.effectivePct, 1) + "%"}`
                     : `ตามคอมมิชชั่น ${formatNum(settings.commissionPct, 2)}%`}
                 </p>

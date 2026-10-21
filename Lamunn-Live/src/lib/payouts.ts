@@ -86,7 +86,7 @@ export async function computeDailyPayouts(from: Date, to: Date): Promise<PayoutR
     } else {
       const hours = sh.slots.reduce((a, sl) => a + slotHours(sl.startTime, sl.endTime), 0);
       const sales = sh.slots.reduce((a, sl) => a + sl.sales, 0);
-      const pay = applyOverride(computePay(sales, hours, settings), sh.payOverride);
+      const pay = applyOverride(computePay(sales, hours, settings, sh.date), sh.payOverride);
       row.hours += hours;
       row.sales += sales;
       row.amount += pay.pay;

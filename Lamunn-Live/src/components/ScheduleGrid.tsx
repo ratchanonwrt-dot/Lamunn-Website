@@ -20,8 +20,9 @@ export interface GridShift {
   hours: number;
   sales: number;
   hasResults: boolean;
-  pay: number; // ยอดที่จ่ายจริง (หลังขั้นต่ำ / ยอดที่แอดมินกำหนดเอง)
-  effectivePct: number | null; // จ่ายจริงคิดเป็นกี่ % ของยอดหลังหักค่าส่ง (null = ยอดขายเป็นศูนย์)
+  pay: number; // ยอดที่จ่ายจริง (เหมา / ขั้นต่ำ / ยอดที่แอดมินกำหนดเอง)
+  effectivePct: number | null; // ค่าจ้างคิดเป็นกี่ % ของยอดขาย (null = ยอดขายเป็นศูนย์)
+  payMode: "HOURLY" | "COMMISSION" | "MIXED";
   hitMinimum: boolean;
   payOverridden: boolean;
 }
@@ -323,7 +324,7 @@ export default function ScheduleGrid({
                       style={{ top: top + 1, height: Math.max(bottom - top - 2, 18) }}
                       title={`${s.streamerName} ${s.startTime}–${s.endTime}${s.channelName ? ` · ${s.channelName}` : ""}${
                         s.hasResults
-                          ? ` · ขาย ${formatBaht(s.sales)} ฿ · จ่ายจริง ${formatBaht(s.pay)} ฿ = ${pctLabel(s.effectivePct)} ของยอดหลังหักค่าส่ง${s.payOverridden ? " (แอดมินกำหนดยอดเอง)" : s.hitMinimum ? " (จ่ายขั้นต่ำรายชั่วโมง)" : ""}`
+                          ? ` · ขาย ${formatBaht(s.sales)} ฿ · ค่าจ้าง ${formatBaht(s.pay)} ฿ = ${pctLabel(s.effectivePct)} ของยอดขาย${s.payOverridden ? " (แอดมินกำหนดยอดเอง)" : s.payMode === "HOURLY" ? " (เหมารายชั่วโมง)" : s.hitMinimum ? " (จ่ายขั้นต่ำรายชั่วโมง)" : ""}`
                           : " · ยังไม่กรอกยอด"
                       }`}
                     >
@@ -336,14 +337,14 @@ export default function ScheduleGrid({
                       </p>
                       {bottom - top > 44 && (
                         s.hasResults ? (
-                          <p className="truncate text-[12px] font-bold">คอมจริง {pctLabel(s.effectivePct)}</p>
+                          <p className="truncate text-[12px] font-bold">ค่าจ้าง {pctLabel(s.effectivePct)}</p>
                         ) : (
                           <p className="truncate opacity-70">{s.channelName ?? ""}</p>
                         )
                       )}
                       {s.hasResults && bottom - top > 62 && (
                         <p className="truncate opacity-75">
-                          จ่าย {formatBaht(s.pay)} ฿{s.payOverridden ? " (กำหนดเอง)" : s.hitMinimum ? " (ขั้นต่ำ)" : ""}
+                          จ่าย {formatBaht(s.pay)} ฿{s.payOverridden ? " (กำหนดเอง)" : s.payMode === "HOURLY" ? " (เหมา)" : s.hitMinimum ? " (ขั้นต่ำ)" : ""}
                         </p>
                       )}
                       {s.hasResults && bottom - top > 78 && <p className="truncate opacity-60">ขาย {formatBaht(s.sales)} ฿</p>}
