@@ -7,19 +7,10 @@ import { formatThaiDate, thaiMonthLabel } from "@/lib/format";
 import JournalEntryCard from "@/components/accounting/JournalEntryCard";
 import JournalFilterBar from "@/components/accounting/JournalFilterBar";
 import { fmtSatang, toSatang } from "@/lib/accounting/money";
+import { isJournalType, JOURNAL_TYPE_LABELS } from "@/lib/accounting/journalTypes";
 import { getPartnerOptions } from "@/lib/accounting/refData";
 
 export const dynamic = "force-dynamic";
-
-const TYPE_LABELS: Record<string, string> = {
-  GENERAL: "รายวันทั่วไป",
-  SALES: "รายวันขาย",
-  PURCHASE: "รายวันซื้อ",
-  RECEIPT: "รายวันรับเงิน",
-  PAYMENT: "รายวันจ่ายเงิน",
-  ADJUST: "ปรับปรุง",
-  CLOSING: "ปิดบัญชี",
-};
 
 export default async function JournalPage({
   searchParams,
@@ -33,6 +24,7 @@ export default async function JournalPage({
     from?: string;
     to?: string;
     partnerId?: string;
+    journalType?: string;
     q?: string;
   };
 }) {
@@ -54,9 +46,11 @@ export default async function JournalPage({
 
   const q = (searchParams.q ?? "").trim();
   const partnerId = searchParams.partnerId ?? "";
+  const journalType = isJournalType(searchParams.journalType) ? searchParams.journalType : "";
 
   const where: Prisma.AccJournalEntryWhereInput = {
     date: dateFilter,
+    ...(journalType ? { journalType } : {}),
     ...(searchParams.status ? { status: searchParams.status as "DRAFT" | "POSTED" | "VOID" } : {}),
     // เงื่อนไขที่อิงบรรทัดต้องแยกกันคนละ some() — ถ้ารวมไว้ก้อนเดียวจะกลายเป็น
     // "มีบรรทัดเดียวที่ทั้งใช่บัญชีนี้และใช่คู่ค้านี้" ซึ่งไม่ใช่สิ่งที่ผู้ใช้ต้องการ
@@ -115,6 +109,7 @@ export default async function JournalPage({
     if (searchParams.from) params.set("from", searchParams.from);
     if (searchParams.to) params.set("to", searchParams.to);
     if (partnerId) params.set("partnerId", partnerId);
+    if (journalType) params.set("journalType", journalType);
     if (q) params.set("q", q);
     return `/accounting/journal?${params}`;
   };
@@ -168,6 +163,7 @@ export default async function JournalPage({
           from: searchParams.from ?? "",
           to: searchParams.to ?? "",
           partnerId,
+          journalType,
           q,
           status: searchParams.status ?? "",
           accountId: searchParams.accountId ?? "",
@@ -196,7 +192,7 @@ export default async function JournalPage({
                   id: e.id,
                   entryNo: e.entryNo,
                   status: e.status,
-                  typeLabel: TYPE_LABELS[e.journalType],
+                  typeLabel: JOURNAL_TYPE_LABELS[e.journalType],
                   dateLabel: formatThaiDate(e.date),
                   description: e.description,
                   totalLabel: fmtSatang(debit),
