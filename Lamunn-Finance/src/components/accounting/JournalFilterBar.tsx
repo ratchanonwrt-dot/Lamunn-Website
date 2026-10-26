@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Search, X } from "lucide-react";
 import PartnerCombobox from "./PartnerCombobox";
 import { thaiMonthLabel } from "@/lib/format";
+import { JOURNAL_TYPE_OPTIONS } from "@/lib/accounting/journalTypes";
 
 interface PartnerOption {
   id: string;
@@ -20,6 +21,7 @@ export interface JournalFilters {
   from: string;
   to: string;
   partnerId: string;
+  journalType: string;
   q: string;
   status: string;
   accountId: string;
@@ -58,6 +60,7 @@ export default function JournalFilterBar({
     if (merged.from) params.set("from", merged.from);
     if (merged.to) params.set("to", merged.to);
     if (merged.partnerId) params.set("partnerId", merged.partnerId);
+    if (merged.journalType) params.set("journalType", merged.journalType);
     if (merged.q.trim()) params.set("q", merged.q.trim());
     if (merged.status) params.set("status", merged.status);
     if (merged.accountId) params.set("accountId", merged.accountId);
@@ -65,7 +68,7 @@ export default function JournalFilterBar({
   }
 
   const usingRange = Boolean(filters.from || filters.to);
-  const hasAnyFilter = usingRange || filters.partnerId || filters.q || filters.status || filters.accountId;
+  const hasAnyFilter = usingRange || filters.partnerId || filters.journalType || filters.q || filters.status || filters.accountId;
 
   const prevMonth = () => (filters.month === 1 ? go({ year: filters.year - 1, month: 12 }) : go({ month: filters.month - 1 }));
   const nextMonth = () => (filters.month === 12 ? go({ year: filters.year + 1, month: 1 }) : go({ month: filters.month + 1 }));
@@ -119,8 +122,8 @@ export default function JournalFilterBar({
         </form>
       </div>
 
-      {/* แถวล่าง: ช่วงวันที่ + ซัพพลายเออร์ + สถานะ */}
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* แถวล่าง: ช่วงวันที่ + ประเภทสมุด + ซัพพลายเออร์ + สถานะ */}
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div>
           <span className={label}>วันที่ลงบัญชี ตั้งแต่</span>
           <DateField value={filters.from} onCommit={(from) => go({ from })} className={`mt-1 ${field}`} />
@@ -128,6 +131,15 @@ export default function JournalFilterBar({
         <div>
           <span className={label}>ถึงวันที่</span>
           <DateField value={filters.to} onCommit={(to) => go({ to })} className={`mt-1 ${field}`} />
+        </div>
+        <div>
+          <span className={label}>ประเภทสมุดรายวัน</span>
+          <select value={filters.journalType} onChange={(e) => go({ journalType: e.target.value })} className={`mt-1 ${field}`}>
+            <option value="">ทุกประเภท</option>
+            {JOURNAL_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
         </div>
         <div>
           <span className={label}>ซัพพลายเออร์ / คู่ค้า</span>
