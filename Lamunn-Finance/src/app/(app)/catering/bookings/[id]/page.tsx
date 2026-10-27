@@ -14,6 +14,7 @@ import ReportSection from "@/components/ReportSection";
 import { StatusBadge, ChannelTag, StaffCount } from "@/components/catering/StatusBadge";
 import { bookingTone, daysAway, TONE } from "@/lib/cateringStatus";
 import { bangkokToday } from "@/lib/cateringCalendar";
+import { DOW_TH, defaultAssignmentHours, eventDays, parseDayOffs } from "@/lib/cateringStaffPay";
 import { formatBaht, formatThaiDate } from "@/lib/format";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, Clock, MapPin, Users } from "lucide-react";
@@ -24,7 +25,7 @@ const PLAIN = "[&>*]:!rounded-none [&>*]:!border-0 [&>*]:!bg-transparent [&>*]:!
 export default async function BookingDetailPage({ params }: { params: { id: string } }) {
   await requireSectionPage("CATERING");
 
-  const [booking, menuItems, minSettings, knownNames] = await Promise.all([
+  const [booking, menuItems, minSettings, knownNames, roster] = await Promise.all([
     prisma.cateringBooking.findUnique({
       where: { id: params.id },
       include: {
@@ -37,6 +38,7 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
     prisma.cateringMenuItem.findMany({ where: { isActive: true }, orderBy: [{ category: "asc" }, { sortOrder: "asc" }] }),
     prisma.setting.findMany({ where: { key: { in: ["cateringMinWithBooth", "cateringMinNoBooth"] } } }),
     knownCateringStaffNames(),
+    prisma.cateringStaff.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
 
   if (!booking) notFound();
@@ -57,6 +59,17 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
   });
   const busyNames: Record<string, string> = {};
   for (const o of overlapping) for (const n of staffNamesOf(o)) busyNames[n.toLowerCase()] = o.customer.name;
+
+  // รายชื่อพนักงาน Catering มาก่อน แล้วตามด้วยชื่ออื่นที่เคยใช้ — และเตือนคนที่งานนี้ตรงกับวันหยุดของเขา (คิด OT อัตราวันหยุด)
+  const rosterLower = new Set(roster.map((r) => r.name.trim().toLowerCase()));
+  const pickNames = [...roster.map((r) => r.name), ...knownNames.filter((n) => !rosterLower.has(n.toLowerCase()))];
+  const jobDows = new Set(eventDays(booking.eventDate, booking.eventEndDate).map((d) => d.getUTCDay()));
+  const offNames: Record<string, string> = {};
+  for (const r of roster) {
+    const hit = parseDayOffs(r.dayOffs).filter((d) => jobDows.has(d));
+    if (hit.length) offNames[r.name.trim().toLowerCase()] = hit.map((d) => DOW_TH[d]).join(" ");
+  }
+  const defaultHours = defaultAssignmentHours(booking);
 
   const servings = bookingServings(booking);
   const needStaff = requiredStaff(servings);
@@ -125,7 +138,7 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
         requiredStaff={needStaff}
       />
 
-      <BookingStaffPanel bookingId={booking.id} assignments={booking.staffAssignments} knownNames={knownNames} busyNames={busyNames} servings={servings} required={needStaff} />
+      <BookingStaffPanel bookingId={booking.id} assignments={booking.staffAssignments} knownNames={pickNames} busyNames={busyNames} servings={servings} required={needStaff} offNames={offNames} defaultHours={defaultHours} />
 
       <div>
         <ReportSection title="แก้ไขรายละเอียดงาน" summary="วันที่ เวลา สถานที่ จำนวนเสิร์ฟ ยอดเงิน สถานะ หมายเหตุ">
