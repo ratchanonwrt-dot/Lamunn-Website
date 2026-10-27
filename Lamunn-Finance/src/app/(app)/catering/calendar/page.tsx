@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireSectionPage } from "@/lib/permissions";
 import { formatBaht, formatThaiDate, thaiMonthLabel } from "@/lib/format";
 import CapacityForm from "@/components/catering/CapacityForm";
+import { TONE, bookingTone, type BookingTone } from "@/lib/cateringStatus";
 import {
   bangkokToday,
   bookingDaysInMonth,
@@ -21,13 +22,6 @@ const DOW = ["จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส.", "อา."]; // �
 function monthParam(year: number, monthIndex0: number) {
   const d = new Date(Date.UTC(year, monthIndex0, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-/** สีตามสถานะ: จอง (ยังไม่จ่าย) = เหลือง, มัดจำแล้ว = ฟ้า, จ่ายเต็ม = เขียว */
-function chipClass(b: MonthBooking) {
-  if (b.paymentStatus === "FULLY_PAID") return "border-emerald-200 bg-emerald-50 text-emerald-800";
-  if (b.paymentStatus === "DEPOSIT_PAID") return "border-sky-200 bg-sky-50 text-sky-800";
-  return "border-amber-200 bg-amber-50 text-amber-800";
 }
 
 function shortDay(iso: string) {
@@ -116,11 +110,14 @@ export default async function CateringCalendarPage({ searchParams }: { searchPar
         </div>
       </div>
 
-      <div className="mb-2 flex flex-wrap gap-3 text-[11px] text-gray-500">
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-amber-200 bg-amber-50" /> จอง (ยังไม่จ่าย)</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-sky-200 bg-sky-50" /> มัดจำแล้ว</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-emerald-200 bg-emerald-50" /> จ่ายเต็มแล้ว</span>
-        <span>✓ = ยืนยันงานแล้ว · ⚠ = เลยกำหนดจ่าย · &ldquo;คน 1/2&rdquo; สีแดง = พนักงานยังไม่ครบตามกฎ 75 เสิร์ฟ/คน · กดวันว่างเพื่อลงงานวันนั้น</span>
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+        {(["booked", "deposit", "paid", "overdue"] as BookingTone[]).map((t) => (
+          <span key={t} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ring-1 ring-inset ${TONE[t].badge}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${TONE[t].dot}`} /> {TONE[t].label}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 font-semibold text-white">👤1/2</span>
+        <span>= พนักงานยังไม่ครบ (75 เสิร์ฟ/คน)</span>
       </div>
 
       {/* ปฏิทิน — จอเล็กเลื่อนแนวนอนได้ ให้ช่องวันไม่บีบจนอ่านชื่อไม่ออก */}
@@ -157,21 +154,21 @@ export default async function CateringCalendarPage({ searchParams }: { searchPar
                     const names = staffNamesOf(b);
                     const need = requiredStaff(bookingServings(b));
                     const short = names.length < need;
-                    const late = b.paymentStatus !== "FULLY_PAID" && b.paymentDueDate && b.paymentDueDate < today;
+                    const tone = bookingTone(b, today);
                     return (
-                      <Link key={b.id} href={`/catering/bookings/${b.id}`} className={`block rounded border px-1.5 py-1 text-[11px] leading-tight hover:opacity-80 ${chipClass(b)}`}>
-                        <span className="font-semibold">
-                          {b.status === "CONFIRMED" || b.status === "COMPLETED" ? "✓ " : ""}
-                          {late ? "⚠ " : ""}
-                          {b.customer.name}
+                      <Link
+                        key={b.id}
+                        href={`/catering/bookings/${b.id}`}
+                        title={`${b.customer.name}${b.eventStartTime ? ` · ${b.eventStartTime}` : ""}${b.guestCount != null ? ` · ${b.guestCount} เสิร์ฟ` : ""}${names.length ? ` · ${names.join(", ")}` : ""}`}
+                        className={`block rounded-lg border px-1.5 py-1 text-[11px] leading-tight hover:shadow-sm ${TONE[tone].soft}`}
+                      >
+                        <span className="flex items-center gap-1 font-semibold">
+                          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE[tone].dot}`} />
+                          <span className="truncate">{b.customer.name}</span>
                         </span>
-                        <span className="block opacity-80">
-                          {b.eventStartTime ?? ""}
-                          {b.guestCount != null ? ` · ${b.guestCount} เสิร์ฟ` : ""}
-                        </span>
-                        <span className={`block ${short ? "font-semibold text-red-600" : "opacity-70"}`}>
-                          คน {names.length}/{need}
-                          {names.length ? ` · ${names.join(", ")}` : ""}
+                        <span className="mt-0.5 flex items-center justify-between gap-1">
+                          <span className="opacity-70">{b.eventStartTime ?? ""}</span>
+                          <span className={`rounded px-1 ${short ? "bg-red-500 font-semibold text-white" : "opacity-70"}`}>👤{names.length}/{need}</span>
                         </span>
                       </Link>
                     );
