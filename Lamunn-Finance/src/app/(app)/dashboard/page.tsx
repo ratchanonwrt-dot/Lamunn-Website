@@ -9,6 +9,8 @@ import { formatBaht, formatPercent } from "@/lib/format";
 import { getCashOnHand, getCreditTermOutstanding } from "@/lib/finance";
 import { computeRent } from "@/lib/rentCalc";
 import { queryGpRateHistories, applyGpRateHistories } from "@/lib/gpRateHistory";
+import { computeYearOverview } from "@/lib/yearOverview";
+import YearOverview from "./YearOverview";
 
 function StatCard({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
@@ -61,6 +63,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
         </Link>
       </div>
 
+      {/* ภาพรวมทั้งปีอยู่บนสุด — ดูยอดสะสมและแนวโน้มทั้งปีก่อน แล้วค่อยลงรายละเอียดรายเดือนด้านล่าง */}
+      <Suspense fallback={<div className="mb-8 h-72 animate-pulse rounded-xl border border-gray-200 bg-white" />}>
+        <YearSection year={year} month={month} />
+      </Suspense>
+
+      <h2 className="mb-3 text-base font-bold text-gray-800">รายละเอียดรายเดือน</h2>
       <MonthFilterBar basePath="/dashboard" year={year} month={month} />
 
       <Suspense fallback={<DashboardSkeleton />}>
@@ -68,6 +76,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       </Suspense>
     </div>
   );
+}
+
+async function YearSection({ year, month }: { year: number; month: number }) {
+  const data = await computeYearOverview(year);
+  return <YearOverview d={data} month={month} />;
 }
 
 async function ActiveBranchCount() {
