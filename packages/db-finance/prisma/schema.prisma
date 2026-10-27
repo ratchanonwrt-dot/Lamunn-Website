@@ -605,6 +605,22 @@ model CateringBookingItem {
 }
 
 // พนักงานที่จัดไปดูแลงาน — "ใครไปใครดูแล" กรอกแค่ชื่อพอ ไม่ผูกกับบัญชีผู้ใช้งานจริง (งานหนึ่งอาจมี 1-2 คนขึ้นไป)
+// รายชื่อพนักงาน Catering — ใช้คิด OT สิ้นเดือน ผูกกับ CateringBookingStaff ด้วย "ชื่อ" (ไม่สนตัวพิมพ์เล็ก/ใหญ่)
+// เพราะการจัดคนเดิมเก็บชื่อแบบข้อความอิสระอยู่แล้ว เปลี่ยนชื่อในรายชื่อ = เปลี่ยนชื่อในงานที่เคยจัดไว้ให้ด้วย (api/catering/staff/[id])
+model CateringStaff {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  dayOffs           String   @default("") // วันหยุดประจำสัปดาห์ เลขวัน 0=อา ... 6=ส คั่นด้วยจุลภาค เช่น "1" หรือ "0,6"
+  otRatePerHour     Float    @default(0) // ค่า OT ต่อชั่วโมง วันทำงานปกติ
+  dayOffRatePerHour Float? // ค่า OT ต่อชั่วโมง ถ้าไปงานตรงวันหยุดของตัวเอง — ว่าง = ใช้อัตราปกติ
+  isActive          Boolean  @default(true)
+  note              String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("catering_staff")
+}
+
 model CateringBookingStaff {
   id String @id @default(cuid())
 
@@ -615,6 +631,7 @@ model CateringBookingStaff {
   staff   StaffUser? @relation(fields: [staffId], references: [id], onDelete: SetNull)
 
   staffName String? // ชื่อพนักงานแบบข้อความอิสระ — ใช้แทน staffId ในการกรอกแบบง่าย
+  otHours   Float? // ชั่วโมง OT ของการไปงานครั้งนี้ — ว่าง = คิดจากเวลาเริ่ม-จบของงาน × จำนวนวัน (lib/cateringStaffPay.ts)
   roleLabel String? // เช่น "หัวหน้างาน", "ทีมงาน", "คนขับ" — ไม่บังคับ
   createdAt DateTime @default(now())
 
