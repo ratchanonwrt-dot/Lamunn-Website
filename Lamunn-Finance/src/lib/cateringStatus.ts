@@ -5,13 +5,15 @@
 
 export type BookingTone = "cancelled" | "done" | "overdue" | "paid" | "deposit" | "booked";
 
-export const TONE: Record<BookingTone, { label: string; badge: string; dot: string; card: string; soft: string }> = {
-  booked: { label: "จอง", badge: "bg-amber-100 text-amber-800 ring-amber-200", dot: "bg-amber-400", card: "border-l-amber-400", soft: "bg-amber-50 border-amber-200 text-amber-900" },
-  deposit: { label: "มัดจำแล้ว", badge: "bg-sky-100 text-sky-800 ring-sky-200", dot: "bg-sky-500", card: "border-l-sky-500", soft: "bg-sky-50 border-sky-200 text-sky-900" },
-  paid: { label: "จ่ายเต็มแล้ว", badge: "bg-emerald-100 text-emerald-800 ring-emerald-200", dot: "bg-emerald-500", card: "border-l-emerald-500", soft: "bg-emerald-50 border-emerald-200 text-emerald-900" },
-  overdue: { label: "เลยกำหนดจ่าย", badge: "bg-red-100 text-red-700 ring-red-200", dot: "bg-red-500", card: "border-l-red-500", soft: "bg-red-50 border-red-200 text-red-900" },
-  done: { label: "จบงานแล้ว", badge: "bg-gray-100 text-gray-600 ring-gray-200", dot: "bg-gray-400", card: "border-l-gray-300", soft: "bg-gray-50 border-gray-200 text-gray-700" },
-  cancelled: { label: "ยกเลิก", badge: "bg-gray-100 text-gray-400 ring-gray-200 line-through", dot: "bg-gray-300", card: "border-l-gray-200", soft: "bg-gray-50 border-gray-200 text-gray-400" },
+// สีทึบ (ไม่ใช่สีพาสเทล) เพื่อให้แยกสถานะออกได้ในแวบเดียว — ผู้ใช้บอกว่าสีอ่อนแยกกันไม่ออกบนจอร้าน
+// date = กล่องวันที่ในการ์ดงาน ทาสีตามสถานะ ให้ไล่สายตาลงรายการแล้วเห็นสีก่อนอ่านตัวหนังสือ
+export const TONE: Record<BookingTone, { label: string; badge: string; dot: string; card: string; soft: string; date: string }> = {
+  booked: { label: "จอง", badge: "bg-amber-400 text-amber-950", dot: "bg-amber-400", card: "border-l-amber-400", soft: "bg-amber-100 border-amber-300 text-amber-950", date: "bg-amber-400 text-amber-950" },
+  deposit: { label: "มัดจำแล้ว", badge: "bg-sky-600 text-white", dot: "bg-sky-600", card: "border-l-sky-600", soft: "bg-sky-100 border-sky-300 text-sky-950", date: "bg-sky-600 text-white" },
+  paid: { label: "จ่ายเต็มแล้ว", badge: "bg-emerald-600 text-white", dot: "bg-emerald-600", card: "border-l-emerald-600", soft: "bg-emerald-100 border-emerald-300 text-emerald-950", date: "bg-emerald-600 text-white" },
+  overdue: { label: "เลยกำหนดจ่าย", badge: "bg-red-600 text-white", dot: "bg-red-600", card: "border-l-red-600", soft: "bg-red-100 border-red-300 text-red-950", date: "bg-red-600 text-white" },
+  done: { label: "จบงานแล้ว", badge: "bg-gray-300 text-gray-800", dot: "bg-gray-400", card: "border-l-gray-300", soft: "bg-gray-100 border-gray-300 text-gray-700", date: "bg-gray-200 text-gray-700" },
+  cancelled: { label: "ยกเลิก", badge: "bg-gray-200 text-gray-500 line-through", dot: "bg-gray-300", card: "border-l-gray-200", soft: "bg-gray-50 border-gray-200 text-gray-400 line-through", date: "bg-gray-100 text-gray-400" },
 };
 
 /** วันนี้ตามเวลาไทย (UTC-midnight ของวันไทย) — ไฟล์นี้ใช้ได้ทั้งฝั่ง client จึงไม่ import จาก cateringCalendar ที่ผูก prisma */

@@ -68,7 +68,7 @@ export default function DateSelect({
   }
 
   const selectClass =
-    "rounded-lg border border-gray-200 bg-gray-50 px-2 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white";
+    "rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-base text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10";
 
   return (
     <div className="flex gap-1.5">

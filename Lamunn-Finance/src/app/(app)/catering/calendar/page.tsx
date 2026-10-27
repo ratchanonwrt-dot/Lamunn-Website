@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { requireSectionPage } from "@/lib/permissions";
 import { formatBaht, formatThaiDate, thaiMonthLabel } from "@/lib/format";
 import CapacityForm from "@/components/catering/CapacityForm";
+import CateringHeader, { headerBtn } from "@/components/catering/CateringHeader";
 import { TONE, bookingTone, type BookingTone } from "@/lib/cateringStatus";
 import {
   bangkokToday,
@@ -60,93 +61,79 @@ export default async function CateringCalendarPage({ searchParams }: { searchPar
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-gray-800">ปฏิทินงาน Catering</h1>
-        {canEdit && (
-          <Link href="/catering/bookings/new" className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-700">
-            + ลงงานใหม่
-          </Link>
-        )}
-      </div>
+      <CateringHeader
+        title="ปฏิทินงาน"
+        sub={`${label} · ${bookings.length} งาน · ${formatBaht(monthTotal)} บาท`}
+        actions={
+          canEdit && (
+            <Link href="/catering/bookings/new" className={headerBtn.primary}>
+              <Plus className="h-4 w-4" /> ลงงานใหม่
+            </Link>
+          )
+        }
+        stats={[
+          { label: "วันที่ยังรับงานได้", value: `${freeDays}`, sub: `เต็มแล้ว ${fullDays} วัน`, accent: "emerald" },
+          { label: "งานเดือนนี้", value: `${bookings.length}`, sub: `${formatBaht(monthTotal)} บาท` },
+          { label: "เลยกำหนดจ่าย", value: `${overdue.length}`, sub: overdue.map((b) => b.customer.name).join(", ") || "ไม่มีงานค้าง", accent: overdue.length ? "red" : "emerald" },
+          { label: "พนักงานยังไม่ครบ", value: `${shortStaff.length}`, sub: shortStaff.map((b) => b.customer.name).join(", ") || "ครบทุกงาน", accent: shortStaff.length ? "orange" : "emerald" },
+        ]}
+      />
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Link href={`/catering/calendar?month=${monthParam(year, monthIndex0 - 1)}`} className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50" aria-label="เดือนก่อน">
+          <Link href={`/catering/calendar?month=${monthParam(year, monthIndex0 - 1)}`} className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-100" aria-label="เดือนก่อน">
             <ChevronLeft className="h-4 w-4" />
           </Link>
-          <span className="min-w-[8rem] text-center text-sm font-semibold text-gray-800">{label}</span>
-          <Link href={`/catering/calendar?month=${monthParam(year, monthIndex0 + 1)}`} className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50" aria-label="เดือนถัดไป">
+          <span className="min-w-[9rem] text-center text-lg font-bold text-gray-900">{label}</span>
+          <Link href={`/catering/calendar?month=${monthParam(year, monthIndex0 + 1)}`} className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-100" aria-label="เดือนถัดไป">
             <ChevronRight className="h-4 w-4" />
           </Link>
           {(year !== today.getUTCFullYear() || monthIndex0 !== today.getUTCMonth()) && (
-            <Link href="/catering/calendar" className="ml-1 text-xs font-medium text-brand-600 hover:underline">
-              กลับเดือนนี้
+            <Link href="/catering/calendar" className="ml-1 rounded-lg bg-gray-900 px-2.5 py-1 text-xs font-semibold text-white">
+              เดือนนี้
             </Link>
           )}
         </div>
         <CapacityForm value={capacity} canEdit={canEdit} />
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-3">
-          <p className="text-xs text-gray-500">งานเดือนนี้</p>
-          <p className="mt-1 text-lg font-bold text-brand-700">{bookings.length} งาน</p>
-          <p className="text-[11px] text-gray-400">{formatBaht(monthTotal)} บาท</p>
-        </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-3">
-          <p className="text-xs text-gray-500">วันที่ยังรับงานได้ (นับจากวันนี้)</p>
-          <p className="mt-1 text-lg font-bold text-emerald-700">{freeDays} วัน</p>
-          <p className="text-[11px] text-gray-400">เต็มแล้ว {fullDays} วัน</p>
-        </div>
-        <div className={`rounded-xl border p-3 ${overdue.length ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}>
-          <p className="text-xs text-gray-500">เลยกำหนดจ่ายแล้ว</p>
-          <p className={`mt-1 text-lg font-bold ${overdue.length ? "text-red-700" : "text-gray-800"}`}>{overdue.length} งาน</p>
-          <p className="text-[11px] text-gray-400 line-clamp-1">{overdue.map((b) => b.customer.name).join(", ") || "-"}</p>
-        </div>
-        <div className={`rounded-xl border p-3 ${shortStaff.length ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white"}`}>
-          <p className="text-xs text-gray-500">พนักงานยังไม่พอ (75 เสิร์ฟ/คน)</p>
-          <p className={`mt-1 text-lg font-bold ${shortStaff.length ? "text-amber-700" : "text-gray-800"}`}>{shortStaff.length} งาน</p>
-          <p className="text-[11px] text-gray-400 line-clamp-1">{shortStaff.map((b) => b.customer.name).join(", ") || "-"}</p>
-        </div>
-      </div>
-
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-medium text-gray-700">
         {(["booked", "deposit", "paid", "overdue"] as BookingTone[]).map((t) => (
-          <span key={t} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ring-1 ring-inset ${TONE[t].badge}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${TONE[t].dot}`} /> {TONE[t].label}
+          <span key={t} className={`rounded-full px-2.5 py-0.5 font-semibold ${TONE[t].badge}`}>
+            {TONE[t].label}
           </span>
         ))}
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 font-semibold text-white">👤1/2</span>
-        <span>= พนักงานยังไม่ครบ (75 เสิร์ฟ/คน)</span>
+        <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 font-semibold text-white">👤1/2</span>
+        <span>= พนักงานยังไม่ครบ</span>
       </div>
 
       {/* ปฏิทิน — จอเล็กเลื่อนแนวนอนได้ ให้ช่องวันไม่บีบจนอ่านชื่อไม่ออก */}
-      <div className="mb-6 overflow-x-auto rounded-xl border border-gray-200 bg-white">
-        <div className="grid min-w-[760px] grid-cols-7">
+      <div className="mb-6 overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-card">
+        <div className="grid min-w-[840px] grid-cols-7">
           {DOW.map((d, i) => (
-            <div key={d} className={`border-b border-gray-100 px-2 py-1.5 text-center text-xs font-medium ${i >= 5 ? "text-brand-600" : "text-gray-500"}`}>
+            <div key={d} className={`bg-gray-900 px-2 py-2 text-center text-sm font-semibold ${i >= 5 ? "text-amber-300" : "text-white"}`}>
               {d}
             </div>
           ))}
           {cells.map((day, i) => {
-            if (!day) return <div key={`e${i}`} className="min-h-[96px] border-b border-r border-gray-50 bg-gray-50/50" />;
+            if (!day) return <div key={`e${i}`} className="min-h-[110px] border-b border-r border-gray-100 bg-gray-50" />;
             const list = perDay.get(day) ?? [];
             const isPast = day < todayIso;
             const full = list.length >= capacity;
             const left = capacity - list.length;
             return (
-              <div key={day} className={`min-h-[96px] border-b border-r border-gray-100 p-1.5 ${day === todayIso ? "bg-brand-50/60" : isPast ? "bg-gray-50/60" : ""}`}>
+              <div key={day} className={`min-h-[110px] border-b border-r border-gray-100 p-1.5 ${day === todayIso ? "bg-amber-50 ring-2 ring-inset ring-gray-900" : isPast ? "bg-gray-50" : ""}`}>
                 <div className="mb-1 flex items-center justify-between">
-                  <span className={`text-xs font-semibold ${day === todayIso ? "text-brand-700" : isPast ? "text-gray-400" : "text-gray-700"}`}>{shortDay(day)}</span>
+                  <span className={`text-base font-bold ${isPast ? "text-gray-400" : "text-gray-900"}`}>{shortDay(day)}</span>
                   {!isPast &&
                     (full ? (
-                      <span className="rounded bg-red-100 px-1.5 text-[10px] font-medium text-red-700">เต็ม</span>
+                      <span className="rounded-md bg-gray-900 px-1.5 py-0.5 text-xs font-semibold text-white">เต็ม</span>
                     ) : canEdit ? (
-                      <Link href={`/catering/bookings/new?date=${day}`} className="rounded bg-emerald-50 px-1.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100">
+                      <Link href={`/catering/bookings/new?date=${day}`} className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-200" title="ลงงานวันนี้">
                         ว่าง {left} +
                       </Link>
                     ) : (
-                      <span className="rounded bg-emerald-50 px-1.5 text-[10px] font-medium text-emerald-700">ว่าง {left}</span>
+                      <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-800">ว่าง {left}</span>
                     ))}
                 </div>
                 <div className="flex flex-col gap-1">
@@ -160,15 +147,12 @@ export default async function CateringCalendarPage({ searchParams }: { searchPar
                         key={b.id}
                         href={`/catering/bookings/${b.id}`}
                         title={`${b.customer.name}${b.eventStartTime ? ` · ${b.eventStartTime}` : ""}${b.guestCount != null ? ` · ${b.guestCount} เสิร์ฟ` : ""}${names.length ? ` · ${names.join(", ")}` : ""}`}
-                        className={`block rounded-lg border px-1.5 py-1 text-[11px] leading-tight hover:shadow-sm ${TONE[tone].soft}`}
+                        className={`block rounded-lg px-2 py-1 text-xs leading-snug hover:opacity-90 ${TONE[tone].date}`}
                       >
-                        <span className="flex items-center gap-1 font-semibold">
-                          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE[tone].dot}`} />
-                          <span className="truncate">{b.customer.name}</span>
-                        </span>
-                        <span className="mt-0.5 flex items-center justify-between gap-1">
-                          <span className="opacity-70">{b.eventStartTime ?? ""}</span>
-                          <span className={`rounded px-1 ${short ? "bg-red-500 font-semibold text-white" : "opacity-70"}`}>👤{names.length}/{need}</span>
+                        <span className="block truncate text-[13px] font-bold">{b.customer.name}</span>
+                        <span className="mt-0.5 flex items-center justify-between gap-1 font-medium">
+                          <span>{b.eventStartTime ?? ""}</span>
+                          <span className={`rounded px-1 ${short ? "bg-white font-bold text-red-700" : ""}`}>👤{names.length}/{need}</span>
                         </span>
                       </Link>
                     );
@@ -180,14 +164,14 @@ export default async function CateringCalendarPage({ searchParams }: { searchPar
         </div>
       </div>
 
-      <h2 className="mb-1 text-sm font-semibold text-gray-700">สรุปพนักงาน — {label}</h2>
-      <p className="mb-3 text-xs text-gray-400">ใครไปงานวันไหนบ้าง รวมกี่งาน (งานหลายวันนับเป็น 1 งาน แต่นับวันทำงานทุกวัน)</p>
+      <h2 className="mb-1 text-base font-bold text-gray-900">สรุปพนักงาน — {label}</h2>
+      <p className="mb-3 text-sm text-gray-600">ใครไปงานวันไหนบ้าง รวมกี่งาน (งานหลายวันนับเป็น 1 งาน แต่นับวันทำงานทุกวัน)</p>
       {staff.length === 0 ? (
         <p className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-400">ยังไม่มีการจัดพนักงานในเดือนนี้</p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
           <table className="w-full min-w-[600px] text-sm">
-            <thead className="bg-gray-50 text-left text-xs text-gray-500">
+            <thead className="bg-gray-900 text-left text-sm text-white">
               <tr>
                 <th className="px-3 py-2">พนักงาน</th>
                 <th className="px-3 py-2 text-right">จำนวนงาน</th>
@@ -198,7 +182,7 @@ export default async function CateringCalendarPage({ searchParams }: { searchPar
             <tbody>
               {staff.map((s) => (
                 <tr key={s.name} className="border-t border-gray-100 align-top">
-                  <td className="px-3 py-2 font-medium text-gray-800">{s.name}</td>
+                  <td className="px-3 py-2 font-semibold text-gray-900">{s.name}</td>
                   <td className="px-3 py-2 text-right font-semibold text-brand-700">{s.bookings.length}</td>
                   <td className="px-3 py-2 text-right text-gray-600">{s.dayCount}</td>
                   <td className="px-3 py-2">
@@ -218,7 +202,7 @@ export default async function CateringCalendarPage({ searchParams }: { searchPar
       )}
 
       {bookings.length > 0 && (
-        <p className="mt-4 text-[11px] text-gray-400">
+        <p className="mt-4 text-xs text-gray-500">
           ข้อมูลเดือน {label} ณ {formatThaiDate(today)} · ไม่รวมงานที่ยกเลิก · งานที่เริ่มเดือนก่อนแต่จัดต่อเนื่องเข้ามาเดือนนี้ก็แสดงด้วย ({bookings.filter((b) => bookingDaysInMonth(b, year, monthIndex0).length > 1).length} งานหลายวัน)
         </p>
       )}

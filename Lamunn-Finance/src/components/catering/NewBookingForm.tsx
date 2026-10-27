@@ -24,7 +24,7 @@ const PAYMENT_OPTIONS = [
   { value: "FULLY_PAID", label: "จ่ายเต็มแล้ว" },
 ];
 
-const inputCls = "w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white";
+const inputCls = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-base text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10";
 
 /** ฟอร์มลงงานหลังลูกค้าทักมา — พนักงานกรอกเองทั้งหมดในหน้าเดียว
  * เลือกวันแล้วบอกทันทีว่าวันนั้นมีงานอยู่แล้วกี่งาน รับเพิ่มได้ไหม (อิงค่า "รับได้สูงสุดต่อวัน" ในหน้าปฏิทิน) */
@@ -38,6 +38,7 @@ export default function NewBookingForm({ initialDate = "" }: { initialDate?: str
 
   const [eventDate, setEventDate] = useState(initialDate);
   const [eventEndDate, setEventEndDate] = useState("");
+  const [multiDay, setMultiDay] = useState(false);
   const [eventStartTime, setEventStartTime] = useState("");
   const [eventEndTime, setEventEndTime] = useState("");
   const [location, setLocation] = useState("");
@@ -125,28 +126,28 @@ export default function NewBookingForm({ initialDate = "" }: { initialDate?: str
 
   return (
     <form onSubmit={handleSubmit} className="mx-auto flex max-w-3xl flex-col gap-4">
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-gray-800"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-xs text-white">1</span>ลูกค้า</h2>
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-card">
+        <h2 className="mb-4 flex items-center gap-2 text-base font-bold text-gray-900"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-sm text-white">1</span>ลูกค้า</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">ชื่อลูกค้า</label>
+            <label className="mb-1 block text-sm font-semibold text-gray-800">ชื่อลูกค้า</label>
             <input required value={customerName} onChange={(e) => setCustomerName(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">ข้อมูลติดต่อ (เบอร์โทร / LINE ID)</label>
+            <label className="mb-1 block text-sm font-semibold text-gray-800">ข้อมูลติดต่อ (เบอร์โทร / LINE ID)</label>
             <input required value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={handlePhoneBlur} className={inputCls} />
-            {lookingUp && <p className="mt-1 text-xs text-gray-400">กำลังค้นหา...</p>}
-            {foundExisting && <p className="mt-1 text-xs text-emerald-600">พบลูกค้าเดิม — เติมข้อมูลให้แล้ว</p>}
+            {lookingUp && <p className="mt-1 text-sm text-gray-600">กำลังค้นหา...</p>}
+            {foundExisting && <p className="mt-1 text-sm font-medium text-emerald-700">พบลูกค้าเดิม — เติมข้อมูลให้แล้ว</p>}
           </div>
           <div className="sm:col-span-3">
-            <label className="mb-1.5 block text-xs font-medium text-gray-500">ลูกค้าติดต่อมาทาง</label>
+            <label className="mb-1.5 block text-sm font-semibold text-gray-800">ลูกค้าติดต่อมาทาง</label>
             <div className="flex flex-wrap gap-1.5">
               {SOURCE_OPTIONS.filter((o) => o.value).map((o) => (
                 <button
                   key={o.value}
                   type="button"
                   onClick={() => setSource(source === o.value ? "" : o.value)}
-                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${source === o.value ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${source === o.value ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-800 hover:bg-gray-200"}`}
                 >
                   {o.label}
                 </button>
@@ -156,14 +157,14 @@ export default function NewBookingForm({ initialDate = "" }: { initialDate?: str
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-gray-800"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-xs text-white">2</span>งาน</h2>
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-card">
+        <h2 className="mb-4 flex items-center gap-2 text-base font-bold text-gray-900"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-sm text-white">2</span>งาน</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">วันที่จัดงาน</label>
+            <label className="mb-1 block text-sm font-semibold text-gray-800">วันที่จัดงาน</label>
             <DateSelect required value={eventDate} onChange={setEventDate} />
             {availability && (
-              <p className={`mt-1 rounded-md px-2 py-1 text-xs ${full ? "bg-red-50 text-red-700" : availability.count > 0 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
+              <p className={`mt-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold ${full ? "bg-red-600 text-white" : availability.count > 0 ? "bg-amber-400 text-amber-950" : "bg-emerald-600 text-white"}`}>
                 {availability.count === 0
                   ? `ว่าง — รับได้ ${availability.capacity} งานต่อวัน`
                   : full
@@ -173,44 +174,58 @@ export default function NewBookingForm({ initialDate = "" }: { initialDate?: str
             )}
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">ถึงวันที่ (ถ้าจัดหลายวัน)</label>
-            <DateSelect value={eventEndDate} onChange={setEventEndDate} />
+            {/* งานส่วนใหญ่จัดวันเดียว — ซ่อนช่อง "ถึงวันที่" ไว้หลังปุ่ม ให้ฟอร์มสั้นลงสำหรับเคสปกติ */}
+            {multiDay ? (
+              <>
+                <label className="mb-1 flex items-center justify-between text-sm font-semibold text-gray-800">
+                  ถึงวันที่
+                  <button type="button" onClick={() => { setMultiDay(false); setEventEndDate(""); }} className="text-xs font-medium text-gray-500 hover:text-gray-900">
+                    จัดวันเดียว
+                  </button>
+                </label>
+                <DateSelect value={eventEndDate} onChange={setEventEndDate} />
+              </>
+            ) : (
+              <button type="button" onClick={() => setMultiDay(true)} className="mt-6 w-full rounded-lg border-2 border-dashed border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:border-gray-900 hover:text-gray-900">
+                + จัดหลายวัน
+              </button>
+            )}
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">จำนวนเสิร์ฟ</label>
+            <label className="mb-1 block text-sm font-semibold text-gray-800">จำนวนเสิร์ฟ</label>
             <input type="number" min="0" value={guestCount} onChange={(e) => setGuestCount(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">เวลาเริ่ม</label>
+            <label className="mb-1 block text-sm font-semibold text-gray-800">เวลาเริ่ม</label>
             <TimeSelect value={eventStartTime} onChange={setEventStartTime} />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">เวลาสิ้นสุด</label>
+            <label className="mb-1 block text-sm font-semibold text-gray-800">เวลาสิ้นสุด</label>
             <TimeSelect value={eventEndTime} onChange={setEventEndTime} />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">สถานที่จัดงาน</label>
+            <label className="mb-1 block text-sm font-semibold text-gray-800">สถานที่จัดงาน</label>
             <input value={location} onChange={(e) => setLocation(e.target.value)} className={inputCls} />
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-gray-800"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-xs text-white">3</span>การชำระเงิน</h2>
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-card">
+        <h2 className="mb-4 flex items-center gap-2 text-base font-bold text-gray-900"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-sm text-white">3</span>การชำระเงิน</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div className="sm:col-span-4">
-            <label className="mb-1.5 block text-xs font-medium text-gray-500">สถานะ</label>
+            <label className="mb-1.5 block text-sm font-semibold text-gray-800">สถานะ</label>
             <div className="grid grid-cols-3 gap-2">
               {PAYMENT_OPTIONS.map((o) => {
                 const on = paymentStatus === o.value;
                 const color = o.value === "FULLY_PAID" ? "emerald" : o.value === "DEPOSIT_PAID" ? "sky" : "amber";
-                const active = { amber: "border-amber-400 bg-amber-50 text-amber-800", sky: "border-sky-400 bg-sky-50 text-sky-800", emerald: "border-emerald-400 bg-emerald-50 text-emerald-800" }[color];
+                const active = { amber: "border-amber-400 bg-amber-400 text-amber-950", sky: "border-sky-600 bg-sky-600 text-white", emerald: "border-emerald-600 bg-emerald-600 text-white" }[color];
                 return (
                   <button
                     key={o.value}
                     type="button"
                     onClick={() => setPaymentStatus(o.value)}
-                    className={`rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition ${on ? active : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"}`}
+                    className={`rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition ${on ? active : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}
                   >
                     {o.label}
                   </button>
@@ -219,18 +234,18 @@ export default function NewBookingForm({ initialDate = "" }: { initialDate?: str
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">ยอดรวม (บาท)</label>
+            <label className="mb-1 block text-sm font-semibold text-gray-800">ยอดรวม (บาท)</label>
             <input required type="number" step="0.01" min="0" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} className={inputCls} />
           </div>
           {paymentStatus === "DEPOSIT_PAID" && (
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">ยอดมัดจำที่ได้รับ (บาท)</label>
+              <label className="mb-1 block text-sm font-semibold text-gray-800">ยอดมัดจำที่ได้รับ (บาท)</label>
               <input type="number" step="0.01" min="0" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className={inputCls} />
             </div>
           )}
           {paymentStatus !== "FULLY_PAID" && (
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">ครบกำหนดจ่ายวันที่</label>
+              <label className="mb-1 block text-sm font-semibold text-gray-800">ครบกำหนดจ่ายวันที่</label>
               <DateSelect value={paymentDueDate} onChange={setPaymentDueDate} />
             </div>
           )}
@@ -242,7 +257,7 @@ export default function NewBookingForm({ initialDate = "" }: { initialDate?: str
       <button
         type="submit"
         disabled={saving}
-        className="w-full rounded-xl bg-brand-600 px-6 py-3 text-base font-semibold text-white hover:bg-brand-700 disabled:opacity-50 sm:w-auto sm:self-end"
+        className="w-full rounded-xl bg-gray-900 px-8 py-3.5 text-base font-bold text-white hover:bg-gray-700 disabled:opacity-50 sm:w-auto sm:self-end"
       >
         {saving ? "กำลังบันทึก..." : full ? "บันทึก (วันนี้เต็มแล้ว)" : "บันทึกงาน"}
       </button>

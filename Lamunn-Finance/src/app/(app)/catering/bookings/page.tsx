@@ -6,6 +6,7 @@ import { formatBaht } from "@/lib/format";
 import { bangkokToday, bookingServings, requiredStaff, staffNamesOf } from "@/lib/cateringCalendar";
 import { TONE, bookingTone, type BookingTone } from "@/lib/cateringStatus";
 import BookingCard from "@/components/catering/BookingCard";
+import CateringHeader, { headerBtn } from "@/components/catering/CateringHeader";
 
 const VIEWS = [
   { key: "upcoming", label: "ที่จะถึง" },
@@ -57,19 +58,22 @@ export default async function CateringBookingsPage({ searchParams }: { searchPar
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-gray-900">งานจัดเลี้ยง</h1>
-        {canEdit && (
-          <Link href="/catering/bookings/new" className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
-            <Plus className="h-4 w-4" /> ลงงานใหม่
-          </Link>
-        )}
-      </div>
+      <CateringHeader
+        title="งานจัดเลี้ยง"
+        sub={`${shown.length} งาน · รวม ${formatBaht(total)} บาท`}
+        actions={
+          canEdit && (
+            <Link href="/catering/bookings/new" className={headerBtn.primary}>
+              <Plus className="h-4 w-4" /> ลงงานใหม่
+            </Link>
+          )
+        }
+      />
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-xl bg-gray-100 p-1">
+        <div className="inline-flex rounded-xl bg-gray-200 p-1">
           {VIEWS.map((v) => (
-            <Link key={v.key} href={href({ view: v.key, tone: null })} className={`rounded-lg px-4 py-1.5 text-sm font-medium ${view === v.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <Link key={v.key} href={href({ view: v.key, tone: null })} className={`rounded-lg px-4 py-1.5 text-sm font-semibold ${view === v.key ? "bg-gray-900 text-white shadow-sm" : "text-gray-700 hover:text-gray-900"}`}>
               {v.label}
             </Link>
           ))}
@@ -82,20 +86,17 @@ export default async function CateringBookingsPage({ searchParams }: { searchPar
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <Link href={href({ tone: null })} className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset ${!tone ? "bg-gray-900 text-white ring-gray-900" : "bg-white text-gray-600 ring-gray-200 hover:bg-gray-50"}`}>
+        <Link href={href({ tone: null })} className={`rounded-full px-3 py-1 text-sm font-semibold ${!tone ? "bg-gray-900 text-white" : "bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-100"}`}>
           ทั้งหมด {cards.filter((c) => view === "all" || c.tone !== "cancelled").length}
         </Link>
         {TONE_FILTERS.filter((t) => counts[t] > 0 || t === tone).map((t) => (
-          <Link key={t} href={href({ tone: tone === t ? null : t })} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset ${tone === t ? TONE[t].badge + " ring-2" : "bg-white text-gray-600 ring-gray-200 hover:bg-gray-50"}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${TONE[t].dot}`} />
+          <Link key={t} href={href({ tone: tone === t ? null : t })} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ${tone === t ? `${TONE[t].badge} ring-2 ring-gray-900 ring-offset-1` : "bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-100"}`}>
+            <span className={`h-2.5 w-2.5 rounded-full ${TONE[t].dot}`} />
             {TONE[t].label} {counts[t]}
           </Link>
         ))}
       </div>
 
-      <p className="mb-2 text-xs text-gray-400">
-        {shown.length} งาน · รวม {formatBaht(total)} บาท
-      </p>
       <div className="flex flex-col gap-2">
         {shown.map((b) => (
           <BookingCard key={b.id} b={b} today={today} />
