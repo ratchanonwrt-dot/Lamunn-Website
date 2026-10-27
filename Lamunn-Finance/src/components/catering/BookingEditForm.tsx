@@ -21,12 +21,13 @@ interface BookingData {
   paymentStatus: string;
   status: string;
   note: string | null;
+  paymentDueDate: string | null;
 }
 
 const PAYMENT_OPTIONS = [
-  { value: "UNPAID", label: "ยังไม่ชำระ" },
+  { value: "UNPAID", label: "จอง (ยังไม่จ่าย)" },
   { value: "DEPOSIT_PAID", label: "มัดจำแล้ว" },
-  { value: "FULLY_PAID", label: "ชำระครบแล้ว" },
+  { value: "FULLY_PAID", label: "จ่ายเต็มแล้ว" },
 ];
 
 const STATUS_OPTIONS = [
@@ -49,6 +50,7 @@ export default function BookingEditForm({ booking, hasItems = false }: { booking
   const [paymentStatus, setPaymentStatus] = useState(booking.paymentStatus);
   const [status, setStatus] = useState(booking.status);
   const [note, setNote] = useState(booking.note ?? "");
+  const [paymentDueDate, setPaymentDueDate] = useState(booking.paymentDueDate ? toDateInputValue(new Date(booking.paymentDueDate)) : "");
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -78,6 +80,7 @@ export default function BookingEditForm({ booking, hasItems = false }: { booking
         paymentStatus,
         status,
         note,
+        paymentDueDate: paymentDueDate || null,
         ...(depositPaidAt ? { depositPaidAt } : {}),
         ...(balancePaidAt ? { balancePaidAt } : {}),
       }),
@@ -116,7 +119,7 @@ export default function BookingEditForm({ booking, hasItems = false }: { booking
           <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white" />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">จำนวนแขก</label>
+          <label className="mb-1 block text-xs font-medium text-gray-500">จำนวนเสิร์ฟ</label>
           <input type="number" min="0" value={guestCount} onChange={(e) => setGuestCount(e.target.value)} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white" />
         </div>
 
@@ -149,6 +152,10 @@ export default function BookingEditForm({ booking, hasItems = false }: { booking
           </select>
         </div>
 
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-500">ครบกำหนดจ่ายวันที่</label>
+          <DateSelect value={paymentDueDate} onChange={setPaymentDueDate} />
+        </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500">สถานะการจอง</label>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white">

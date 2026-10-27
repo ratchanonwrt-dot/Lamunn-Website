@@ -176,6 +176,7 @@ const otherLinks: NavLink[] = [
 // กลุ่ม Catering — จัดเลี้ยง/รับออเดอร์หน้าร้าน
 const cateringLinks: NavLink[] = [
   { href: "/catering", label: "Catering Overall", icon: ChefHat, color: "bg-orange-100 text-orange-600", section: "CATERING" },
+  { href: "/catering/calendar", label: "ปฏิทินงาน + พนักงาน", icon: CalendarDays, color: "bg-orange-100 text-orange-600", section: "CATERING" },
   { href: "/catering/bookings", label: "งานจัดเลี้ยง", icon: CalendarCheck, color: "bg-amber-100 text-amber-600", section: "CATERING" },
   { href: "/catering/customers", label: "ลูกค้า", icon: UserRound, color: "bg-teal-100 text-teal-600", section: "CATERING" },
   { href: "/catering/menu", label: "จัดการเมนู/ราคา", icon: Utensils, color: "bg-lime-100 text-lime-600", section: "CATERING" },
