@@ -5,6 +5,14 @@ import type { NextRequest } from "next/server";
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // หน้า "สรุปกำไร" เดิมถูกรวมเข้า "วิเคราะห์ & กำไร" — พาไปหน้ารวมทันที (คงช่วงวันที่ใน query ไว้)
+  if (pathname === "/profit") {
+    const url = req.nextUrl.clone();
+    url.pathname = "/analysis";
+    url.searchParams.delete("range");
+    return NextResponse.redirect(url);
+  }
+
   // API สำหรับเว็บ Finance (ทำจ่าย) ใช้กุญแจลับใน header แทนคุกกี้ — ตรวจสิทธิ์ใน route เอง
   const payoutApi = pathname === "/api/payouts/export" || /^\/api\/payouts\/[^/]+\/paid$/.test(pathname);
 

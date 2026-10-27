@@ -11,6 +11,7 @@ import ShiftResultsForm from "@/components/ShiftResultsForm";
 import ShiftEditForm from "@/components/ShiftEditForm";
 import DeleteShiftButton from "@/components/DeleteShiftButton";
 import ShiftPayOverride from "@/components/ShiftPayOverride";
+import ShiftOrdersForm from "@/components/ShiftOrdersForm";
 
 export default async function ShiftDetailPage({ params }: { params: { id: string } }) {
   await requirePageRole();
@@ -21,14 +22,21 @@ export default async function ShiftDetailPage({ params }: { params: { id: string
       streamer: true,
       channel: true,
       slots: { include: { streamer: true }, orderBy: [{ startTime: "asc" }, { createdAt: "asc" }] },
+      orderLines: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!shift) notFound();
 
-  const [settings, streamers, channels] = await Promise.all([
+  const [settings, streamers, channels, products] = await Promise.all([
     getPaySettings(),
     prisma.streamer.findMany({ where: { OR: [{ isActive: true }, { id: shift.streamerId }] }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
     prisma.channel.findMany({ where: { OR: [{ isActive: true }, { id: shift.channelId ?? "" }] }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
+    // สินค้าที่ใช้งานอยู่ + ที่อยู่ในออเดอร์ของกะนี้แล้ว (แม้ปิดใช้งานไปแล้ว ก็ยังแก้จำนวนได้)
+    prisma.liveProduct.findMany({
+      where: { OR: [{ isActive: true }, { id: { in: shift.orderLines.map((l) => l.productId).filter((x): x is string => !!x) } }] },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, costPerSet: true },
+    }),
   ]);
 
   const range = toRange(shift.startTime, shift.endTime);
@@ -163,6 +171,17 @@ export default async function ShiftDetailPage({ params }: { params: { id: string
         shiftDate={isoDate(shift.date)}
         existing={shift.slots.map((s) => ({ startTime: s.startTime, endTime: s.endTime, viewers: s.viewers, sales: s.sales, peakViewers: s.peakViewers, orders: s.orders }))}
         payOverride={shift.payOverride}
+      />
+
+      <h2 className="mb-2 mt-8 font-display text-[15px] font-semibold text-ink">ออเดอร์ของกะ (ค่าส่ง + ต้นทุนวัตถุดิบ)</h2>
+      <p className="mb-3 text-xs text-stone-400">
+        กรอกว่าลูกค้าสั่งชุดไหนกี่ชุด จำนวนออเดอร์ และค่าส่งรวม — ระบบคูณต้นทุนต่อชุดเป็นต้นทุนวัตถุดิบจริง แล้วนำไปคิดกำไรจริงในหน้าสรุปกำไร
+      </p>
+      <ShiftOrdersForm
+        shiftId={shift.id}
+        products={products}
+        sales={sales}
+        existing={{ orderCount: shift.orderCount, shippingCost: shift.shippingCost, lines: shift.orderLines.map((l) => ({ productId: l.productId, productName: l.productName, quantity: l.quantity, unitCost: l.unitCost })) }}
       />
 
     </div>
