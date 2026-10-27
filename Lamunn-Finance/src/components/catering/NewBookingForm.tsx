@@ -124,9 +124,9 @@ export default function NewBookingForm({ initialDate = "" }: { initialDate?: str
   const full = availability && availability.count >= availability.capacity;
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-      <div className="rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-gray-700">ลูกค้า</h2>
+    <form onSubmit={handleSubmit} className="mx-auto flex max-w-3xl flex-col gap-4">
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-gray-800"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-xs text-white">1</span>ลูกค้า</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">ชื่อลูกค้า</label>
@@ -138,21 +138,26 @@ export default function NewBookingForm({ initialDate = "" }: { initialDate?: str
             {lookingUp && <p className="mt-1 text-xs text-gray-400">กำลังค้นหา...</p>}
             {foundExisting && <p className="mt-1 text-xs text-emerald-600">พบลูกค้าเดิม — เติมข้อมูลให้แล้ว</p>}
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">ช่องทางที่ติดต่อมา</label>
-            <select value={source} onChange={(e) => setSource(e.target.value)} className={inputCls}>
-              {SOURCE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
+          <div className="sm:col-span-3">
+            <label className="mb-1.5 block text-xs font-medium text-gray-500">ลูกค้าติดต่อมาทาง</label>
+            <div className="flex flex-wrap gap-1.5">
+              {SOURCE_OPTIONS.filter((o) => o.value).map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => setSource(source === o.value ? "" : o.value)}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${source === o.value ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                >
                   {o.label}
-                </option>
+                </button>
               ))}
-            </select>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-gray-700">งาน</h2>
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-gray-800"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-xs text-white">2</span>งาน</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">วันที่จัดงาน</label>
@@ -190,18 +195,28 @@ export default function NewBookingForm({ initialDate = "" }: { initialDate?: str
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-gray-700">การชำระเงิน</h2>
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-gray-800"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-xs text-white">3</span>การชำระเงิน</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">สถานะ</label>
-            <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} className={inputCls}>
-              {PAYMENT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+          <div className="sm:col-span-4">
+            <label className="mb-1.5 block text-xs font-medium text-gray-500">สถานะ</label>
+            <div className="grid grid-cols-3 gap-2">
+              {PAYMENT_OPTIONS.map((o) => {
+                const on = paymentStatus === o.value;
+                const color = o.value === "FULLY_PAID" ? "emerald" : o.value === "DEPOSIT_PAID" ? "sky" : "amber";
+                const active = { amber: "border-amber-400 bg-amber-50 text-amber-800", sky: "border-sky-400 bg-sky-50 text-sky-800", emerald: "border-emerald-400 bg-emerald-50 text-emerald-800" }[color];
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setPaymentStatus(o.value)}
+                    className={`rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition ${on ? active : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"}`}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">ยอดรวม (บาท)</label>
@@ -217,11 +232,9 @@ export default function NewBookingForm({ initialDate = "" }: { initialDate?: str
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500">ครบกำหนดจ่ายวันที่</label>
               <DateSelect value={paymentDueDate} onChange={setPaymentDueDate} />
-              <p className="mt-1 text-[11px] text-gray-400">{paymentStatus === "UNPAID" ? "วันที่ลูกค้าต้องโอนมัดจำ" : "วันที่ลูกค้าต้องจ่ายส่วนที่เหลือ"}</p>
             </div>
           )}
         </div>
-        <p className="mt-3 text-[11px] text-gray-400">ลูกค้าโอนแล้วค่อยกด &ldquo;รับเงินแล้ว + ยืนยันงาน&rdquo; ในหน้ารายละเอียดงาน แล้วเลือกพนักงานที่จะไป</p>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -229,7 +242,7 @@ export default function NewBookingForm({ initialDate = "" }: { initialDate?: str
       <button
         type="submit"
         disabled={saving}
-        className="self-start rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-600/20 hover:bg-brand-700 disabled:opacity-50"
+        className="w-full rounded-xl bg-brand-600 px-6 py-3 text-base font-semibold text-white hover:bg-brand-700 disabled:opacity-50 sm:w-auto sm:self-end"
       >
         {saving ? "กำลังบันทึก..." : full ? "บันทึก (วันนี้เต็มแล้ว)" : "บันทึกงาน"}
       </button>
