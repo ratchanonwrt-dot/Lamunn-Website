@@ -26,6 +26,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     note,
     needsBooth,
     specialRequest,
+    paymentDueDate,
   } = body;
 
   const booking = await prisma.cateringBooking.update({
@@ -46,6 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       ...(note !== undefined ? { note: note || null } : {}),
       ...(needsBooth !== undefined ? { needsBooth: Boolean(needsBooth) } : {}),
       ...(specialRequest !== undefined ? { specialRequest: specialRequest || null } : {}),
+      ...(paymentDueDate !== undefined ? { paymentDueDate: paymentDueDate ? new Date(paymentDueDate) : null } : {}),
     },
   });
   if (eventDate !== undefined || eventEndDate !== undefined) {

@@ -53,5 +53,15 @@ export const customerSourceLabel: Record<string, string> = {
   REFERRAL: "คนแนะนำ/บอกต่อ",
   WALK_IN: "เดินเข้ามาเอง",
   GOOGLE: "Google",
+  PHONE: "โทรศัพท์",
+  TIKTOK: "TikTok",
   OTHER: "อื่นๆ",
+};
+
+/** สถานะการชำระของ "งานจัดเลี้ยง" ตามภาษาที่ทีม Catering ใช้ (จอง / มัดจำแล้ว / จ่ายเต็ม)
+ * แยกจาก paymentStatusLabel ที่ออเดอร์รับหน้าร้านใช้ร่วมกัน */
+export const bookingPaymentLabel: Record<string, string> = {
+  UNPAID: "จอง (ยังไม่จ่าย)",
+  DEPOSIT_PAID: "มัดจำแล้ว",
+  FULLY_PAID: "จ่ายเต็มแล้ว",
 };

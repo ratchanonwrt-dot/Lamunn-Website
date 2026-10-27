@@ -486,6 +486,8 @@ enum CustomerSource {
   REFERRAL // คนแนะนำ/บอกต่อ
   WALK_IN
   GOOGLE
+  PHONE // โทรมาโดยตรง
+  TIKTOK
   OTHER
 }
 
@@ -542,6 +544,7 @@ model CateringBooking {
   depositPaidAt DateTime?
   balancePaidAt DateTime?
   paymentStatus CateringPaymentStatus @default(UNPAID)
+  paymentDueDate DateTime? @db.Date // ครบกำหนดลูกค้าต้องจ่าย (มัดจำ/ส่วนที่เหลือ) — ใช้เตือนในปฏิทินงานว่าใครเลยกำหนดแล้วยังไม่จ่าย
 
   status         BookingStatus @default(PENDING)
   note           String?

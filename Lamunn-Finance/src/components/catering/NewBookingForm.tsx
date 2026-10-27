@@ -1,22 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DateSelect from "./DateSelect";
 import TimeSelect from "./TimeSelect";
 
 const SOURCE_OPTIONS = [
   { value: "", label: "ไม่ระบุ" },
+  { value: "LINE", label: "Line" },
   { value: "FACEBOOK", label: "Facebook" },
   { value: "INSTAGRAM", label: "Instagram" },
-  { value: "LINE", label: "Line" },
+  { value: "TIKTOK", label: "TikTok" },
+  { value: "PHONE", label: "โทรศัพท์" },
   { value: "REFERRAL", label: "คนแนะนำ/บอกต่อ" },
   { value: "WALK_IN", label: "เดินเข้ามาเอง" },
   { value: "GOOGLE", label: "Google" },
   { value: "OTHER", label: "อื่นๆ" },
 ];
 
-export default function NewBookingForm() {
+const PAYMENT_OPTIONS = [
+  { value: "UNPAID", label: "จอง (ยังไม่จ่าย)" },
+  { value: "DEPOSIT_PAID", label: "มัดจำแล้ว" },
+  { value: "FULLY_PAID", label: "จ่ายเต็มแล้ว" },
+];
+
+const inputCls = "w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white";
+
+/** ฟอร์มลงงานหลังลูกค้าทักมา — พนักงานกรอกเองทั้งหมดในหน้าเดียว
+ * เลือกวันแล้วบอกทันทีว่าวันนั้นมีงานอยู่แล้วกี่งาน รับเพิ่มได้ไหม (อิงค่า "รับได้สูงสุดต่อวัน" ในหน้าปฏิทิน) */
+export default function NewBookingForm({ initialDate = "" }: { initialDate?: string }) {
   const router = useRouter();
   const [phone, setPhone] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -24,17 +36,40 @@ export default function NewBookingForm() {
   const [foundExisting, setFoundExisting] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
 
-  const [eventDate, setEventDate] = useState("");
+  const [eventDate, setEventDate] = useState(initialDate);
   const [eventEndDate, setEventEndDate] = useState("");
   const [eventStartTime, setEventStartTime] = useState("");
   const [eventEndTime, setEventEndTime] = useState("");
   const [location, setLocation] = useState("");
   const [guestCount, setGuestCount] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("UNPAID");
   const [depositAmount, setDepositAmount] = useState("");
+  const [paymentDueDate, setPaymentDueDate] = useState("");
 
+  const [availability, setAvailability] = useState<{ count: number; capacity: number; names: string[] } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // เช็ควันว่างทุกครั้งที่เปลี่ยนวันจัดงาน
+  useEffect(() => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
+      setAvailability(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/catering/availability?month=${eventDate.slice(0, 7)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        const day = data.days?.[eventDate];
+        setAvailability({ count: day?.count ?? 0, capacity: data.capacity, names: day?.names ?? [] });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [eventDate]);
 
   async function handlePhoneBlur() {
     if (!phone) return;
@@ -70,7 +105,9 @@ export default function NewBookingForm() {
         location: location || undefined,
         guestCount: guestCount || undefined,
         totalAmount,
-        depositAmount: depositAmount || undefined,
+        paymentStatus,
+        depositAmount: paymentStatus === "UNPAID" ? undefined : depositAmount || undefined,
+        paymentDueDate: paymentDueDate || undefined,
       }),
     });
     setSaving(false);
@@ -84,41 +121,30 @@ export default function NewBookingForm() {
     router.refresh();
   }
 
+  const full = availability && availability.count >= availability.capacity;
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div className="rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-gray-700">ข้อมูลลูกค้า</h2>
+        <h2 className="mb-4 text-sm font-semibold text-gray-700">ลูกค้า</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">เบอร์โทร</label>
-            <input
-              required
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              onBlur={handlePhoneBlur}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white"
-            />
+            <label className="mb-1 block text-xs font-medium text-gray-500">ชื่อลูกค้า</label>
+            <input required value={customerName} onChange={(e) => setCustomerName(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">ข้อมูลติดต่อ (เบอร์โทร / LINE ID)</label>
+            <input required value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={handlePhoneBlur} className={inputCls} />
             {lookingUp && <p className="mt-1 text-xs text-gray-400">กำลังค้นหา...</p>}
             {foundExisting && <p className="mt-1 text-xs text-emerald-600">พบลูกค้าเดิม — เติมข้อมูลให้แล้ว</p>}
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">ชื่อลูกค้า</label>
-            <input
-              required
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">ลูกค้ามาจากไหน</label>
-            <select
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white"
-            >
+            <label className="mb-1 block text-xs font-medium text-gray-500">ช่องทางที่ติดต่อมา</label>
+            <select value={source} onChange={(e) => setSource(e.target.value)} className={inputCls}>
               {SOURCE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
               ))}
             </select>
           </div>
@@ -126,16 +152,28 @@ export default function NewBookingForm() {
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-gray-700">รายละเอียดงาน</h2>
+        <h2 className="mb-4 text-sm font-semibold text-gray-700">งาน</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">วันจัดงาน</label>
+            <label className="mb-1 block text-xs font-medium text-gray-500">วันที่จัดงาน</label>
             <DateSelect required value={eventDate} onChange={setEventDate} />
+            {availability && (
+              <p className={`mt-1 rounded-md px-2 py-1 text-xs ${full ? "bg-red-50 text-red-700" : availability.count > 0 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
+                {availability.count === 0
+                  ? `ว่าง — รับได้ ${availability.capacity} งานต่อวัน`
+                  : full
+                    ? `เต็มแล้ว — มี ${availability.count} งาน (${availability.names.join(", ")})`
+                    : `มีแล้ว ${availability.count} งาน (${availability.names.join(", ")}) — รับเพิ่มได้อีก ${availability.capacity - availability.count}`}
+              </p>
+            )}
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">ถึงวันที่ (ถ้าจัดต่อกันหลายวัน)</label>
+            <label className="mb-1 block text-xs font-medium text-gray-500">ถึงวันที่ (ถ้าจัดหลายวัน)</label>
             <DateSelect value={eventEndDate} onChange={setEventEndDate} />
-            <p className="mt-1 text-[11px] text-gray-400">เว้นว่างถ้าจัดวันเดียว — กรอกแล้วจะเปิดให้แจงจำนวนเสิร์ฟ/โน้ตแยกแต่ละวันได้หลังบันทึก</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">จำนวนเสิร์ฟ</label>
+            <input type="number" min="0" value={guestCount} onChange={(e) => setGuestCount(e.target.value)} className={inputCls} />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">เวลาเริ่ม</label>
@@ -145,56 +183,45 @@ export default function NewBookingForm() {
             <label className="mb-1 block text-xs font-medium text-gray-500">เวลาสิ้นสุด</label>
             <TimeSelect value={eventEndTime} onChange={setEventEndTime} />
           </div>
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-gray-500">สถานที่จัดงาน</label>
-            <input
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white"
-            />
-          </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">จำนวนแขก</label>
-            <input
-              type="number"
-              min="0"
-              value={guestCount}
-              onChange={(e) => setGuestCount(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white"
-            />
+            <label className="mb-1 block text-xs font-medium text-gray-500">สถานที่จัดงาน</label>
+            <input value={location} onChange={(e) => setLocation(e.target.value)} className={inputCls} />
           </div>
         </div>
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold text-gray-700">ยอดเงิน</h2>
-        <p className="mb-4 -mt-2 text-xs text-gray-400">กรอกยอดรวมคร่าวๆ ไว้ก่อนได้ — ปรับให้ตรงจากรายการ/เมนูที่ติ๊กเลือกได้อีกทีในหน้ารายละเอียดหลังบันทึก</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <h2 className="mb-4 text-sm font-semibold text-gray-700">การชำระเงิน</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">สถานะ</label>
+            <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} className={inputCls}>
+              {PAYMENT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">ยอดรวม (บาท)</label>
-            <input
-              required
-              type="number"
-              step="0.01"
-              min="0"
-              value={totalAmount}
-              onChange={(e) => setTotalAmount(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white"
-            />
+            <input required type="number" step="0.01" min="0" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} className={inputCls} />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">มัดจำที่ได้รับแล้ว (ถ้ามี)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={depositAmount}
-              onChange={(e) => setDepositAmount(e.target.value)}
-              placeholder="เช่น 50% ของยอดรวม"
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:bg-white"
-            />
-          </div>
+          {paymentStatus === "DEPOSIT_PAID" && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">ยอดมัดจำที่ได้รับ (บาท)</label>
+              <input type="number" step="0.01" min="0" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className={inputCls} />
+            </div>
+          )}
+          {paymentStatus !== "FULLY_PAID" && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">ครบกำหนดจ่ายวันที่</label>
+              <DateSelect value={paymentDueDate} onChange={setPaymentDueDate} />
+              <p className="mt-1 text-[11px] text-gray-400">{paymentStatus === "UNPAID" ? "วันที่ลูกค้าต้องโอนมัดจำ" : "วันที่ลูกค้าต้องจ่ายส่วนที่เหลือ"}</p>
+            </div>
+          )}
         </div>
+        <p className="mt-3 text-[11px] text-gray-400">ลูกค้าโอนแล้วค่อยกด &ldquo;รับเงินแล้ว + ยืนยันงาน&rdquo; ในหน้ารายละเอียดงาน แล้วเลือกพนักงานที่จะไป</p>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -204,7 +231,7 @@ export default function NewBookingForm() {
         disabled={saving}
         className="self-start rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-600/20 hover:bg-brand-700 disabled:opacity-50"
       >
-        {saving ? "กำลังบันทึก..." : "บันทึกการจอง"}
+        {saving ? "กำลังบันทึก..." : full ? "บันทึก (วันนี้เต็มแล้ว)" : "บันทึกงาน"}
       </button>
     </form>
   );
