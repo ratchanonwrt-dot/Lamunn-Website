@@ -77,7 +77,7 @@ export default async function ProfitPage({ searchParams }: { searchParams: { ran
     { label: `ค่าธรรมเนียม TikTok ${formatNum(settings.platformFeePct, 1)}%`, value: t.fee, cls: "bg-amber-200" },
     { label: "ค่าจ้างคนไลฟ์", value: t.pay, cls: "bg-stone-400" },
     { label: "ค่าขนส่ง", value: t.shipping, cls: "bg-sky-300" },
-    { label: "ต้นทุนวัตถุดิบ", value: t.cogs, cls: "bg-violet-300" },
+    { label: "ค่าผลิต", value: t.cogs, cls: "bg-violet-300" },
     { label: t.profit >= 0 ? "กำไรจริง" : "ขาดทุน", value: Math.abs(t.profit), cls: t.profit >= 0 ? "bg-emerald-500" : "bg-red-500" },
   ];
   const maxAbsDay = Math.max(1, ...rep.byDay.map((d) => Math.abs(d.profit)));
@@ -89,7 +89,7 @@ export default async function ProfitPage({ searchParams }: { searchParams: { ran
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">สรุปกำไร — ไลฟ์คุ้มไหม</h1>
           <p className="text-sm text-muted">
-            ยอดขาย − ค่า Ads − ค่าธรรมเนียม TikTok = เงินได้ · เงินได้ − ค่าจ้างคนไลฟ์ − ค่าขนส่ง − ต้นทุนวัตถุดิบ = กำไรจริง
+            ยอดขาย − ค่า Ads − ค่าธรรมเนียม TikTok = เงินได้ · เงินได้ − ค่าจ้างคนไลฟ์ = กำไรก่อนหักค่าส่งและค่าผลิต · − ค่าขนส่ง − ค่าผลิต = กำไรจริง
           </p>
         </div>
         <ProfitSettingsForm adsPct={settings.adsPct} platformFeePct={settings.platformFeePct} shippingCostPct={settings.shippingCostPct} cogsPct={settings.cogsPct} />
@@ -151,15 +151,17 @@ export default async function ProfitPage({ searchParams }: { searchParams: { ran
           </section>
 
           {/* ตัวเลขหลัก */}
-          <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3">
             {[
               { label: "ยอดขาย", value: baht(t.sales) },
               { label: `− ค่า Ads ${formatNum(settings.adsPct, 1)}%`, value: baht(-t.ads), tone: "text-orange-700" },
               { label: `− ค่าธรรมเนียม TikTok ${formatNum(settings.platformFeePct, 1)}%`, value: baht(-t.fee), tone: "text-amber-700" },
               { label: "= เงินได้", value: baht(t.income), strong: true },
               { label: "− ค่าจ้างคนไลฟ์", value: baht(-t.pay), sub: `${pct(t.sales > 0 ? (t.pay / t.sales) * 100 : null)} ของยอดขาย`, tone: "text-stone-600" },
+              // ขั้นกลางที่เจ้าของใช้ดู: หักแค่ค่าการตลาด/แพลตฟอร์ม/คนไลฟ์ ยังไม่หักค่าส่งและค่าผลิต
+              { label: "= กำไรก่อนหักค่าส่งและค่าผลิต", value: baht(t.income - t.pay), strong: true, sub: `${pct(t.sales > 0 ? ((t.income - t.pay) / t.sales) * 100 : null)} ของยอดขาย` },
               { label: "− ค่าขนส่ง", value: baht(-t.shipping), tone: "text-sky-700", sub: costSource(t, t.orders > 0 ? `${formatNum(t.orders)} ออเดอร์ · ${formatBaht(t.shipping / Math.max(1, t.orders))} ฿/ออเดอร์` : null) },
-              { label: "− ต้นทุนวัตถุดิบ", value: baht(-t.cogs), tone: "text-violet-700", sub: costSource(t, t.sets > 0 ? `${formatNum(t.sets)} ชุด` : null) },
+              { label: "− ค่าผลิต (ต้นทุนวัตถุดิบ)", value: baht(-t.cogs), tone: "text-violet-700", sub: costSource(t, t.sets > 0 ? `${formatNum(t.sets)} ชุด` : null) },
               { label: "= กำไรจริง", value: baht(t.profit), strong: true, tone: worth ? "text-emerald-700" : "text-red-700", sub: `${pct(t.margin)} ของยอดขาย` },
             ].map((c) => (
               <div key={c.label} className="rounded-2xl border border-line bg-white p-3 shadow-card">
