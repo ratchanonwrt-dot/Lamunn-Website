@@ -2,6 +2,11 @@ import Link from "next/link";
 import clsx from "clsx";
 import { prisma } from "@lamunn/db-live";
 import { requirePageRole } from "@/lib/requirePageRole";
+import { EDITOR_ROLES } from "@/lib/requireStaff";
+import { getPaySettings } from "@/lib/paySettings";
+import { buildProfitReport, type ProfitReport } from "@/lib/profit";
+import ProfitSettingsForm from "@/components/ProfitSettingsForm";
+import { ProfitSummary, ProfitHourList, ProfitDayList, WorthBadge, baht } from "@/components/ProfitParts";
 import { analyze, toRows, DOW_LABEL, type StreamerStat } from "@/lib/analytics";
 import { parseDateOnly } from "@/lib/validation";
 import { formatBaht, formatHours, formatNum, thaiDaysShort } from "@/lib/format";
@@ -42,7 +47,9 @@ function Meter({ label, value, hint }: { label: string; value: number; hint: str
 }
 
 export default async function AnalysisPage({ searchParams }: { searchParams: { from?: string; to?: string; channel?: string } }) {
-  await requirePageRole();
+  const me = await requirePageRole();
+  // ตัวเลขเงิน (ค่าจ้าง/กำไร) เห็นเฉพาะผู้จัดการขึ้นไป — พนักงานเห็นเฉพาะส่วนวิเคราะห์คนดู/ยอดขาย
+  const canSeeMoney = EDITOR_ROLES.includes(me.role);
 
   const today = todayTH();
   const to = parseDateOnly(searchParams.to) ?? today;
@@ -56,6 +63,35 @@ export default async function AnalysisPage({ searchParams }: { searchParams: { f
       include: { streamer: true, session: { include: { channel: true } } },
     }),
   ]);
+
+  // กำไร: คิดจากกะในช่วงเดียวกัน (ช่องทางเดียวกันถ้าเลือก)
+  let rep: ProfitReport | null = null;
+  let settings: Awaited<ReturnType<typeof getPaySettings>> | null = null;
+  if (canSeeMoney) {
+    const dayCount = Math.min(370, Math.max(1, Math.round((to.getTime() - from.getTime()) / 86400000) + 1));
+    const days = Array.from({ length: dayCount }, (_, i) => new Date(from.getTime() + i * 86400000));
+    const [st, shifts] = await Promise.all([
+      getPaySettings(),
+      prisma.liveShift.findMany({
+        where: { date: { gte: from, lte: to }, ...(channelId ? { channelId } : {}) },
+        include: {
+          streamer: { select: { name: true } },
+          channel: { select: { name: true } },
+          slots: { select: { startTime: true, endTime: true, sales: true } },
+          orderLines: { select: { quantity: true, unitCost: true } },
+        },
+        orderBy: [{ date: "asc" }, { startTime: "asc" }],
+      }),
+    ]);
+    settings = st;
+    rep = buildProfitReport(
+      shifts.map((s) => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime, streamerId: s.streamerId, streamerName: s.streamer.name, channelName: s.channel?.name ?? null, payOverride: s.payOverride, slots: s.slots, orderCount: s.orderCount, shippingCost: s.shippingCost, orderLines: s.orderLines })),
+      st,
+      days,
+    );
+  }
+  const profitByStreamer = new Map((rep?.byStreamer ?? []).map((r) => [r.key, r]));
+  const profitByChannel = new Map((rep?.byChannel ?? []).map((r) => [r.key, r]));
 
   const rows = toRows(slots);
   const a = analyze(rows);
@@ -91,8 +127,10 @@ export default async function AnalysisPage({ searchParams }: { searchParams: { f
     <div>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">วิเคราะห์ยอดไลฟ์</h1>
-          <p className="text-sm text-muted">ช่วงเวลาไหนคนดูเยอะ · คนดูมาเพราะเวลาหรือเพราะคน · ใครไลฟ์เก่ง</p>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">วิเคราะห์ &amp; กำไร</h1>
+          <p className="text-sm text-muted">
+            {canSeeMoney ? "ไลฟ์คุ้มไหม · ช่วงเวลาไหนคนดูเยอะและกำไรดี · ใครไลฟ์เก่งและคุ้ม" : "ช่วงเวลาไหนคนดูเยอะ · คนดูมาเพราะเวลาหรือเพราะคน · ใครไลฟ์เก่ง"}
+          </p>
         </div>
         <p className="text-xs text-stone-400">
           {a.totals.slots} ช่วง · {a.totals.sessions} รอบ · {a.totals.days} วัน · {formatHours(a.totals.hours)}
@@ -100,6 +138,21 @@ export default async function AnalysisPage({ searchParams }: { searchParams: { f
       </div>
 
       <AnalysisFilters from={fromStr} to={toStr} channelId={channelId} channels={channels.map((c) => ({ id: c.id, name: c.name }))} />
+
+      {rep && settings && (
+        <>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-display text-lg font-semibold text-ink">กำไร — ไลฟ์คุ้มไหม</h2>
+            <ProfitSettingsForm adsPct={settings.adsPct} platformFeePct={settings.platformFeePct} shippingCostPct={settings.shippingCostPct} cogsPct={settings.cogsPct} />
+          </div>
+          <p className="mb-3 text-xs text-muted">
+            ยอดขาย − ค่า Ads − ค่าธรรมเนียม TikTok = เงินได้ · เงินได้ − ค่าจ้างคนไลฟ์ = กำไรก่อนหักค่าส่งและค่าผลิต · − ค่าขนส่ง − ค่าผลิต = กำไรจริง
+            {settings.payMode === "HOURLY" && <> · ค่าจ้างเหมาชั่วโมงละ {formatBaht(settings.hourlyRate)} ฿</>}
+          </p>
+          <ProfitSummary rep={rep} settings={settings} />
+          <h2 className="mb-3 font-display text-lg font-semibold text-ink">คนดูและยอดขาย</h2>
+        </>
+      )}
 
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-line bg-white p-10 text-center text-stone-400">
@@ -174,14 +227,22 @@ export default async function AnalysisPage({ searchParams }: { searchParams: { f
             </section>
           </div>
 
+          {rep && rep.byHour.length > 0 && (
+            <section className="mb-6 rounded-2xl border border-line bg-white p-5 shadow-card">
+              <h2 className="font-display text-[15px] font-semibold text-ink">กำไรจริงตามช่วงเวลา — ช่วงไหนคุ้ม</h2>
+              <p className="mb-3 text-xs text-stone-400">รวมทุกวันในช่วงที่เลือก · ยอดขายตามที่กรอกรายชั่วโมง · ค่าจ้าง/ค่าส่ง/ค่าผลิตกระจายตามสัดส่วน</p>
+              <ProfitHourList rep={rep} />
+            </section>
+          )}
+
           {/* คนไลฟ์ */}
           <section className="mb-6 rounded-2xl border border-line bg-white shadow-card p-5">
-            <h2 className="font-display text-[15px] font-semibold text-ink">ใครไลฟ์เก่ง — เทียบกับ &quot;ช่วงเวลาเดียวกัน&quot;</h2>
+            <h2 className="font-display text-[15px] font-semibold text-ink">ใครไลฟ์เก่ง{rep ? " และคุ้ม" : ""} — เทียบกับ &quot;ช่วงเวลาเดียวกัน&quot;</h2>
             <p className="mb-3 text-xs text-stone-400">
               คอลัมน์ &quot;เทียบช่วงเดียวกัน&quot; = คนดูจริงของคนนี้ เทียบกับคนดูที่คนอื่นได้ในชั่วโมงเดียวกัน (ตัดผลของเวลาออก) — บวก = ดึงคนดูได้เกินค่าปกติของช่วงนั้น
             </p>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] text-sm">
+              <table className={clsx("w-full text-sm", rep ? "min-w-[1100px]" : "min-w-[820px]")}>
                 <thead className="bg-paper/70 text-left text-[11px] font-semibold uppercase tracking-wider text-muted">
                   <tr>
                     <th className="px-3 py-2">คนไลฟ์</th>
@@ -194,6 +255,13 @@ export default async function AnalysisPage({ searchParams }: { searchParams: { f
                     <th className="px-3 py-2 text-right">ยอดขายรวม</th>
                     <th className="px-3 py-2 text-right">ขาย/ชม.</th>
                     <th className="px-3 py-2 text-right">ออเดอร์</th>
+                    {rep && (
+                      <>
+                        <th className="px-3 py-2 text-right">ค่าจ้าง</th>
+                        <th className="px-3 py-2 text-right">กำไรจริง</th>
+                        <th className="px-3 py-2"></th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -214,6 +282,21 @@ export default async function AnalysisPage({ searchParams }: { searchParams: { f
                       <td className="px-3 py-2 text-right tabular-nums text-ink">{formatBaht(s.totalSales)}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-ink">{formatBaht(s.salesPerHour)}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-muted">{s.orders ? formatNum(s.orders) : "-"}</td>
+                      {rep &&
+                        (() => {
+                          const p = profitByStreamer.get(s.key);
+                          return p ? (
+                            <>
+                              <td className="px-3 py-2 text-right tabular-nums text-muted">{formatBaht(p.pay)}</td>
+                              <td className={clsx("px-3 py-2 text-right tabular-nums font-semibold", p.profit >= 0 ? "text-emerald-700" : "text-red-700")}>{baht(p.profit)}</td>
+                              <td className="px-3 py-2 text-right">
+                                <WorthBadge profit={p.profit} />
+                              </td>
+                            </>
+                          ) : (
+                            <td colSpan={3} className="px-3 py-2 text-right text-[11px] text-stone-300">ไม่มีกะในตาราง</td>
+                          );
+                        })()}
                     </tr>
                   ))}
                 </tbody>
@@ -272,6 +355,13 @@ export default async function AnalysisPage({ searchParams }: { searchParams: { f
             </section>
           </div>
 
+          {rep && rep.total.shifts > 0 && (
+            <section className="mb-6 rounded-2xl border border-line bg-white p-5 shadow-card">
+              <h2 className="mb-2 font-display text-[15px] font-semibold text-ink">กำไรจริงรายวัน</h2>
+              <ProfitDayList rep={rep} />
+            </section>
+          )}
+
           {/* ช่องทาง */}
           {a.byChannel.length > 1 && (
             <section className="mb-6 rounded-2xl border border-line bg-white shadow-card p-5">
@@ -286,6 +376,7 @@ export default async function AnalysisPage({ searchParams }: { searchParams: { f
                       <th className="px-3 py-2 text-right">สูงสุด</th>
                       <th className="px-3 py-2 text-right">ยอดขายรวม</th>
                       <th className="px-3 py-2 text-right">ขาย/ชม.</th>
+                      {rep && <th className="px-3 py-2 text-right">กำไรจริง</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -297,6 +388,11 @@ export default async function AnalysisPage({ searchParams }: { searchParams: { f
                         <td className="px-3 py-2 text-right tabular-nums text-muted">{c.peakViewers === null ? "-" : formatNum(c.peakViewers)}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-ink">{formatBaht(c.totalSales)}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-ink">{formatBaht(c.salesPerHour)}</td>
+                        {rep &&
+                          (() => {
+                            const p = profitByChannel.get(c.label);
+                            return <td className={clsx("px-3 py-2 text-right tabular-nums font-semibold", !p ? "text-stone-300" : p.profit >= 0 ? "text-emerald-700" : "text-red-700")}>{p ? baht(p.profit) : "–"}</td>;
+                          })()}
                       </tr>
                     ))}
                   </tbody>
