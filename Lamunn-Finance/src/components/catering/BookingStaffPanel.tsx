@@ -8,20 +8,37 @@ interface Assignment {
   staffName: string | null;
   staff: { id: string; name: string } | null;
   otHours?: number | null;
+  travelCost?: number | null;
 }
 
-/** ช่องชั่วโมง OT ของคนนี้ในงานนี้ — ว่าง = ใช้ชั่วโมงจากเวลางาน (ตัวเลขจางในช่อง) แก้แล้วบันทึกตอนออกจากช่อง */
-function HoursInput({ bookingId, a, defaultHours }: { bookingId: string; a: Assignment; defaultHours: number | null }) {
+/** ช่องตัวเลขของคนนี้ในงานนี้ (ชั่วโมง OT / ค่ารถล่วงหน้า) — แก้แล้วบันทึกตอนออกจากช่อง ส่งเฉพาะ field นั้น
+ * ชั่วโมงว่าง = ใช้ชั่วโมงจากเวลางาน (ตัวเลขจางในช่อง) · ค่ารถว่าง = ไม่มีค่ารถ */
+function AssignmentNumberInput({
+  bookingId,
+  a,
+  field,
+  placeholder,
+  title,
+  step,
+}: {
+  bookingId: string;
+  a: Assignment;
+  field: "otHours" | "travelCost";
+  placeholder: string;
+  title: string;
+  step: string;
+}) {
   const router = useRouter();
-  const [val, setVal] = useState(a.otHours != null ? String(a.otHours) : "");
+  const saved = a[field] != null ? String(a[field]) : "";
+  const [val, setVal] = useState(saved);
   const [state, setState] = useState<"idle" | "saving" | "error">("idle");
   async function save() {
-    if (val === (a.otHours != null ? String(a.otHours) : "")) return;
+    if (val === saved) return;
     setState("saving");
     const res = await fetch(`/api/catering/bookings/${bookingId}/staff/${a.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ otHours: val === "" ? null : val }),
+      body: JSON.stringify({ [field]: val === "" ? null : val }),
     });
     setState(res.ok ? "idle" : "error");
     if (res.ok) router.refresh();
@@ -30,10 +47,10 @@ function HoursInput({ bookingId, a, defaultHours }: { bookingId: string; a: Assi
     <input
       type="number"
       min={0}
-      step="0.5"
+      step={step}
       value={val}
-      placeholder={defaultHours != null ? String(defaultHours) : "ชม."}
-      title="ชั่วโมง OT ของงานนี้ (ว่าง = คิดจากเวลางาน)"
+      placeholder={placeholder}
+      title={title}
       onChange={(e) => setVal(e.target.value)}
       onBlur={save}
       className={`w-14 rounded-md border bg-white px-1.5 py-0.5 text-right text-xs outline-none focus:border-brand-400 ${state === "error" ? "border-red-400" : state === "saving" ? "border-amber-300" : "border-gray-200"}`}
@@ -95,7 +112,7 @@ export default function BookingStaffPanel({
         พนักงานที่ส่งไปงานนี้ ({assignments.length}/{required} คน)
       </h2>
       <p className="mb-3 text-xs text-gray-500">
-        ช่องตัวเลขข้างชื่อ = ชั่วโมง OT ของงานนี้ (ว่างไว้ = คิดจากเวลางาน{defaultHours != null ? ` ${defaultHours} ชม.` : ""}) · กฎ: ทุก 75 เสิร์ฟต้องมีพนักงาน 1 คน{servings ? ` — งานนี้ ${servings} เสิร์ฟ ต้องมีอย่างน้อย ${required} คน` : " — ยังไม่ได้กรอกจำนวนเสิร์ฟ (คิดขั้นต่ำ 1 คน)"}
+        ข้างชื่อ: ชั่วโมง OT ของงานนี้ (ว่างไว้ = คิดจากเวลางาน{defaultHours != null ? ` ${defaultHours} ชม.` : ""}) และค่ารถที่ให้ล่วงหน้า (บาท) · กฎ: ทุก 75 เสิร์ฟต้องมีพนักงาน 1 คน{servings ? ` — งานนี้ ${servings} เสิร์ฟ ต้องมีอย่างน้อย ${required} คน` : " — ยังไม่ได้กรอกจำนวนเสิร์ฟ (คิดขั้นต่ำ 1 คน)"}
       </p>
       {assignments.length < required && (
         <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">คนยังไม่พอ — ต้องเพิ่มอีก {required - assignments.length} คน</p>
@@ -111,8 +128,10 @@ export default function BookingStaffPanel({
               <span className="font-medium">{n}</span>
               {off && <span className="rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">วันหยุด {off}</span>}
               {clash && <span className="text-[11px]">มีงาน {clash} วันเดียวกัน</span>}
-              <HoursInput bookingId={bookingId} a={a} defaultHours={defaultHours} />
+              <AssignmentNumberInput bookingId={bookingId} a={a} field="otHours" step="0.5" placeholder={defaultHours != null ? String(defaultHours) : "ชม."} title="ชั่วโมง OT ของงานนี้ (ว่าง = คิดจากเวลางาน)" />
               <span className="text-[10px] opacity-60">ชม.</span>
+              <AssignmentNumberInput bookingId={bookingId} a={a} field="travelCost" step="1" placeholder="0" title="ค่ารถที่ให้ล่วงหน้าสำหรับงานนี้ (บาท)" />
+              <span className="text-[10px] opacity-60">฿ ค่ารถ</span>
               <button onClick={() => handleRemove(a.id)} className="text-xs text-gray-400 hover:text-red-500" aria-label={`เอา ${n} ออก`}>
                 ✕
               </button>

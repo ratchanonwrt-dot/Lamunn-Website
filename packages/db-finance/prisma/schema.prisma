@@ -630,10 +630,11 @@ model CateringBookingStaff {
   staffId String?
   staff   StaffUser? @relation(fields: [staffId], references: [id], onDelete: SetNull)
 
-  staffName String? // ชื่อพนักงานแบบข้อความอิสระ — ใช้แทน staffId ในการกรอกแบบง่าย
-  otHours   Float? // ชั่วโมง OT ของการไปงานครั้งนี้ — ว่าง = คิดจากเวลาเริ่ม-จบของงาน × จำนวนวัน (lib/cateringStaffPay.ts)
-  roleLabel String? // เช่น "หัวหน้างาน", "ทีมงาน", "คนขับ" — ไม่บังคับ
-  createdAt DateTime @default(now())
+  staffName  String? // ชื่อพนักงานแบบข้อความอิสระ — ใช้แทน staffId ในการกรอกแบบง่าย
+  otHours    Float? // ชั่วโมง OT ของการไปงานครั้งนี้ — ว่าง = คิดจากเวลาเริ่ม-จบของงาน × จำนวนวัน (lib/cateringStaffPay.ts)
+  travelCost Float? // ค่ารถที่ให้ล่วงหน้าสำหรับการไปงานครั้งนี้ (บาท) — สรุปเป็นรอบ 1–15 / 16–สิ้นเดือน
+  roleLabel  String? // เช่น "หัวหน้างาน", "ทีมงาน", "คนขับ" — ไม่บังคับ
+  createdAt  DateTime @default(now())
 
   @@map("catering_booking_staff")
 }

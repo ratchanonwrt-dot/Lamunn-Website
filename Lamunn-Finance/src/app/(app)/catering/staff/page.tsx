@@ -38,7 +38,12 @@ export default async function CateringStaffPage({ searchParams }: { searchParams
 
   return (
     <div className="mx-auto max-w-5xl">
-      <h1 className="mb-1 text-xl font-bold text-gray-900">พนักงาน Catering</h1>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-bold text-gray-900">พนักงาน Catering</h1>
+        <Link href="/catering/staff/allowance" className="text-sm text-brand-700 hover:underline">
+          ค่ารถ + ค่าข้าว รายรอบ →
+        </Link>
+      </div>
       <p className="mb-5 text-sm text-gray-500">ตั้งวันหยุดและค่า OT ของแต่ละคน ระบบคิด OT ให้อัตโนมัติจากงานที่ถูกเลือกไป</p>
 
       <section className="mb-8">
