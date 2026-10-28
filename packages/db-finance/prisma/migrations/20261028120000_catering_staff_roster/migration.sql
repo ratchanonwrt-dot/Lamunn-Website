@@ -1,4 +1,4 @@
--- รายชื่อพนักงาน Catering + ชั่วโมง OT ต่อการไปงาน (สำหรับคิด OT สิ้นเดือน)
+-- รายชื่อพนักงาน Catering + ชั่วโมง OT และค่ารถต่อการไปงาน (สำหรับคิด OT สิ้นเดือน และค่ารถ/ค่าข้าวรายรอบ)
 -- เพิ่มอย่างเดียว ไม่แตะข้อมูลเดิม — โค้ดที่รันอยู่ไม่รู้จักตาราง/คอลัมน์ใหม่ก็ทำงานต่อได้ปกติ
 CREATE TABLE IF NOT EXISTS "catering_staff" (
     "id" TEXT NOT NULL,
@@ -15,3 +15,4 @@ CREATE TABLE IF NOT EXISTS "catering_staff" (
 CREATE UNIQUE INDEX IF NOT EXISTS "catering_staff_name_key" ON "catering_staff"("name");
 
 ALTER TABLE "catering_booking_staff" ADD COLUMN IF NOT EXISTS "otHours" DOUBLE PRECISION;
+ALTER TABLE "catering_booking_staff" ADD COLUMN IF NOT EXISTS "travelCost" DOUBLE PRECISION;
