@@ -5,6 +5,7 @@ import { checkShiftConflicts } from "@/lib/shiftValidation";
 import { attachShiftToSession, syncSessionTimes } from "@/lib/shiftSession";
 import { optionalText } from "@/lib/validation";
 import { pickUnusedColor, toRange, rangesOverlap } from "@/lib/schedule";
+import { phoneKey } from "@/lib/streamerMatch";
 
 /**
  * จองทับกันได้: เมื่อแอดมินเลือกผู้ไลฟ์ของช่วงนี้แล้ว คำขออื่นที่รออยู่และทับเวลากับกะที่อนุมัติ (วันเดียวกัน ช่องเดียวกัน)
@@ -82,15 +83,28 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // ---- คำขอปกติ: เลือกคนไลฟ์ (ที่ส่งมา / สร้างใหม่จากข้อมูลคำขอ) แล้วสร้างกะ ----
   let streamerId: string | null = typeof body.streamerId === "string" && body.streamerId ? body.streamerId : null;
   if (!streamerId && body.createStreamer) {
-    const used = (await prisma.streamer.findMany({ where: { isActive: true }, select: { color: true } })).map((s) => s.color);
-    const created = await prisma.streamer.create({
-      data: { name: request.requesterName, phone: request.requesterPhone, lineId: request.requesterLine, color: pickUnusedColor(used), note: "สร้างจากคำขอจองบนเว็บ" },
-    });
-    streamerId = created.id;
+    const active = await prisma.streamer.findMany({ where: { isActive: true }, select: { id: true, color: true, phone: true } });
+    // กันคนไลฟ์ซ้ำ: เบอร์นี้มีคนไลฟ์อยู่แล้ว → ใช้คนเดิม ไม่สร้างใหม่ (เดิมกดสร้างใหม่ได้ทำให้คนเดียวมี 2 ชื่อ)
+    const key = phoneKey(request.requesterPhone);
+    const existing = key ? active.find((s) => phoneKey(s.phone) === key) : undefined;
+    if (existing) streamerId = existing.id;
+    else {
+      const created = await prisma.streamer.create({
+        data: { name: request.requesterName, phone: request.requesterPhone, lineId: request.requesterLine, color: pickUnusedColor(active.map((s) => s.color)), note: "สร้างจากคำขอจองบนเว็บ" },
+      });
+      streamerId = created.id;
+    }
   }
   if (!streamerId) return NextResponse.json({ error: "กรุณาเลือกคนไลฟ์ หรือเลือกสร้างคนไลฟ์ใหม่จากคำขอ" }, { status: 400 });
   const streamer = await prisma.streamer.findUnique({ where: { id: streamerId } });
   if (!streamer) return NextResponse.json({ error: "ไม่พบคนไลฟ์" }, { status: 400 });
+  // คนไลฟ์เก่าที่ยังไม่มีเบอร์/LINE ในหลังบ้าน → เติมจากคำขอ ครั้งหน้าจะจับคู่ได้เอง และเว็บจองรู้ว่ากะไหนเป็นของเขา
+  if ((!streamer.phone && request.requesterPhone) || (!streamer.lineId && request.requesterLine)) {
+    await prisma.streamer.update({
+      where: { id: streamer.id },
+      data: { ...(!streamer.phone ? { phone: request.requesterPhone } : {}), ...(!streamer.lineId && request.requesterLine ? { lineId: request.requesterLine } : {}) },
+    });
+  }
 
   const shiftData = { date: request.date, streamerId, channelId: request.channelId, startTime: request.startTime, endTime: request.endTime, note: note ?? request.note };
   const conflict = await checkShiftConflicts(shiftData, null);

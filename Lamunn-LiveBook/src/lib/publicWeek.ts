@@ -2,6 +2,7 @@ import { prisma } from "@lamunn/db-live";
 import { addDays, freeRanges, isoDate, toRange, weekStartOf } from "@/lib/schedule";
 import { thaiDaysShort } from "@/lib/format";
 import { gapRuleApplies, padRanges, startsWithin, EDIT_LEAD_HOURS } from "@/lib/bookingRules";
+import { myStreamerIds } from "@/lib/phone";
 
 const thaiMonthsShort = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
@@ -45,16 +46,27 @@ export async function loadPublicWeek(weekParam: string | undefined, channelParam
   const channels = await prisma.channel.findMany({ where: { isActive: true, publicBooking: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } });
   const channelId = channelParam && channels.some((c) => c.id === channelParam) ? channelParam : (channels[0]?.id ?? null);
 
-  const [shifts, requests, blocks_, mine] = await Promise.all([
-    prisma.liveShift.findMany({ where: { date: { gte: weekStart, lte: weekEnd }, channelId }, select: { id: true, date: true, startTime: true, endTime: true, slots: { select: { id: true } } } }),
+  const [shifts, requests, blocks_, mine, myStreamers] = await Promise.all([
+    prisma.liveShift.findMany({ where: { date: { gte: weekStart, lte: weekEnd }, channelId }, select: { id: true, date: true, streamerId: true, startTime: true, endTime: true, slots: { select: { id: true } } } }),
     // คำขอที่รออนุมัติ: ส่งเฉพาะของเบอร์ที่จำไว้ — คนนอกเห็นแค่ "ว่าง" จนกว่าแอดมินจะอนุมัติ (แอดมินเลือกคนที่ดีที่สุดเอง)
     phone
       ? prisma.slotRequest.findMany({ where: { date: { gte: weekStart, lte: weekEnd }, channelId, status: "PENDING", requesterPhone: phone }, select: { id: true, date: true, startTime: true, endTime: true } })
       : Promise.resolve([]),
     prisma.scheduleBlock.findMany({ where: { date: { gte: weekStart, lte: weekEnd }, OR: [{ channelId }, { channelId: null }] }, select: { date: true, startTime: true, endTime: true, label: true } }),
+    // คำขอที่อนุมัติแล้วหาจากวันที่ของ "กะ" ไม่ใช่วันที่ในคำขอ — แอดมินย้ายกะไปวันอื่นได้ คำขอยังผูกกะเดิมอยู่
     phone
-      ? prisma.slotRequest.findMany({ where: { requesterPhone: phone, date: { gte: weekStart, lte: weekEnd }, status: { in: ["PENDING", "APPROVED"] } }, select: { id: true, status: true, shiftId: true } })
+      ? prisma.slotRequest.findMany({
+          where: {
+            requesterPhone: phone,
+            OR: [
+              { status: "PENDING", date: { gte: weekStart, lte: weekEnd } },
+              { status: "APPROVED", shift: { is: { date: { gte: weekStart, lte: weekEnd } } } },
+            ],
+          },
+          select: { id: true, status: true, shiftId: true },
+        })
       : Promise.resolve([]),
+    phone ? myStreamerIds(phone) : Promise.resolve(new Set<string>()),
   ]);
   const myByShift = new Map(mine.filter((r) => r.status === "APPROVED" && r.shiftId).map((r) => [r.shiftId!, r.id]));
   const myPending = new Set(mine.filter((r) => r.status === "PENDING").map((r) => r.id));
@@ -69,7 +81,13 @@ export async function loadPublicWeek(weekParam: string | undefined, channelParam
       const r = toRange(s.startTime, s.endTime);
       if (!r) continue;
       const reqId = myByShift.get(s.id);
-      blocks.push({ startTime: s.startTime, endTime: s.endTime, s: r.s, e: r.e, status: "booked", ...(reqId ? { mine: { requestId: reqId, status: "APPROVED", editable: !isPast && !startsWithin(iso, s.startTime, EDIT_LEAD_HOURS) && s.slots.length === 0 } } : {}) });
+      // กะที่แอดมินลงให้เอง (ไม่มีคำขอผูก) ก็เป็น "ของฉัน" ถ้าเป็นคนไลฟ์ของเบอร์นี้ — แต่แก้เองไม่ได้ เพราะไม่มีคำขอให้แก้
+      const mine = reqId
+        ? { requestId: reqId, status: "APPROVED" as const, editable: !isPast && !startsWithin(iso, s.startTime, EDIT_LEAD_HOURS) && s.slots.length === 0 }
+        : myStreamers.has(s.streamerId)
+          ? { requestId: "", status: "APPROVED" as const, editable: false }
+          : null;
+      blocks.push({ startTime: s.startTime, endTime: s.endTime, s: r.s, e: r.e, status: "booked", ...(mine ? { mine } : {}) });
     }
     for (const q of requests) {
       if (isoDate(q.date) !== iso) continue;
