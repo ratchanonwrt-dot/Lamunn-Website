@@ -3,7 +3,8 @@
   "git": {
     "deploymentEnabled": {
       "acc/*": false,
-      "fin/*": false
+      "fin/*": false,
+      "cat/*": false
     }
   },
   "crons": [

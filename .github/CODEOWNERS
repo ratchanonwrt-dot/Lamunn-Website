@@ -1,5 +1,6 @@
 # เฉพาะส่วนที่เจ้าของสงวนไว้ (ฝั่งการเงิน + CI) มีเจ้าของ — ที่เหลือทีมบัญชี merge ได้เองเมื่อ CI ผ่าน
-# รายการต้องตรงกับ PROTECTED ใน .github/workflows/accounting-pr-check.yml และตาราง "ส่วนที่ห้ามแตะ" ใน AGENTS.md
+# รายการต้องตรงกับ OWNER_RESERVED ใน .github/scripts/check_scope.py และตาราง "ส่วนที่ห้ามแตะ" ใน AGENTS.md
+# (ทีม Catering ถูกจำกัดแบบ allowlist ใน check_scope.py อีกชั้น — ไฟล์นอกระบบ catering merge เองไม่ได้)
 .github/                                              @ratchanonwrt-dot
 Lamunn-Finance/src/app/(app)/company-status/          @ratchanonwrt-dot
 Lamunn-Finance/src/app/(app)/reports/                 @ratchanonwrt-dot
