@@ -29,7 +29,10 @@ interface RequestRow {
   reviewNote: string | null;
   reviewedBy: string | null;
   createdAt: string;
+  match: { streamerId: string; reason: "history" | "phone" | "line" | "name" } | null;
 }
+
+const MATCH_LABEL = { history: "เคยไลฟ์ด้วยเบอร์นี้", phone: "เบอร์ตรงกัน", line: "LINE ตรงกัน", name: "ชื่อตรงกัน — ตรวจสอบก่อนอนุมัติ" } as const;
 
 interface StreamerOpt {
   id: string;
@@ -38,7 +41,6 @@ interface StreamerOpt {
   lineId: string | null;
 }
 
-const digits = (s: string | null | undefined) => (s ?? "").replace(/[^\d]/g, "");
 const inputCls = "rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none transition focus:border-ink focus:ring-2 focus:ring-ink/10";
 
 /** คำขอที่รออนุมัติอื่น ๆ ที่ทับเวลากัน (วันเดียวกัน ช่องเดียวกัน) — แอดมินต้องเลือกคนใดคนหนึ่ง */
@@ -55,8 +57,8 @@ function competitorsOf(r: RequestRow, all: RequestRow[]): RequestRow[] {
 
 function RequestCard({ r, streamers, competitors, onChanged }: { r: RequestRow; streamers: StreamerOpt[]; competitors: RequestRow[]; onChanged: () => void }) {
   const canEdit = useCanEdit();
-  // จับคู่คนไลฟ์จากเบอร์โทร (เทียบเฉพาะตัวเลข) หรือ LINE ID
-  const matched = streamers.find((s) => (digits(s.phone) && digits(s.phone) === digits(r.requesterPhone)) || (s.lineId && r.requesterLine && s.lineId.toLowerCase() === r.requesterLine.toLowerCase()));
+  // คนไลฟ์ที่มีอยู่แล้ว — เซิร์ฟเวอร์จับคู่ให้ (ประวัติการอนุมัติของเบอร์นี้ > เบอร์ > LINE > ชื่อ) ดู lib/streamerMatch.ts
+  const matched = r.match ? streamers.find((s) => s.id === r.match!.streamerId) : undefined;
   const [mode, setMode] = useState<"pick" | "create">(matched ? "pick" : "create");
   const [streamerId, setStreamerId] = useState(matched?.id ?? "");
   const [note, setNote] = useState("");
@@ -136,7 +138,12 @@ function RequestCard({ r, streamers, competitors, onChanged }: { r: RequestRow; 
           <div className="flex flex-wrap items-end gap-3">
             <div className={clsx(r.replacesShiftId && "hidden")}>
               <label className="mb-1 block text-xs font-medium text-muted">
-                ผูกกับคนไลฟ์{matched && <span className="ml-1 text-emerald-600">(เจอจากเบอร์/LINE: {matched.name})</span>}
+                ผูกกับคนไลฟ์
+                {matched && r.match && (
+                  <span className={clsx("ml-1", r.match.reason === "name" ? "text-amber-700" : "text-emerald-600")}>
+                    (คนไลฟ์เดิม: {matched.name} · {MATCH_LABEL[r.match.reason]})
+                  </span>
+                )}
               </label>
               <div className="flex items-center gap-2">
                 <select

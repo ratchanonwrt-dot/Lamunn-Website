@@ -1,6 +1,7 @@
 import { prisma } from "@lamunn/db-live";
 import { requirePageRole } from "@/lib/requirePageRole";
 import RequestsManager from "@/components/RequestsManager";
+import { matchStreamer, phoneKey } from "@/lib/streamerMatch";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: { s
   await requirePageRole();
   const status = (["PENDING", "APPROVED", "REJECTED", "CANCELLED", "ALL"].includes(searchParams.status ?? "") ? searchParams.status : "PENDING") as "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED" | "ALL";
 
-  const [requests, streamers, counts] = await Promise.all([
+  const [requests, streamers, counts, approvedLinks] = await Promise.all([
     prisma.slotRequest.findMany({
       where: status === "ALL" ? {} : { status },
       include: { channel: true, streamer: true, reviewedByStaff: { select: { name: true } } },
@@ -17,8 +18,12 @@ export default async function RequestsPage({ searchParams }: { searchParams: { s
     }),
     prisma.streamer.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true, phone: true, lineId: true } }),
     prisma.slotRequest.groupBy({ by: ["status"], _count: { _all: true } }),
+    // เบอร์ไหนเคยถูกอนุมัติแล้วผูกกับคนไลฟ์คนไหน — ใช้จับคู่คนไลฟ์เก่าที่ไม่มีเบอร์ในหลังบ้าน (ล่าสุดชนะ)
+    prisma.slotRequest.findMany({ where: { status: "APPROVED", streamerId: { not: null } }, orderBy: { reviewedAt: "asc" }, select: { requesterPhone: true, streamerId: true } }),
   ]);
   const countOf = (s: string) => counts.find((c) => c.status === s)?._count._all ?? 0;
+  const history = new Map<string, string>();
+  for (const a of approvedLinks) if (a.streamerId) history.set(phoneKey(a.requesterPhone), a.streamerId);
 
   return (
     <div>
@@ -49,6 +54,10 @@ export default async function RequestsPage({ searchParams }: { searchParams: { s
           reviewNote: r.reviewNote,
           reviewedBy: r.reviewedByStaff?.name ?? null,
           createdAt: r.createdAt.toISOString(),
+          match: (() => {
+            const m = r.status === "PENDING" ? matchStreamer(r, streamers, history) : null;
+            return m ? { streamerId: m.streamer.id, reason: m.reason } : null;
+          })(),
         }))}
       />
     </div>
