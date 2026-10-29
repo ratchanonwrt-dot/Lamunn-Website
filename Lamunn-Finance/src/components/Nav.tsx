@@ -40,6 +40,7 @@ import {
   Handshake,
   Banknote,
   FileText,
+  Calculator,
 } from "lucide-react";
 import type { PermissionMap, PermissionSection } from "@/lib/permissions";
 
@@ -128,6 +129,7 @@ const financialStatementLinks: NavLink[] = [
   { href: "/accounting/trial-balance", label: "งบทดลอง", icon: Scale, color: "bg-teal-100 text-teal-600", section: "ACCOUNTING" },
   { href: "/accounting/income-statement", label: "งบกำไรขาดทุน", icon: BarChart3, color: "bg-green-100 text-green-600", section: "ACCOUNTING" },
   { href: "/accounting/balance-sheet", label: "งบแสดงฐานะการเงิน", icon: FileSpreadsheet, color: "bg-sky-100 text-sky-600", section: "ACCOUNTING" },
+  { href: "/accounting/projection", label: "ประมาณการ", icon: Calculator, color: "bg-indigo-100 text-indigo-600", section: "ACCOUNTING" },
   { href: "/accounting/document-cover", label: "ปกเอกสาร", icon: FileText, color: "bg-amber-100 text-amber-700", section: "ACCOUNTING" },
 ];
 

@@ -851,6 +851,35 @@ model AccPeriod {
   @@map("acc_periods")
 }
 
+// ตัวเลขประมาณการแยกจากสมุดรายวันโดยตั้งใจ — การแก้ประมาณการต้องไม่ทำให้ยอดบัญชีจริงเปลี่ยน
+model AccFinancialProjection {
+  id               String   @id @default(cuid())
+  year             Int
+  month            Int
+  estimatedRevenue Decimal  @default(0) @db.Decimal(15, 2)
+  estimatedExpense Decimal  @default(0) @db.Decimal(15, 2)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([year, month])
+  @@index([year])
+  @@map("acc_financial_projections")
+}
+
+// ขาดทุนทางภาษีต้องให้ผู้ใช้ยืนยันเอง เพราะอาจต่างจากขาดทุนตามบัญชีและมีการใช้สิทธิข้ามปี
+model AccTaxLossCarryforward {
+  id         String   @id @default(cuid())
+  reportYear Int
+  lossYear   Int
+  amount     Decimal  @default(0) @db.Decimal(15, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([reportYear, lossYear])
+  @@index([reportYear])
+  @@map("acc_tax_loss_carryforwards")
+}
+
 enum AccEntryStatus {
   DRAFT // ร่าง — ยังไม่เข้างบ (ใบที่ระบบสร้างอัตโนมัติเริ่มที่สถานะนี้เสมอ)
   POSTED // ผ่านรายการแล้ว — เข้างบทดลอง/งบการเงิน
