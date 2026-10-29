@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Printer } from "lucide-react";
 
 /** กรอบมาตรฐานของงบการเงินทุกใบ — หัวงบ (ชื่อบริษัท / ชื่องบ / งวด) + ปุ่มพิมพ์
@@ -8,11 +9,13 @@ export default function StatementShell({
   companyName,
   title,
   subtitle,
+  printHref,
   children,
 }: {
   companyName: string;
   title: string;
   subtitle: string;
+  printHref?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -23,13 +26,23 @@ export default function StatementShell({
           <p className="text-sm font-semibold text-gray-700">{title}</p>
           <p className="text-xs text-gray-500">{subtitle}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 print:hidden"
-        >
-          <Printer size={14} /> พิมพ์
-        </button>
+        {printHref ? (
+          <Link
+            href={printHref}
+            target="_blank"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 print:hidden"
+          >
+            <Printer size={14} /> พิมพ์ / บันทึก PDF
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 print:hidden"
+          >
+            <Printer size={14} /> พิมพ์
+          </button>
+        )}
       </div>
       <div className="overflow-x-auto px-5 py-4">{children}</div>
     </div>
