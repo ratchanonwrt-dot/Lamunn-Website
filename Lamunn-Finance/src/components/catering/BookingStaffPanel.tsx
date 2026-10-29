@@ -69,6 +69,7 @@ export default function BookingStaffPanel({
   required = 1,
   offNames = {},
   defaultHours = null,
+  offDefaultHours = {},
 }: {
   bookingId: string;
   assignments: Assignment[];
@@ -77,7 +78,8 @@ export default function BookingStaffPanel({
   servings?: number | null;
   required?: number; // คนขั้นต่ำตามกฎ 75 เสิร์ฟ/คน (lib/cateringCalendar.ts)
   offNames?: Record<string, string>; // ชื่อ (ตัวเล็ก) → วันหยุดที่ตรงกับงานนี้ เช่น "ส." — ไปได้แต่คิด OT อัตราวันหยุด
-  defaultHours?: number | null; // ชั่วโมง OT ตั้งต้นจากเวลางาน × จำนวนวัน
+  defaultHours?: number | null; // ชั่วโมง OT ตั้งต้นจากเวลางาน (เฉพาะส่วนนอก 10:00–19:00) × จำนวนวัน
+  offDefaultHours?: Record<string, number | null>; // ชื่อ (ตัวเล็ก) → OT ตั้งต้นของคนที่งานตรงวันหยุด (นับทั้งงาน)
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -112,7 +114,7 @@ export default function BookingStaffPanel({
         พนักงานที่ส่งไปงานนี้ ({assignments.length}/{required} คน)
       </h2>
       <p className="mb-3 text-xs text-gray-500">
-        ข้างชื่อ: ชั่วโมง OT ของงานนี้ (ว่างไว้ = คิดจากเวลางาน{defaultHours != null ? ` ${defaultHours} ชม.` : ""}) และค่ารถที่ให้ล่วงหน้า (บาท) · กฎ: ทุก 75 เสิร์ฟต้องมีพนักงาน 1 คน{servings ? ` — งานนี้ ${servings} เสิร์ฟ ต้องมีอย่างน้อย ${required} คน` : " — ยังไม่ได้กรอกจำนวนเสิร์ฟ (คิดขั้นต่ำ 1 คน)"}
+        ข้างชื่อ: ชั่วโมง OT ของงานนี้ (ว่างไว้ = คิดจากเวลางาน เฉพาะช่วงก่อน 10:00 และหลัง 19:00{defaultHours != null ? ` = ${defaultHours} ชม.` : ""} · วันหยุดของคนนั้นนับทั้งงาน) และค่ารถที่ให้ล่วงหน้า (บาท) · กฎ: ทุก 75 เสิร์ฟต้องมีพนักงาน 1 คน{servings ? ` — งานนี้ ${servings} เสิร์ฟ ต้องมีอย่างน้อย ${required} คน` : " — ยังไม่ได้กรอกจำนวนเสิร์ฟ (คิดขั้นต่ำ 1 คน)"}
       </p>
       {assignments.length < required && (
         <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">คนยังไม่พอ — ต้องเพิ่มอีก {required - assignments.length} คน</p>
@@ -123,12 +125,13 @@ export default function BookingStaffPanel({
           const n = a.staffName ?? a.staff?.name ?? "";
           const clash = busyNames[n.trim().toLowerCase()];
           const off = offNames[n.trim().toLowerCase()];
+          const myDefault = off ? offDefaultHours[n.trim().toLowerCase()] ?? defaultHours : defaultHours;
           return (
             <span key={a.id} className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm ${clash ? "bg-red-50 text-red-700" : "bg-brand-50 text-brand-800"}`}>
               <span className="font-medium">{n}</span>
               {off && <span className="rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">วันหยุด {off}</span>}
               {clash && <span className="text-[11px]">มีงาน {clash} วันเดียวกัน</span>}
-              <AssignmentNumberInput bookingId={bookingId} a={a} field="otHours" step="0.5" placeholder={defaultHours != null ? String(defaultHours) : "ชม."} title="ชั่วโมง OT ของงานนี้ (ว่าง = คิดจากเวลางาน)" />
+              <AssignmentNumberInput bookingId={bookingId} a={a} field="otHours" step="0.5" placeholder={myDefault != null ? String(myDefault) : "ชม."} title="ชั่วโมง OT ของงานนี้ (ว่าง = คิดจากเวลางาน เฉพาะก่อน 10:00 / หลัง 19:00)" />
               <span className="text-[10px] opacity-60">ชม.</span>
               <AssignmentNumberInput bookingId={bookingId} a={a} field="travelCost" step="1" placeholder="0" title="ค่ารถที่ให้ล่วงหน้าสำหรับงานนี้ (บาท)" />
               <span className="text-[10px] opacity-60">฿ ค่ารถ</span>

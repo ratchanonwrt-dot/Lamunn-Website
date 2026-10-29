@@ -165,7 +165,7 @@ export default async function CateringAllowancePage({ searchParams }: { searchPa
         {rows.length === 0 && <p className="rounded-xl bg-white p-6 text-center text-sm text-gray-400">ยังไม่มีพนักงานไปงานในรอบ {label}</p>}
       </div>
       <p className="mt-3 text-[11px] text-gray-400">
-        วันที่สีเหลือง = ได้ค่าข้าว · ค่ารถนับครั้งเดียวที่วันแรกของงาน (งานหลายวันที่คร่อมรอบไม่นับซ้ำ) · ชั่วโมงต่อวันใช้ชุดเดียวกับ OT · ไม่นับงานที่ยกเลิก
+        วันที่สีเหลือง = ได้ค่าข้าว · ค่ารถนับครั้งเดียวที่วันแรกของงาน (งานหลายวันที่คร่อมรอบไม่นับซ้ำ) · ค่าข้าวดูชั่วโมงทำงานทั้งวัน (ไม่ใช่เฉพาะ OT) · ไม่นับงานที่ยกเลิก
       </p>
     </div>
   );

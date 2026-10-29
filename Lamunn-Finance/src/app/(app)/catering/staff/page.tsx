@@ -44,7 +44,7 @@ export default async function CateringStaffPage({ searchParams }: { searchParams
           ค่ารถ + ค่าข้าว รายรอบ →
         </Link>
       </div>
-      <p className="mb-5 text-sm text-gray-500">ตั้งวันหยุดและค่า OT ของแต่ละคน ระบบคิด OT ให้อัตโนมัติจากงานที่ถูกเลือกไป</p>
+      <p className="mb-5 text-sm text-gray-500">ตั้งวันหยุดและค่า OT ของแต่ละคน ระบบคิด OT ให้อัตโนมัติจากงานที่ถูกเลือกไป (นับเฉพาะช่วงก่อน 10:00 และหลัง 19:00)</p>
 
       <section className="mb-8">
         <h2 className="mb-2 text-sm font-bold text-gray-800">รายชื่อ ({roster.filter((r) => r.isActive).length} คน)</h2>
@@ -141,7 +141,7 @@ export default async function CateringStaffPage({ searchParams }: { searchParams
           {pay.length === 0 && <p className="rounded-xl bg-white p-6 text-center text-sm text-gray-400">ยังไม่มีพนักงานไปงานใน{label}</p>}
         </div>
         <p className="mt-3 text-[11px] text-gray-400">
-          ชั่วโมงคิดจากเวลาเริ่ม-จบของงาน × จำนวนวัน (แก้เป็นรายคนได้ที่หน้างาน) · วันที่สีชมพู = ตรงกับวันหยุดของคนนั้น ใช้อัตราวันหยุด · ไม่นับงานที่ยกเลิก
+          OT นับเฉพาะช่วงก่อน 10:00 และหลัง 19:00 ของเวลางาน × จำนวนวัน (แก้เป็นรายคนได้ที่หน้างาน) · วันที่สีชมพู = ตรงกับวันหยุดของคนนั้น นับทั้งงานเป็น OT อัตราวันหยุด · ไม่นับงานที่ยกเลิก
         </p>
       </section>
     </div>
