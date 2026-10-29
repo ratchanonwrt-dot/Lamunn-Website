@@ -192,14 +192,37 @@ function section(balances: AccountBalance[], groupCode: string, useMovement: boo
 
 export interface IncomeStatement {
   revenue: StatementSection;
-  cogs: StatementSection;
-  grossProfit: number;
   otherIncome: StatementSection;
+  totalRevenue: number;
+  cogs: StatementSection;
+  // เก็บกำไรขั้นต้นไว้ให้ผู้เรียกเดิมใช้ต่อได้ แม้หน้ารายงานใหม่ไม่แสดงบรรทัดนี้
+  grossProfit: number;
   sellingExpense: StatementSection;
   adminExpense: StatementSection;
+  totalExpenses: number;
   operatingProfit: number;
+  financeCost: StatementSection;
+  profitBeforeTax: number;
+  incomeTax: StatementSection;
+  // เก็บหมวดรวมไว้ให้โค้ดเดิมที่อ้างอิงยังใช้งานได้ แต่หน้ารายงานแสดงแยกสองหมวดด้านบน
   financeTax: StatementSection;
   netProfit: number;
+}
+
+function splitSection(source: StatementSection, title: string, predicate: (line: StatementLine) => boolean): StatementSection {
+  const lines = source.lines.filter(predicate);
+  return {
+    code: source.code,
+    title,
+    lines,
+    total: lines.reduce((sum, line) => sum + line.amount, 0),
+  };
+}
+
+/** บัญชี 5920 และบัญชีย่อยของมันเป็นภาษีเงินได้ ส่วนบัญชีอื่นใต้ 5900 เป็นต้นทุนทางการเงิน
+ * การแยกจากรหัสทำให้ชื่อบัญชีที่ผู้ใช้แก้เองไม่ทำให้ยอดย้ายหมวดโดยไม่ตั้งใจ */
+function isIncomeTaxLine(line: StatementLine): boolean {
+  return line.code === "5920" || line.code.startsWith("5920.") || line.code.startsWith("5920-");
 }
 
 /** งบกำไรขาดทุน — ใช้เฉพาะความเคลื่อนไหวในงวดที่เลือก (ไม่รวมยอดยกมา) */
@@ -210,12 +233,32 @@ export function buildIncomeStatement(balances: AccountBalance[]): IncomeStatemen
   const sellingExpense = section(balances, GROUP.SELLING_EXPENSE, true);
   const adminExpense = section(balances, GROUP.ADMIN_EXPENSE, true);
   const financeTax = section(balances, GROUP.FINANCE_TAX, true);
+  const financeCost = splitSection(financeTax, "ต้นทุนทางการเงิน", (line) => !isIncomeTaxLine(line));
+  const incomeTax = splitSection(financeTax, "ภาษีเงินได้", isIncomeTaxLine);
 
+  const totalRevenue = revenue.total + otherIncome.total;
+  const totalExpenses = cogs.total + sellingExpense.total + adminExpense.total;
   const grossProfit = revenue.total - cogs.total;
-  const operatingProfit = grossProfit + otherIncome.total - sellingExpense.total - adminExpense.total;
-  const netProfit = operatingProfit - financeTax.total;
+  const operatingProfit = totalRevenue - totalExpenses;
+  const profitBeforeTax = operatingProfit - financeCost.total;
+  const netProfit = profitBeforeTax - incomeTax.total;
 
-  return { revenue, cogs, grossProfit, otherIncome, sellingExpense, adminExpense, operatingProfit, financeTax, netProfit };
+  return {
+    revenue,
+    otherIncome,
+    totalRevenue,
+    cogs,
+    grossProfit,
+    sellingExpense,
+    adminExpense,
+    totalExpenses,
+    operatingProfit,
+    financeCost,
+    profitBeforeTax,
+    incomeTax,
+    financeTax,
+    netProfit,
+  };
 }
 
 // ─────────────────────── งบแสดงฐานะการเงิน (งบดุล) ───────────────────────
