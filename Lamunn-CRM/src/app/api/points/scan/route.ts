@@ -139,7 +139,14 @@ export async function POST(req: NextRequest) {
 
   if (points <= 0) {
     await prisma.qrScanLog.create({ data: { ...logBase, branchId: branch.id, customerId, signatureValid: signed, result: "SUCCESS" } });
-    return NextResponse.json({ error: "ยอดซื้อไม่ถึงเกณฑ์สะสมแต้ม", code: "BELOW_THRESHOLD" }, { status: 400 });
+    // Say the actual minimum and this receipt's amount — a bare "ไม่ถึงเกณฑ์" read as
+    // "scanning is broken" to customers buying a ฿89 item.
+    const minBaht = rule ? Math.max(Number(rule.minAmount), Number(rule.bahtPerPoint)) : null;
+    const baht = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 2 });
+    const error = minBaht
+      ? `ซื้อครบ ${baht(minBaht)} บาทขึ้นไปต่อใบเสร็จ จึงจะสะสมแต้มได้ (ใบเสร็จนี้ ${baht(amount)} บาท)`
+      : "สาขานี้ยังไม่เปิดสะสมแต้ม กรุณาติดต่อพนักงาน";
+    return NextResponse.json({ error, code: "BELOW_THRESHOLD" }, { status: 400 });
   }
 
   const [, updatedCustomer] = await prisma.$transaction([
