@@ -11,6 +11,7 @@ export interface PosDailyTotal {
   storeTransfer: number;
   grab: number;
   lineman: number;
+  shopee: number;
   total: number;
   billCount: number;
 }
@@ -44,11 +45,13 @@ export async function getPosDailyTotals(start: Date, end: Date): Promise<Map<str
       storeTransfer: 0,
       grab: 0,
       lineman: 0,
+      shopee: 0,
       total: 0,
       billCount: 0,
     };
     if (row.channel === "grab") existing.grab += row.total;
     else if (row.channel === "lineman") existing.lineman += row.total;
+    else if (row.channel === "shopee") existing.shopee += row.total;
     else if (CASH_METHODS.has(row.payment_method ?? "")) existing.storeCash += row.total;
     else existing.storeTransfer += row.total;
     existing.total += row.total;
@@ -74,14 +77,15 @@ export interface BranchSalesReport {
   transfer: number;
   grab: number;
   lineman: number;
+  shopee: number;
   posTotal: number;
 }
 
 export async function getBranchSalesReports(start: Date, end: Date): Promise<Map<string, BranchSalesReport>> {
   const raw = await prisma.$queryRaw<
-    { pos_code: string; report_date: string; cash_amount: unknown; transfer_amount: unknown; grab_amount: unknown; lineman_amount: unknown; pos_total_amount: unknown }[]
+    { pos_code: string; report_date: string; cash_amount: unknown; transfer_amount: unknown; grab_amount: unknown; lineman_amount: unknown; shopee_amount: unknown; pos_total_amount: unknown }[]
   >`
-    SELECT b.code AS pos_code, bsr.report_date::text AS report_date, bsr.cash_amount, bsr.transfer_amount, bsr.grab_amount, bsr.lineman_amount, bsr.pos_total_amount
+    SELECT b.code AS pos_code, bsr.report_date::text AS report_date, bsr.cash_amount, bsr.transfer_amount, bsr.grab_amount, bsr.lineman_amount, bsr.shopee_amount, bsr.pos_total_amount
     FROM public.branch_sales_reports bsr
     JOIN public.branches b ON b.id = bsr.branch_id
     WHERE bsr.report_date >= ${start}::date AND bsr.report_date <= ${end}::date
@@ -96,6 +100,7 @@ export async function getBranchSalesReports(start: Date, end: Date): Promise<Map
       transfer: Number(row.transfer_amount ?? 0),
       grab: Number(row.grab_amount ?? 0),
       lineman: Number(row.lineman_amount ?? 0),
+      shopee: Number(row.shopee_amount ?? 0),
       posTotal: Number(row.pos_total_amount ?? 0),
     });
   }
@@ -117,6 +122,7 @@ type ExistingSalesRow = {
   storefrontOverride: boolean;
   grabOverride: boolean;
   linemanOverride: boolean;
+  shopeeOverride: boolean;
   cashCountedOverride: boolean;
   cashPos: number | null;
   transfer: number | null;
@@ -124,6 +130,7 @@ type ExistingSalesRow = {
   cashCounted: number | null;
   grab: number;
   lineman: number;
+  shopee: number;
 };
 
 // Builds the storefront/grab/lineman/cashCounted fields to write, skipping any that the
@@ -133,7 +140,7 @@ type ExistingSalesRow = {
 // fast once everything's already in sync). `existing` is null for a brand-new row.
 function buildSyncedData(
   branchType: "CASH" | "CREDIT_TERM",
-  report: { cash: number; transfer: number; grab: number; lineman: number },
+  report: { cash: number; transfer: number; grab: number; lineman: number; shopee: number },
   existing?: ExistingSalesRow | null
 ) {
   const data: Record<string, number> = {};
@@ -148,6 +155,7 @@ function buildSyncedData(
   }
   if (!existing?.grabOverride && existing?.grab !== report.grab) data.grab = report.grab;
   if (!existing?.linemanOverride && existing?.lineman !== report.lineman) data.lineman = report.lineman;
+  if (!existing?.shopeeOverride && existing?.shopee !== report.shopee) data.shopee = report.shopee;
   // "เงินสดนับ (ส่งกลับครัวกลาง)" ไม่มีฟิลด์แยกในระบบ IMS ของเพื่อน — ใช้ยอดเงินสด POS (cash_amount)
   // เป็นค่าตั้งต้นแทน (เฉพาะสาขาเงินสด, ไม่ใช่ Credit Term) เจ้าหน้าที่แก้ไขทับเองได้ตามปกติถ้ายอดจริงต่างจากนี้
   if (branchType === "CASH" && !existing?.cashCountedOverride && existing?.cashCounted !== report.cash) {
@@ -179,7 +187,7 @@ function normalizeName(name: string) {
 }
 
 function reportTotal(r: BranchSalesReport) {
-  return r.cash + r.transfer + r.grab + r.lineman;
+  return r.cash + r.transfer + r.grab + r.lineman + r.shopee;
 }
 
 type BranchLite = { id: string; code: string; name: string; posCode: string | null; isActive: boolean; sortOrder: number };
@@ -270,6 +278,7 @@ export async function syncPosDailySalesRange(start: Date, end: Date): Promise<Po
         storefrontOverride: true,
         grabOverride: true,
         linemanOverride: true,
+        shopeeOverride: true,
         cashCountedOverride: true,
         cashPos: true,
         transfer: true,
@@ -277,6 +286,7 @@ export async function syncPosDailySalesRange(start: Date, end: Date): Promise<Po
         cashCounted: true,
         grab: true,
         lineman: true,
+        shopee: true,
       },
     }),
   ]);
@@ -320,6 +330,7 @@ export async function syncDailySalesFromPos(branchId: string, date: Date) {
       storefrontOverride: true,
       grabOverride: true,
       linemanOverride: true,
+      shopeeOverride: true,
       cashCountedOverride: true,
       cashPos: true,
       transfer: true,
@@ -327,6 +338,7 @@ export async function syncDailySalesFromPos(branchId: string, date: Date) {
       cashCounted: true,
       grab: true,
       lineman: true,
+      shopee: true,
     },
   });
   const data = buildSyncedData(branch.type, report, existing);

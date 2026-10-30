@@ -52,7 +52,7 @@ export function computeBranchDailyStats(
     const type = typeOf.get(r.branchId);
     if (!type) continue;
     const storefront = type === "CASH" ? (r.cashPos ?? 0) + (r.transfer ?? 0) : r.cashTransferCombined ?? 0;
-    const dayTotal = storefront + r.grab + r.lineman;
+    const dayTotal = storefront + r.grab + r.lineman + r.shopee;
     if (dayTotal <= 0) continue;
 
     let s = byBranch.get(r.branchId);

@@ -11,6 +11,7 @@ interface BranchRankRow {
   storefront: number;
   grab: number;
   lineman: number;
+  shopee: number;
 }
 
 type ViewMode = "ALL" | "STOREFRONT" | "DELIVERY";
@@ -25,7 +26,8 @@ export default function BranchRankingChart({ rows }: { rows: BranchRankRow[] }) 
   const [mode, setMode] = useState<ViewMode>("ALL");
 
   const valueOf = (r: BranchRankRow) =>
-    mode === "STOREFRONT" ? r.storefront : mode === "DELIVERY" ? r.grab + r.lineman : r.storefront + r.grab + r.lineman;
+    mode === "STOREFRONT" ? r.storefront : mode === "DELIVERY" ? r.grab + r.lineman + r.shopee : r.storefront + r.grab + r.lineman + r.shopee;
+  const hasShopee = rows.some((r) => r.shopee !== 0);
 
   const sorted = [...rows].sort((a, b) => valueOf(b) - valueOf(a));
   const maxTotal = Math.max(...sorted.map(valueOf), 1);
@@ -52,6 +54,12 @@ export default function BranchRankingChart({ rows }: { rows: BranchRankRow[] }) 
               Lineman
             </span>
           )}
+          {mode !== "STOREFRONT" && hasShopee && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: CHART_COLORS.orange }} />
+              Shopee
+            </span>
+          )}
         </div>
         <div className="flex gap-1 rounded-lg bg-gray-100 p-1 text-xs">
           {(["ALL", "STOREFRONT", "DELIVERY"] as ViewMode[]).map((m) => (
@@ -73,6 +81,7 @@ export default function BranchRankingChart({ rows }: { rows: BranchRankRow[] }) 
           const storefrontPct = mode === "DELIVERY" ? 0 : (r.storefront / maxTotal) * 100;
           const grabPct = mode === "STOREFRONT" ? 0 : (r.grab / maxTotal) * 100;
           const linemanPct = mode === "STOREFRONT" ? 0 : (r.lineman / maxTotal) * 100;
+          const shopeePct = mode === "STOREFRONT" ? 0 : (r.shopee / maxTotal) * 100;
           return (
             <div key={r.branchId} className="flex items-center gap-3">
               <span className="w-6 shrink-0 text-right text-xs font-semibold text-gray-400">{i + 1}</span>
@@ -97,6 +106,12 @@ export default function BranchRankingChart({ rows }: { rows: BranchRankRow[] }) 
                   <div
                     style={{ width: `${linemanPct}%`, backgroundColor: CHART_COLORS.magenta }}
                     title={`Lineman: ${formatBaht(r.lineman)}`}
+                  />
+                )}
+                {shopeePct > 0 && (
+                  <div
+                    style={{ width: `${shopeePct}%`, backgroundColor: CHART_COLORS.orange }}
+                    title={`Shopee: ${formatBaht(r.shopee)}`}
                   />
                 )}
               </div>

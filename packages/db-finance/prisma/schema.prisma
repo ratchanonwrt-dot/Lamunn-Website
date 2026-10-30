@@ -328,12 +328,14 @@ model DailySales {
   // Both branch types
   grab    Float @default(0)
   lineman Float @default(0)
+  shopee  Float @default(0) // ช่องทาง Shopee (เริ่ม 30 ต.ค. 2569) — ดึงจาก IMS branch_sales_reports.shopee_amount
 
   // เมื่อ true = พนักงานแก้ตัวเลขนี้เอง (ทับค่าที่ดึงจาก POS/IMS อัตโนมัติ) — ตัวไหน override
   // แล้ว การ sync อัตโนมัติ (posSync.ts) จะข้ามฟิลด์นั้นไป ไม่ทับค่าที่กรอกไว้
   storefrontOverride  Boolean @default(false)
   grabOverride        Boolean @default(false)
   linemanOverride     Boolean @default(false)
+  shopeeOverride      Boolean @default(false)
   cashCountedOverride Boolean @default(false)
 
   posCheckTotal Float? // ยอดรวม POS ไว้เช็คยอด (optional)

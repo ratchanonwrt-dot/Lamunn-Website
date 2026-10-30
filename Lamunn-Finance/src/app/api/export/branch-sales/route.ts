@@ -37,7 +37,8 @@ export async function GET(req: NextRequest) {
       storefront,
       grab: r.grab,
       lineman: r.lineman,
-      total: storefront + r.grab + r.lineman,
+      shopee: r.shopee,
+      total: storefront + r.grab + r.lineman + r.shopee,
     };
   });
 
@@ -50,6 +51,7 @@ export async function GET(req: NextRequest) {
         { header: "หน้าร้าน", key: "storefront", width: 14 },
         { header: "Grab", key: "grab", width: 12 },
         { header: "Lineman", key: "lineman", width: 12 },
+        { header: "Shopee", key: "shopee", width: 12 },
         { header: "รวม", key: "total", width: 14 },
       ],
       rows: sheetRows,

@@ -11,6 +11,7 @@ interface DayRow {
   storefrontTotal: number;
   grab: number;
   lineman: number;
+  shopee: number;
   tiktok: number;
   fbLine: number;
   pickup: number;
@@ -116,6 +117,8 @@ function mergeRow(base: DayRow, edit: Edit | undefined): DayRow {
 export default function EditableMonthlyChannelTable({ rows }: { rows: DayRow[] }) {
   // ค่าที่กรอกแล้วแต่ยังไม่ได้ผ่าน refresh (key = วันที่) — หลัง refresh ค่าใน rows จะเท่ากันอยู่แล้ว
   const [edits, setEdits] = useState<Record<string, Edit>>({});
+  // Shopee เริ่ม 30 ต.ค. 2569 — เดือนที่ไม่มียอด Shopee ไม่ต้องมีคอลัมน์ว่าง
+  const hasShopee = rows.some((r) => r.shopee !== 0);
   const commitEdit = useCallback((date: string, field: NumericField, value: number | null) => {
     setEdits((prev) => ({ ...prev, [date]: { ...prev[date], [field]: value } }));
   }, []);
@@ -129,6 +132,7 @@ export default function EditableMonthlyChannelTable({ rows }: { rows: DayRow[] }
             <th className="px-3 py-2 text-right">หน้าร้านรวม (ทุกสาขา)</th>
             <th className="px-3 py-2 text-right">Grab</th>
             <th className="px-3 py-2 text-right">Lineman</th>
+            {hasShopee && <th className="px-3 py-2 text-right">Shopee</th>}
             <th className="px-3 py-2 text-right">TikTok</th>
             <th className="px-3 py-2 text-right">FB / Line</th>
             <th className="px-3 py-2 text-right">รับหน้าร้าน</th>
@@ -144,7 +148,7 @@ export default function EditableMonthlyChannelTable({ rows }: { rows: DayRow[] }
         <tbody>
           {rows.map((base) => {
             const r = mergeRow(base, edits[base.date]);
-            const total = r.storefrontTotal + r.grab + r.lineman + r.tiktok + r.fbLine + r.pickup + r.catering;
+            const total = r.storefrontTotal + r.grab + r.lineman + r.shopee + r.tiktok + r.fbLine + r.pickup + r.catering;
             const onCommit = (field: NumericField, value: number | null) => commitEdit(r.date, field, value);
             return (
               <tr key={r.date} className="border-t border-gray-100">
@@ -152,6 +156,7 @@ export default function EditableMonthlyChannelTable({ rows }: { rows: DayRow[] }
                 <td className="px-3 py-1.5 text-right text-gray-500">{formatBaht(r.storefrontTotal)}</td>
                 <td className="px-3 py-1.5 text-right text-gray-500">{formatBaht(r.grab)}</td>
                 <td className="px-3 py-1.5 text-right text-gray-500">{formatBaht(r.lineman)}</td>
+                {hasShopee && <td className="px-3 py-1.5 text-right text-gray-500">{formatBaht(r.shopee)}</td>}
                 <td className="px-3 py-1.5 text-right">
                   <EditableCell date={r.date} field="tiktok" value={r.tiktok} onCommit={onCommit} />
                 </td>

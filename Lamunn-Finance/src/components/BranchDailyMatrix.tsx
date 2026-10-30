@@ -9,6 +9,7 @@ interface DayDetail {
   storefront: number;
   grab: number;
   lineman: number;
+  shopee: number;
   cashPos: number | null;
   transfer: number | null;
   cashTransferCombined: number | null;
@@ -43,7 +44,7 @@ function toNum(s: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-// เซลล์แก้ไข Grab / Lineman — ค่าเดียว
+// เซลล์แก้ไข Grab / Lineman / Shopee — ค่าเดียว
 function SimpleAmountCell({
   branchId,
   date,
@@ -53,7 +54,7 @@ function SimpleAmountCell({
 }: {
   branchId: string;
   date: string;
-  field: "grab" | "lineman";
+  field: "grab" | "lineman" | "shopee";
   value: number;
   onCommit: Commit;
 }) {
@@ -65,7 +66,7 @@ function SimpleAmountCell({
     if (Number(val) === value) return;
     const previous = value;
     onCommit({ [field]: toNum(val) });
-    const ok = await save({ branchId, date, [field]: val, overrideGrab: field === "grab", overrideLineman: field === "lineman" });
+    const ok = await save({ branchId, date, [field]: val, overrideGrab: field === "grab", overrideLineman: field === "lineman", overrideShopee: field === "shopee" });
     if (!ok) onCommit({ [field]: previous });
   }
 
@@ -243,6 +244,7 @@ const emptyDetail: DayDetail = {
   storefront: 0,
   grab: 0,
   lineman: 0,
+  shopee: 0,
   cashPos: null,
   transfer: null,
   cashTransferCombined: null,
@@ -291,12 +293,13 @@ export default function BranchDailyMatrix({
   const rows = branches.map((b) => {
     const key = `${b.id}_${selectedDate}`;
     const d = mergeDetail(detail[key] ?? emptyDetail, edits[key], b.type);
-    return { ...b, key, d, total: d.storefront + d.grab + d.lineman };
+    return { ...b, key, d, total: d.storefront + d.grab + d.lineman + d.shopee };
   });
   const grandTotal = {
     storefront: rows.reduce((a, r) => a + r.d.storefront, 0),
     grab: rows.reduce((a, r) => a + r.d.grab, 0),
     lineman: rows.reduce((a, r) => a + r.d.lineman, 0),
+    shopee: rows.reduce((a, r) => a + r.d.shopee, 0),
     total: rows.reduce((a, r) => a + r.total, 0),
   };
 
@@ -339,13 +342,14 @@ export default function BranchDailyMatrix({
       </p>
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-        <table className="w-full min-w-[900px] text-sm">
+        <table className="w-full min-w-[1000px] text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-3 py-2">สาขา</th>
               <th className="px-3 py-2 text-right">หน้าร้าน</th>
               <th className="px-3 py-2 text-right">Grab</th>
               <th className="px-3 py-2 text-right">Lineman</th>
+              <th className="px-3 py-2 text-right">Shopee</th>
               <th className="px-3 py-2 text-right">เงินสดนับ</th>
               <th className="px-3 py-2 text-right">เช็คยอด POS</th>
               <th className="px-3 py-2 text-right font-semibold">รวม</th>
@@ -371,6 +375,9 @@ export default function BranchDailyMatrix({
                     <SimpleAmountCell branchId={r.id} date={selectedDate} field="lineman" value={r.d.lineman} onCommit={onCommit} />
                   </td>
                   <td className="px-3 py-2 text-right text-gray-600">
+                    <SimpleAmountCell branchId={r.id} date={selectedDate} field="shopee" value={r.d.shopee} onCommit={onCommit} />
+                  </td>
+                  <td className="px-3 py-2 text-right text-gray-600">
                     {r.type === "CASH" ? (
                       <CashCountedCell branchId={r.id} date={selectedDate} value={r.d.cashCounted} onCommit={onCommit} />
                     ) : (
@@ -389,7 +396,7 @@ export default function BranchDailyMatrix({
             })}
             {rows.length === 0 && (
               <tr>
-                <td className="px-3 py-6 text-center text-gray-400" colSpan={8}>
+                <td className="px-3 py-6 text-center text-gray-400" colSpan={9}>
                   ยังไม่มีข้อมูล
                 </td>
               </tr>
@@ -401,6 +408,7 @@ export default function BranchDailyMatrix({
               <td className="px-3 py-2 text-right">{formatBaht(grandTotal.storefront)}</td>
               <td className="px-3 py-2 text-right">{formatBaht(grandTotal.grab)}</td>
               <td className="px-3 py-2 text-right">{formatBaht(grandTotal.lineman)}</td>
+              <td className="px-3 py-2 text-right">{formatBaht(grandTotal.shopee)}</td>
               <td className="px-3 py-2" />
               <td className="px-3 py-2" />
               <td className="px-3 py-2 text-right text-brand-700">{formatBaht(grandTotal.total)}</td>

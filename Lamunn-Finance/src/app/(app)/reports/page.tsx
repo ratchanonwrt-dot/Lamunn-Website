@@ -243,15 +243,15 @@ async function ReportsData({
 
   // --- Ranking รายสาขา: เดือนนี้ vs เดือนก่อน ---
   // ไม่กรอง isActive — สาขาที่ปิดไปแล้วต้องยังเห็นในอันดับของเดือนที่เคยเปิดอยู่ (branches โหลดมาแล้วด้านบน)
-  type ChannelBreakdown = { storefront: number; grab: number; lineman: number };
+  type ChannelBreakdown = { storefront: number; grab: number; lineman: number; shopee: number };
   const channelFor = (type: "CASH" | "CREDIT_TERM", s?: ChannelSums): ChannelBreakdown => {
-    if (!s) return { storefront: 0, grab: 0, lineman: 0 };
+    if (!s) return { storefront: 0, grab: 0, lineman: 0, shopee: 0 };
     const storefront = type === "CASH" ? (s.cashPos ?? 0) + (s.transfer ?? 0) : s.cashTransferCombined ?? 0;
-    return { storefront, grab: s.grab ?? 0, lineman: s.lineman ?? 0 };
+    return { storefront, grab: s.grab ?? 0, lineman: s.lineman ?? 0, shopee: s.shopee ?? 0 };
   };
   const totalFor = (type: "CASH" | "CREDIT_TERM", s?: ChannelSums) => {
     const c = channelFor(type, s);
-    return c.storefront + c.grab + c.lineman;
+    return c.storefront + c.grab + c.lineman + c.shopee;
   };
 
   // วันที่มียอดขายจริงวันแรกสุดของแต่ละสาขา (ทุกช่วงเวลา) — ใช้เช็คว่าประวัติย้อนหลังของสาขานั้นครอบคลุมช่วง "เดือนก่อน"
@@ -275,8 +275,8 @@ async function ReportsData({
     .map((b) => {
       const thisChannel = channelFor(b.type, thisMap.get(b.id));
       const lastChannel = channelFor(b.type, lastMap.get(b.id));
-      const thisTotal = thisChannel.storefront + thisChannel.grab + thisChannel.lineman;
-      const lastTotal = lastChannel.storefront + lastChannel.grab + lastChannel.lineman;
+      const thisTotal = thisChannel.storefront + thisChannel.grab + thisChannel.lineman + thisChannel.shopee;
+      const lastTotal = lastChannel.storefront + lastChannel.grab + lastChannel.lineman + lastChannel.shopee;
       // สาขาใหม่ = ไม่มียอดขายเลยในรอบก่อนหน้า (เดือนก่อน) — เทียบ % แล้วบิดเบือน เพราะจริงๆ ไม่เคยมีฐานให้เทียบ
       const isNewBranch = lastTotal === 0 && thisTotal > 0;
       // เปิดไม่เต็มช่วงที่เทียบ = จำนวนวันที่มียอดขายจริงในเดือนก่อน (ภายใน daysSoFar วันแรก) น้อยกว่าเดือนนี้
@@ -314,8 +314,9 @@ async function ReportsData({
             cashTransferCombined: acc.cashTransferCombined + (row.cashTransferCombined ?? 0),
             grab: acc.grab + row.grab,
             lineman: acc.lineman + row.lineman,
+            shopee: acc.shopee + row.shopee,
           }),
-          { cashPos: 0, transfer: 0, cashTransferCombined: 0, grab: 0, lineman: 0 }
+          { cashPos: 0, transfer: 0, cashTransferCombined: 0, grab: 0, lineman: 0, shopee: 0 }
         );
       matchedThisTotalMap.set(r.branch.id, totalFor(r.branch.type, sums));
       matchedThisChannelMap.set(r.branch.id, channelFor(r.branch.type, sums));
@@ -363,6 +364,7 @@ async function ReportsData({
   let storefrontTotal = 0;
   let grabTotal = 0;
   let linemanTotal = 0;
+  let shopeeTotal = 0;
   for (const row of allSalesRows) {
     if (row.date < start || row.date > clampedEnd) continue;
     const type = branchTypeMap.get(row.branchId);
@@ -370,6 +372,7 @@ async function ReportsData({
     storefrontTotal += type === "CASH" ? (row.cashPos ?? 0) + (row.transfer ?? 0) : row.cashTransferCombined ?? 0;
     grabTotal += row.grab;
     linemanTotal += row.lineman;
+    shopeeTotal += row.shopee;
   }
   const ecom = { tiktok: 0, fbLine: 0, pickup: 0, catering: 0 };
   for (const c of allCompanyRows) {
@@ -385,6 +388,7 @@ async function ReportsData({
     { label: "หน้าร้าน (Storefront)", value: storefrontTotal, color: CHART_COLORS.blue },
     { label: "Grab", value: grabTotal, color: CHART_COLORS.green },
     { label: "Lineman", value: linemanTotal, color: CHART_COLORS.magenta },
+    ...(shopeeTotal ? [{ label: "Shopee", value: shopeeTotal, color: CHART_COLORS.orange }] : []),
     { label: "E-Commerce", value: ecomTotal, color: CHART_COLORS.yellow },
   ];
   const ecomSlices = [
@@ -473,6 +477,7 @@ async function ReportsData({
                     ["หน้าร้าน", sssg.current.avgChannel.storefront, sssg.previous.avgChannel.storefront, sssg.channelChange.storefront],
                     ["Grab", sssg.current.avgChannel.grab, sssg.previous.avgChannel.grab, sssg.channelChange.grab],
                     ["Lineman", sssg.current.avgChannel.lineman, sssg.previous.avgChannel.lineman, sssg.channelChange.lineman],
+                    ...(sssg.current.avgChannel.shopee || sssg.previous.avgChannel.shopee ? ([["Shopee", sssg.current.avgChannel.shopee, sssg.previous.avgChannel.shopee, sssg.channelChange.shopee]] as const) : []),
                   ] as const
                 ).map(([label, cur, prev, change]) => (
                   <div key={label} className="flex items-center justify-between">
@@ -583,7 +588,7 @@ async function ReportsData({
 
       <ReportSection
         title="สัดส่วนช่องทางการขาย (เดือนนี้)"
-        summary={`หน้าร้าน ${formatBaht(storefrontTotal)} · Grab ${formatBaht(grabTotal)} · Lineman ${formatBaht(linemanTotal)} · E-Commerce ${formatBaht(ecomTotal)}`}
+        summary={`หน้าร้าน ${formatBaht(storefrontTotal)} · Grab ${formatBaht(grabTotal)} · Lineman ${formatBaht(linemanTotal)}${shopeeTotal ? ` · Shopee ${formatBaht(shopeeTotal)}` : ""} · E-Commerce ${formatBaht(ecomTotal)}`}
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>

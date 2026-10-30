@@ -29,14 +29,15 @@ export async function GET(req: NextRequest) {
   const sheets: ExportSheet[] = [];
 
   if (sections.has("dailySummary")) {
-    const dayTotals = new Map<string, { storefrontTotal: number; grab: number; lineman: number }>();
+    const dayTotals = new Map<string, { storefrontTotal: number; grab: number; lineman: number; shopee: number }>();
     for (const r of salesRows) {
       const key = r.date.toISOString().slice(0, 10);
-      const existing = dayTotals.get(key) ?? { storefrontTotal: 0, grab: 0, lineman: 0 };
+      const existing = dayTotals.get(key) ?? { storefrontTotal: 0, grab: 0, lineman: 0, shopee: 0 };
       const storefront = r.branch.type === "CASH" ? (r.cashPos ?? 0) + (r.transfer ?? 0) : r.cashTransferCombined ?? 0;
       existing.storefrontTotal += storefront;
       existing.grab += r.grab;
       existing.lineman += r.lineman;
+      existing.shopee += r.shopee;
       dayTotals.set(key, existing);
     }
     const companyByDate = new Map(companyRows.map((c) => [c.date.toISOString().slice(0, 10), c]));
@@ -44,18 +45,19 @@ export async function GET(req: NextRequest) {
     for (let day = 1; day <= daysInMonth; day++) {
       const d = new Date(Date.UTC(year, month - 1, day));
       const key = d.toISOString().slice(0, 10);
-      const t = dayTotals.get(key) ?? { storefrontTotal: 0, grab: 0, lineman: 0 };
+      const t = dayTotals.get(key) ?? { storefrontTotal: 0, grab: 0, lineman: 0, shopee: 0 };
       const c = companyByDate.get(key);
       rows.push({
         date: `${day} ${thaiMonthsShort[month - 1]} (${weekdaysShort[d.getUTCDay()]})`,
         storefrontTotal: t.storefrontTotal,
         grab: t.grab,
         lineman: t.lineman,
+        shopee: t.shopee,
         tiktok: c?.tiktok ?? 0,
         fbLine: c?.fbLine ?? 0,
         pickup: c?.pickup ?? 0,
         catering: c?.catering ?? 0,
-        total: t.storefrontTotal + t.grab + t.lineman + (c?.tiktok ?? 0) + (c?.fbLine ?? 0) + (c?.pickup ?? 0) + (c?.catering ?? 0),
+        total: t.storefrontTotal + t.grab + t.lineman + t.shopee + (c?.tiktok ?? 0) + (c?.fbLine ?? 0) + (c?.pickup ?? 0) + (c?.catering ?? 0),
       });
     }
     sheets.push({
@@ -65,6 +67,7 @@ export async function GET(req: NextRequest) {
         { header: "หน้าร้านรวม", key: "storefrontTotal", width: 14 },
         { header: "Grab", key: "grab", width: 12 },
         { header: "Lineman", key: "lineman", width: 12 },
+        { header: "Shopee", key: "shopee", width: 12 },
         { header: "TikTok", key: "tiktok", width: 12 },
         { header: "FB / Line", key: "fbLine", width: 12 },
         { header: "รับหน้าร้าน", key: "pickup", width: 12 },
@@ -87,7 +90,8 @@ export async function GET(req: NextRequest) {
           storefront,
           grab: r.grab,
           lineman: r.lineman,
-          total: storefront + r.grab + r.lineman,
+          shopee: r.shopee,
+          total: storefront + r.grab + r.lineman + r.shopee,
         };
       })
       .sort((a, b) => a.branch.localeCompare(b.branch) || a.date.localeCompare(b.date));
@@ -99,6 +103,7 @@ export async function GET(req: NextRequest) {
         { header: "หน้าร้าน", key: "storefront", width: 14 },
         { header: "Grab", key: "grab", width: 12 },
         { header: "Lineman", key: "lineman", width: 12 },
+        { header: "Shopee", key: "shopee", width: 12 },
         { header: "รวม", key: "total", width: 14 },
       ],
       rows,
@@ -106,19 +111,20 @@ export async function GET(req: NextRequest) {
   }
 
   if (sections.has("ranking")) {
-    const branchMonthTotal = new Map<string, { storefront: number; grab: number; lineman: number }>();
+    const branchMonthTotal = new Map<string, { storefront: number; grab: number; lineman: number; shopee: number }>();
     for (const r of salesRows) {
       const storefront = r.branch.type === "CASH" ? (r.cashPos ?? 0) + (r.transfer ?? 0) : r.cashTransferCombined ?? 0;
-      const existing = branchMonthTotal.get(r.branchId) ?? { storefront: 0, grab: 0, lineman: 0 };
+      const existing = branchMonthTotal.get(r.branchId) ?? { storefront: 0, grab: 0, lineman: 0, shopee: 0 };
       existing.storefront += storefront;
       existing.grab += r.grab;
       existing.lineman += r.lineman;
+      existing.shopee += r.shopee;
       branchMonthTotal.set(r.branchId, existing);
     }
     const rows = branches
       .map((b) => {
-        const t = branchMonthTotal.get(b.id) ?? { storefront: 0, grab: 0, lineman: 0 };
-        return { branch: b.name, storefront: t.storefront, grab: t.grab, lineman: t.lineman, total: t.storefront + t.grab + t.lineman };
+        const t = branchMonthTotal.get(b.id) ?? { storefront: 0, grab: 0, lineman: 0, shopee: 0 };
+        return { branch: b.name, storefront: t.storefront, grab: t.grab, lineman: t.lineman, shopee: t.shopee, total: t.storefront + t.grab + t.lineman + t.shopee };
       })
       .sort((a, b) => b.total - a.total);
     sheets.push({
@@ -128,6 +134,7 @@ export async function GET(req: NextRequest) {
         { header: "หน้าร้าน", key: "storefront", width: 14 },
         { header: "Grab", key: "grab", width: 12 },
         { header: "Lineman", key: "lineman", width: 12 },
+        { header: "Shopee", key: "shopee", width: 12 },
         { header: "รวม", key: "total", width: 14 },
       ],
       rows,

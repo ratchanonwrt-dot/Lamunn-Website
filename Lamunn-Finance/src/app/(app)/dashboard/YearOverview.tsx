@@ -46,7 +46,7 @@ export default function YearOverview({ d, month }: { d: YearData; month: number 
             <ChevronRight className="h-4 w-4" />
           </Link>
         </div>
-        <span className="text-xs text-gray-400">ยอดรวมทุกช่องทาง: หน้าร้าน + Grab + Lineman + E-Commerce + Event</span>
+        <span className="text-xs text-gray-400">ยอดรวมทุกช่องทาง: หน้าร้าน + Grab + Lineman + Shopee + E-Commerce + Event</span>
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -105,7 +105,7 @@ export default function YearOverview({ d, month }: { d: YearData; month: number 
             {(
               [
                 ["หน้าร้าน", ch.storefront, "bg-brand-500"],
-                ["Delivery (Grab+Lineman)", ch.delivery, "bg-emerald-500"],
+                ["Delivery (Grab+Lineman+Shopee)", ch.delivery, "bg-emerald-500"],
                 ["E-Commerce", ch.ecommerce, "bg-amber-500"],
                 ["Event", ch.event, "bg-violet-500"],
               ] as const

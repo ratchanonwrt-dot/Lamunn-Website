@@ -99,6 +99,7 @@ async function SssgData({ year, month, sort }: { year: number; month: number; so
     ["หน้าร้าน", sssg.current.avgChannel.storefront, sssg.previous.avgChannel.storefront, sssg.channelChange.storefront],
     ["Grab", sssg.current.avgChannel.grab, sssg.previous.avgChannel.grab, sssg.channelChange.grab],
     ["Lineman", sssg.current.avgChannel.lineman, sssg.previous.avgChannel.lineman, sssg.channelChange.lineman],
+    ...(sssg.current.avgChannel.shopee || sssg.previous.avgChannel.shopee ? ([["Shopee", sssg.current.avgChannel.shopee, sssg.previous.avgChannel.shopee, sssg.channelChange.shopee]] as const) : []),
   ] as const;
 
   return (

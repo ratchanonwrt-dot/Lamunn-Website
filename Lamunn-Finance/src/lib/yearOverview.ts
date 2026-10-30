@@ -3,7 +3,7 @@ import { loadAllSalesData } from "./reportsCalc";
 
 /** ภาพรวมยอดขายทั้งปีของหน้า "ภาพรวม" — ยอดรายเดือนแยกช่องทาง เทียบปีก่อน สะสมทั้งปี และแนวโน้ม
  *
- * ยอดรวมใช้นิยามเดียวกับการ์ด "ยอดขายรวมทั้งหมด" ของหน้าภาพรวม: หน้าร้าน + Grab + Lineman ทุกสาขา
+ * ยอดรวมใช้นิยามเดียวกับการ์ด "ยอดขายรวมทั้งหมด" ของหน้าภาพรวม: หน้าร้าน + Grab + Lineman + Shopee ทุกสาขา
  * + E-Commerce กลาง (TikTok/FB-Line/รับหน้าร้าน/Catering) + Event ชั่วคราว (นับตามวันเริ่มงาน)
  * ใช้ข้อมูลก้อนที่แคชไว้ของหน้ารายงาน (loadAllSalesData) ไม่ยิงคิวรียอดขายเพิ่ม */
 
@@ -84,7 +84,7 @@ export async function computeYearOverview(year: number): Promise<YearOverview> {
     const type = typeOf.get(r.branchId);
     if (!type) continue;
     const storefront = type === "CASH" ? (r.cashPos ?? 0) + (r.transfer ?? 0) : r.cashTransferCombined ?? 0;
-    const delivery = r.grab + r.lineman;
+    const delivery = r.grab + r.lineman + r.shopee;
     if (r.date >= yearStart && r.date <= cutoff) {
       const m = cur[r.date.getUTCMonth()];
       m.storefront += storefront;
