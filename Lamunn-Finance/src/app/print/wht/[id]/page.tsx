@@ -6,6 +6,7 @@ import { getAllSettings } from "@/lib/settings";
 import { bahtTextFromSatang } from "@/lib/accounting/bahtText";
 import { fmtSatang, toSatang } from "@/lib/accounting/money";
 import { resolveWhtPayeeAddress } from "@/lib/accounting/withholding";
+import { formatWhtOtherIncomeType } from "@/lib/accounting/whtCertificatePrint";
 import PrintButton from "@/components/accounting/PrintButton";
 
 export const dynamic = "force-dynamic";
@@ -71,10 +72,17 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
   };
   const reportPath = certificate.formType === "PND3" ? "pnd3" : "pnd53";
   const payeeAddress = await resolveWhtPayeeAddress(certificate);
+  const otherIncomeType = formatWhtOtherIncomeType(certificate.incomeType);
 
   return (
     <div>
-      <style>{`@page { size: A4 portrait; margin: 7mm; } @media print { html, body { background: white !important; } }`}</style>
+      <style>{`
+        @page { size: A4 portrait; margin: 0; }
+        @media print {
+          html, body { width: 210mm; min-height: 297mm; background: white !important; }
+          .wht-page { box-sizing: border-box; width: 210mm; min-height: 297mm; padding: 7mm !important; }
+        }
+      `}</style>
       <div className="mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3 print:hidden">
         <Link href={`/accounting/tax-reports/${reportPath}?year=${year}&month=${month}`} className="text-sm text-gray-500 hover:text-brand-700 hover:underline">
           ← กลับไป {certificate.formType === "PND3" ? "ภ.ง.ด.3" : "ภ.ง.ด.53"}
@@ -82,7 +90,7 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
         <PrintButton label="พิมพ์หนังสือรับรอง 50 ทวิ" />
       </div>
 
-      <main className="mx-auto w-full max-w-[210mm] bg-white p-4 text-[9px] leading-[1.25] text-black shadow-sm print:max-w-none print:p-0 print:shadow-none">
+      <main className="wht-page mx-auto min-h-[297mm] w-full max-w-[210mm] bg-white p-[7mm] text-[10px] leading-[1.35] text-black shadow-sm print:max-w-none print:shadow-none">
         {certificate.voided && <div className="mb-2 border-4 border-black py-1 text-center text-xl font-bold">ยกเลิกแล้ว</div>}
 
         <div className="mb-1 font-semibold">
@@ -94,8 +102,8 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
           <header className="grid grid-cols-[1fr_2fr_1fr] items-start border-b border-black pb-1">
             <div />
             <div className="text-center">
-              <h1 className="whitespace-nowrap text-[16px] font-bold">หนังสือรับรองการหักภาษี ณ ที่จ่าย</h1>
-              <p className="text-[11px] font-semibold">ตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร</p>
+              <h1 className="whitespace-nowrap text-[18px] font-bold">หนังสือรับรองการหักภาษี ณ ที่จ่าย</h1>
+              <p className="text-[12px] font-semibold">ตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร</p>
             </div>
             <div className="min-w-0 pl-2 text-left text-[8px]">
               <p>เล่มที่　........................................</p>
@@ -154,7 +162,7 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
                 <td />
               </tr>
               <IncomeLine label="5. การจ่ายเงินได้ที่ต้องหักภาษี ณ ที่จ่ายตามคำสั่งกรมสรรพากรที่ออกตามมาตรา 3 เตรส เช่น รางวัล ส่วนลด ค่าจ้างทำของ ค่าโฆษณา ค่าเช่า ค่าขนส่ง ค่าบริการ ค่าเบี้ยประกันวินาศภัย ฯลฯ" tall />
-              <IncomeLine label={`6. อื่น ๆ (ระบุ) ${row === "6" ? certificate.incomeType : "................................................"}`} value={row === "6" ? values : undefined} />
+              <IncomeLine label={`6. อื่น ๆ (ระบุ) ${row === "6" ? otherIncomeType : "................................................"}`} value={row === "6" ? values : undefined} />
             </tbody>
             <tfoot>
               <tr className="border-y border-black font-bold">
