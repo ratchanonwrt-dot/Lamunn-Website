@@ -118,7 +118,7 @@ export default async function JournalPage({
     <div>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="mb-1 text-xl font-bold text-gray-900">สมุดรายวัน</h1>
+          <h1 className="mb-1 text-xl font-bold text-gray-900">บันทึกบัญชี</h1>
           <p className="text-sm text-gray-500">
             {usingRange
               ? `ใบสำคัญช่วง ${searchParams.from || "เริ่มแรก"} ถึง ${searchParams.to || "ปัจจุบัน"}`
