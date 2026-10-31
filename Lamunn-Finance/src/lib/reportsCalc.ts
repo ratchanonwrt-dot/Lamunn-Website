@@ -11,7 +11,7 @@ export async function getDailyTotals(start: Date, end: Date): Promise<Map<string
   const [salesRows, companyRows] = await Promise.all([
     prisma.dailySales.findMany({
       where: { date: { gte: start, lte: end } },
-      select: { date: true, cashPos: true, transfer: true, cashTransferCombined: true, grab: true, lineman: true, branch: { select: { type: true } } },
+      select: { date: true, cashPos: true, transfer: true, cashTransferCombined: true, grab: true, lineman: true, shopee: true, branch: { select: { type: true } } },
     }),
     prisma.companyChannelDaily.findMany({
       where: { date: { gte: start, lte: end } },
@@ -22,7 +22,7 @@ export async function getDailyTotals(start: Date, end: Date): Promise<Map<string
   const byDate = new Map<string, number>();
   for (const r of salesRows) {
     const storefront = r.branch.type === "CASH" ? (r.cashPos ?? 0) + (r.transfer ?? 0) : r.cashTransferCombined ?? 0;
-    const total = storefront + r.grab + r.lineman;
+    const total = storefront + r.grab + r.lineman + r.shopee;
     const key = r.date.toISOString().slice(0, 10);
     byDate.set(key, (byDate.get(key) ?? 0) + total);
   }
@@ -50,6 +50,7 @@ export interface SalesRowLite {
   cashTransferCombined: number | null;
   grab: number;
   lineman: number;
+  shopee: number;
 }
 
 export interface CompanyRowLite {
@@ -73,6 +74,7 @@ export interface ChannelSums {
   cashTransferCombined: number | null;
   grab: number | null;
   lineman: number | null;
+  shopee: number | null;
 }
 
 // unstable_cache เก็บได้แค่ค่าที่ serialize เป็น JSON ได้ — Date จะกลายเป็น string เงียบๆ
@@ -82,7 +84,7 @@ const loadAllSalesDataCached = unstable_cache(
     const [branches, salesRows, companyRows] = await Promise.all([
       getBranchesLite(),
       prisma.dailySales.findMany({
-        select: { branchId: true, date: true, cashPos: true, transfer: true, cashTransferCombined: true, grab: true, lineman: true },
+        select: { branchId: true, date: true, cashPos: true, transfer: true, cashTransferCombined: true, grab: true, lineman: true, shopee: true },
         orderBy: { date: "asc" },
       }),
       prisma.companyChannelDaily.findMany({
@@ -127,7 +129,7 @@ export function dailyTotalsFrom(
     if (!type) continue;
     const storefront = type === "CASH" ? (r.cashPos ?? 0) + (r.transfer ?? 0) : r.cashTransferCombined ?? 0;
     const key = r.date.toISOString().slice(0, 10);
-    byDate.set(key, (byDate.get(key) ?? 0) + storefront + r.grab + r.lineman);
+    byDate.set(key, (byDate.get(key) ?? 0) + storefront + r.grab + r.lineman + r.shopee);
   }
   for (const c of companyRows) {
     const key = c.date.toISOString().slice(0, 10);
@@ -153,12 +155,13 @@ export function aggregateByBranch(rows: SalesRowLite[], start: Date, end: Date):
   for (const r of rows) {
     if (r.date < start || r.date > end) continue;
     const cur =
-      out.get(r.branchId) ?? { cashPos: 0, transfer: 0, cashTransferCombined: 0, grab: 0, lineman: 0 };
+      out.get(r.branchId) ?? { cashPos: 0, transfer: 0, cashTransferCombined: 0, grab: 0, lineman: 0, shopee: 0 };
     cur.cashPos = (cur.cashPos ?? 0) + (r.cashPos ?? 0);
     cur.transfer = (cur.transfer ?? 0) + (r.transfer ?? 0);
     cur.cashTransferCombined = (cur.cashTransferCombined ?? 0) + (r.cashTransferCombined ?? 0);
     cur.grab = (cur.grab ?? 0) + r.grab;
     cur.lineman = (cur.lineman ?? 0) + r.lineman;
+    cur.shopee = (cur.shopee ?? 0) + r.shopee;
     out.set(r.branchId, cur);
   }
   return out;

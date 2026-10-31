@@ -29,7 +29,7 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
 
   const checked = rows.map((r) => {
     const storefront = r.branch.type === "CASH" ? (r.cashPos ?? 0) + (r.transfer ?? 0) : r.cashTransferCombined ?? 0;
-    const computedTotal = storefront + r.grab + r.lineman;
+    const computedTotal = storefront + r.grab + r.lineman + r.shopee;
     const posTotal = r.posCheckTotal ?? 0;
     const diff = posTotal - computedTotal;
     return { ...r, computedTotal, posTotal, diff };
@@ -53,7 +53,7 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
     for (const [key, pos] of posTotalsMap) {
       if (pos.posCode !== b.posCode) continue;
       const our = ourSalesMap.get(`${b.id}_${pos.date}`);
-      const ourTotal = our ? (b.type === "CASH" ? (our.cashPos ?? 0) + (our.transfer ?? 0) : our.cashTransferCombined ?? 0) + our.grab + our.lineman : 0;
+      const ourTotal = our ? (b.type === "CASH" ? (our.cashPos ?? 0) + (our.transfer ?? 0) : our.cashTransferCombined ?? 0) + our.grab + our.lineman + our.shopee : 0;
       liveRows.push({ date: pos.date, branchName: b.name, posTotal: pos.total, billCount: pos.billCount, ourTotal, diff: pos.total - ourTotal });
     }
   }

@@ -58,14 +58,17 @@ export default async function BranchSalesReportPage({
       storefront,
       grab: r.grab,
       lineman: r.lineman,
-      total: storefront + r.grab + r.lineman,
+      shopee: r.shopee,
+      total: storefront + r.grab + r.lineman + r.shopee,
     };
   });
 
   const sum = tableRows.reduce(
-    (a, r) => ({ storefront: a.storefront + r.storefront, grab: a.grab + r.grab, lineman: a.lineman + r.lineman, total: a.total + r.total }),
-    { storefront: 0, grab: 0, lineman: 0, total: 0 }
+    (a, r) => ({ storefront: a.storefront + r.storefront, grab: a.grab + r.grab, lineman: a.lineman + r.lineman, shopee: a.shopee + r.shopee, total: a.total + r.total }),
+    { storefront: 0, grab: 0, lineman: 0, shopee: 0, total: 0 }
   );
+  // Shopee เริ่ม 30 ต.ค. 2569 — ช่วงที่ไม่มียอด Shopee ไม่ต้องมีคอลัมน์ว่าง
+  const hasShopee = sum.shopee !== 0;
 
   return (
     <div>
@@ -85,7 +88,7 @@ export default async function BranchSalesReportPage({
         />
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className={`mb-6 grid grid-cols-2 gap-3 ${hasShopee ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
         <div className="rounded-xl border border-gray-200 bg-white p-4">
           <p className="text-xs text-gray-500">หน้าร้านรวม</p>
           <p className="mt-1 text-lg font-bold text-gray-800">{formatBaht(sum.storefront)}</p>
@@ -98,6 +101,12 @@ export default async function BranchSalesReportPage({
           <p className="text-xs text-gray-500">Lineman รวม</p>
           <p className="mt-1 text-lg font-bold text-gray-800">{formatBaht(sum.lineman)}</p>
         </div>
+        {hasShopee && (
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <p className="text-xs text-gray-500">Shopee รวม</p>
+            <p className="mt-1 text-lg font-bold text-gray-800">{formatBaht(sum.shopee)}</p>
+          </div>
+        )}
         <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
           <p className="text-xs text-brand-700">รวมทั้งหมด</p>
           <p className="mt-1 text-lg font-bold text-brand-700">{formatBaht(sum.total)}</p>
@@ -113,6 +122,7 @@ export default async function BranchSalesReportPage({
               <th className="px-4 py-2 text-right">หน้าร้าน</th>
               <th className="px-4 py-2 text-right">Grab</th>
               <th className="px-4 py-2 text-right">Lineman</th>
+              {hasShopee && <th className="px-4 py-2 text-right">Shopee</th>}
               <th className="px-4 py-2 text-right">รวม</th>
             </tr>
           </thead>
@@ -124,6 +134,7 @@ export default async function BranchSalesReportPage({
                 <td className="px-4 py-2 text-right text-gray-800">{formatBaht(r.storefront)}</td>
                 <td className="px-4 py-2 text-right text-gray-800">{formatBaht(r.grab)}</td>
                 <td className="px-4 py-2 text-right text-gray-800">{formatBaht(r.lineman)}</td>
+                {hasShopee && <td className="px-4 py-2 text-right text-gray-800">{formatBaht(r.shopee)}</td>}
                 <td className="px-4 py-2 text-right font-medium text-gray-900">{formatBaht(r.total)}</td>
               </tr>
             ))}
@@ -144,6 +155,7 @@ export default async function BranchSalesReportPage({
                 <td className="px-4 py-2 text-right text-gray-800">{formatBaht(sum.storefront)}</td>
                 <td className="px-4 py-2 text-right text-gray-800">{formatBaht(sum.grab)}</td>
                 <td className="px-4 py-2 text-right text-gray-800">{formatBaht(sum.lineman)}</td>
+                {hasShopee && <td className="px-4 py-2 text-right text-gray-800">{formatBaht(sum.shopee)}</td>}
                 <td className="px-4 py-2 text-right text-brand-700">{formatBaht(sum.total)}</td>
               </tr>
             </tfoot>

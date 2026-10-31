@@ -95,14 +95,15 @@ async function MonthlyData({ year, month }: { year: number; month: number }) {
   ]);
 
   // สรุปรายวัน (ทุกสาขารวมกัน) — สำหรับตารางแก้ไข E-Commerce
-  const dayTotals = new Map<string, { storefrontTotal: number; grab: number; lineman: number }>();
+  const dayTotals = new Map<string, { storefrontTotal: number; grab: number; lineman: number; shopee: number }>();
   for (const r of salesRows) {
     const key = r.date.toISOString().slice(0, 10);
-    const existing = dayTotals.get(key) ?? { storefrontTotal: 0, grab: 0, lineman: 0 };
+    const existing = dayTotals.get(key) ?? { storefrontTotal: 0, grab: 0, lineman: 0, shopee: 0 };
     const storefront = r.branch.type === "CASH" ? (r.cashPos ?? 0) + (r.transfer ?? 0) : r.cashTransferCombined ?? 0;
     existing.storefrontTotal += storefront;
     existing.grab += r.grab;
     existing.lineman += r.lineman;
+    existing.shopee += r.shopee;
     dayTotals.set(key, existing);
   }
   const companyByDate = new Map(companyRows.map((c) => [c.date.toISOString().slice(0, 10), c]));
@@ -118,6 +119,7 @@ async function MonthlyData({ year, month }: { year: number; month: number }) {
     storefrontTotal: number;
     grab: number;
     lineman: number;
+    shopee: number;
     tiktok: number;
     fbLine: number;
     pickup: number;
@@ -131,7 +133,7 @@ async function MonthlyData({ year, month }: { year: number; month: number }) {
   for (let day = 1; day <= daysInMonth; day++) {
     const d = new Date(Date.UTC(year, month - 1, day));
     const key = d.toISOString().slice(0, 10);
-    const t = dayTotals.get(key) ?? { storefrontTotal: 0, grab: 0, lineman: 0 };
+    const t = dayTotals.get(key) ?? { storefrontTotal: 0, grab: 0, lineman: 0, shopee: 0 };
     const c = companyByDate.get(key);
     dayRows.push({
       date: key,
@@ -139,6 +141,7 @@ async function MonthlyData({ year, month }: { year: number; month: number }) {
       storefrontTotal: t.storefrontTotal,
       grab: t.grab,
       lineman: t.lineman,
+      shopee: t.shopee,
       tiktok: c?.tiktok ?? 0,
       fbLine: c?.fbLine ?? 0,
       pickup: c?.pickup ?? 0,
@@ -158,6 +161,7 @@ async function MonthlyData({ year, month }: { year: number; month: number }) {
       storefront: number;
       grab: number;
       lineman: number;
+      shopee: number;
       cashPos: number | null;
       transfer: number | null;
       cashTransferCombined: number | null;
@@ -167,13 +171,14 @@ async function MonthlyData({ year, month }: { year: number; month: number }) {
     }
   >();
   // สรุปรายสาขาทั้งเดือน แยกหน้าร้าน/Grab/Lineman — สำหรับ Ranking chart
-  const branchMonthTotal = new Map<string, { storefront: number; grab: number; lineman: number }>();
+  const branchMonthTotal = new Map<string, { storefront: number; grab: number; lineman: number; shopee: number }>();
   for (const r of salesRows) {
     const storefront = r.branch.type === "CASH" ? (r.cashPos ?? 0) + (r.transfer ?? 0) : r.cashTransferCombined ?? 0;
     branchDayDetail.set(`${r.branchId}_${r.date.toISOString().slice(0, 10)}`, {
       storefront,
       grab: r.grab,
       lineman: r.lineman,
+      shopee: r.shopee,
       cashPos: r.cashPos,
       transfer: r.transfer,
       cashTransferCombined: r.cashTransferCombined,
@@ -182,10 +187,11 @@ async function MonthlyData({ year, month }: { year: number; month: number }) {
       note: r.note,
     });
 
-    const existing = branchMonthTotal.get(r.branchId) ?? { storefront: 0, grab: 0, lineman: 0 };
+    const existing = branchMonthTotal.get(r.branchId) ?? { storefront: 0, grab: 0, lineman: 0, shopee: 0 };
     existing.storefront += storefront;
     existing.grab += r.grab;
     existing.lineman += r.lineman;
+    existing.shopee += r.shopee;
     branchMonthTotal.set(r.branchId, existing);
   }
   const rankingRows = branches.map((b) => ({
@@ -195,16 +201,19 @@ async function MonthlyData({ year, month }: { year: number; month: number }) {
     storefront: branchMonthTotal.get(b.id)?.storefront ?? 0,
     grab: branchMonthTotal.get(b.id)?.grab ?? 0,
     lineman: branchMonthTotal.get(b.id)?.lineman ?? 0,
+    shopee: branchMonthTotal.get(b.id)?.shopee ?? 0,
   }));
 
   // สรุปยอดรวมทั้งเดือน แยกประเภทช่องทาง — สำหรับ Chart วงกลม (รูปแบบเดิม)
   let storefrontTotal = 0;
   let grabTotal = 0;
   let linemanTotal = 0;
+  let shopeeTotal = 0;
   for (const r of salesRows) {
     storefrontTotal += r.branch.type === "CASH" ? (r.cashPos ?? 0) + (r.transfer ?? 0) : r.cashTransferCombined ?? 0;
     grabTotal += r.grab;
     linemanTotal += r.lineman;
+    shopeeTotal += r.shopee;
   }
   let tiktokTotal = 0;
   let fbLineTotal = 0;
@@ -220,7 +229,7 @@ async function MonthlyData({ year, month }: { year: number; month: number }) {
 
   const eventTotal = (eventAgg._sum.storefront ?? 0) + (eventAgg._sum.grab ?? 0) + (eventAgg._sum.lineman ?? 0);
 
-  const monthGrandTotal = storefrontTotal + grabTotal + linemanTotal + ecomTotal + eventTotal;
+  const monthGrandTotal = storefrontTotal + grabTotal + linemanTotal + shopeeTotal + ecomTotal + eventTotal;
 
   // จำนวนวันที่ผ่านมาแล้วในเดือนนี้ (ถ้าเป็นเดือนที่ผ่านไปแล้ว = เต็มเดือน, ถ้าเป็นเดือนปัจจุบัน = นับถึงวันนี้)
   const daysElapsed = clampedEnd.getUTCDate();
@@ -232,6 +241,7 @@ async function MonthlyData({ year, month }: { year: number; month: number }) {
     { label: "หน้าร้าน (Storefront)", value: storefrontTotal, color: CHART_COLORS.blue },
     { label: "Grab", value: grabTotal, color: CHART_COLORS.green },
     { label: "Lineman", value: linemanTotal, color: CHART_COLORS.magenta },
+    ...(shopeeTotal ? [{ label: "Shopee", value: shopeeTotal, color: CHART_COLORS.orange }] : []),
     { label: "E-Commerce", value: ecomTotal, color: CHART_COLORS.yellow },
     { label: "Event ชั่วคราว", value: eventTotal, color: CHART_COLORS.aqua },
   ];
@@ -257,7 +267,7 @@ async function MonthlyData({ year, month }: { year: number; month: number }) {
         )}
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className={`mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 ${shopeeTotal > 0 ? "lg:grid-cols-6" : "lg:grid-cols-5"}`}>
         <div className="rounded-xl border border-gray-200 bg-white p-4">
           <p className="text-xs text-gray-500">เฉลี่ย/วัน (ทุกช่องทาง)</p>
           <p className="mt-1 text-base font-bold text-brand-700">{formatBaht(avgDaily)}</p>
@@ -272,6 +282,13 @@ async function MonthlyData({ year, month }: { year: number; month: number }) {
           <p className="mt-1 text-base font-bold text-gray-800">{formatBaht(grabTotal)}</p>
           <p className="mt-0.5 text-[11px] text-gray-400">เฉลี่ย {formatBaht(avgGrab)}/วัน</p>
         </div>
+        {shopeeTotal > 0 && (
+          <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+            <p className="text-xs text-orange-700">ยอดรวม Shopee</p>
+            <p className="mt-1 text-base font-bold text-orange-800">{formatBaht(shopeeTotal)}</p>
+            <p className="mt-0.5 text-[11px] text-orange-600">เฉลี่ย {formatBaht(shopeeTotal / daysElapsed)}/วัน</p>
+          </div>
+        )}
         <div className="rounded-xl border border-gray-200 bg-white p-4">
           <p className="text-xs text-gray-500">ยอดรวมหน้าร้าน</p>
           <p className="mt-1 text-base font-bold text-gray-800">{formatBaht(storefrontTotal)}</p>

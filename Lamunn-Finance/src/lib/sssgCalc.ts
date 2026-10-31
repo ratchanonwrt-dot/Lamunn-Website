@@ -14,6 +14,7 @@ export interface ChannelTotals {
   storefront: number;
   grab: number;
   lineman: number;
+  shopee: number;
 }
 
 export interface PeriodStat extends ChannelTotals {
@@ -42,7 +43,7 @@ export interface SssgSummary {
   current: { avgPerDay: number; avgChannel: ChannelTotals; openDays: number };
   previous: { avgPerDay: number; avgChannel: ChannelTotals; openDays: number };
   change: number | null;
-  channelChange: { storefront: number | null; grab: number | null; lineman: number | null };
+  channelChange: { storefront: number | null; grab: number | null; lineman: number | null; shopee: number | null };
 }
 
 export function pctChange(current: number, previous: number): number | null {
@@ -52,17 +53,17 @@ export function pctChange(current: number, previous: number): number | null {
 
 function channelOf(type: "CASH" | "CREDIT_TERM", r: SalesRowLite): ChannelTotals {
   const storefront = type === "CASH" ? (r.cashPos ?? 0) + (r.transfer ?? 0) : r.cashTransferCombined ?? 0;
-  return { storefront, grab: r.grab, lineman: r.lineman };
+  return { storefront, grab: r.grab, lineman: r.lineman, shopee: r.shopee };
 }
 
 function emptyStat(): PeriodStat {
-  return { storefront: 0, grab: 0, lineman: 0, total: 0, openDays: 0, avgPerDay: 0, avgChannel: { storefront: 0, grab: 0, lineman: 0 } };
+  return { storefront: 0, grab: 0, lineman: 0, shopee: 0, total: 0, openDays: 0, avgPerDay: 0, avgChannel: { storefront: 0, grab: 0, lineman: 0, shopee: 0 } };
 }
 
 function finalize(s: PeriodStat): PeriodStat {
   if (s.openDays === 0) return s;
   s.avgPerDay = s.total / s.openDays;
-  s.avgChannel = { storefront: s.storefront / s.openDays, grab: s.grab / s.openDays, lineman: s.lineman / s.openDays };
+  s.avgChannel = { storefront: s.storefront / s.openDays, grab: s.grab / s.openDays, lineman: s.lineman / s.openDays, shopee: s.shopee / s.openDays };
   return s;
 }
 
@@ -75,12 +76,13 @@ function statsByBranch(branches: BranchLite[], rows: SalesRowLite[], start: Date
     const type = typeOf.get(r.branchId);
     if (!type) continue;
     const c = channelOf(type, r);
-    const dayTotal = c.storefront + c.grab + c.lineman;
+    const dayTotal = c.storefront + c.grab + c.lineman + c.shopee;
     if (dayTotal <= 0) continue; // วันที่ยอด 0 = ไม่ได้เปิด/ยังไม่ส่งยอด ไม่นับ
     const s = out.get(r.branchId) ?? emptyStat();
     s.storefront += c.storefront;
     s.grab += c.grab;
     s.lineman += c.lineman;
+    s.shopee += c.shopee;
     s.total += dayTotal;
     s.openDays += 1;
     out.set(r.branchId, s);
@@ -114,10 +116,11 @@ export function computeSssg(
         acc.avgChannel.storefront += s.avgChannel.storefront;
         acc.avgChannel.grab += s.avgChannel.grab;
         acc.avgChannel.lineman += s.avgChannel.lineman;
+        acc.avgChannel.shopee += s.avgChannel.shopee;
         acc.openDays += s.openDays;
         return acc;
       },
-      { avgPerDay: 0, avgChannel: { storefront: 0, grab: 0, lineman: 0 }, openDays: 0 }
+      { avgPerDay: 0, avgChannel: { storefront: 0, grab: 0, lineman: 0, shopee: 0 }, openDays: 0 }
     );
   const curSum = sum(comparable, (r) => r.current);
   const prevSum = sum(comparable, (r) => r.previous);
@@ -141,6 +144,7 @@ export function computeSssg(
       storefront: pctChange(curSum.avgChannel.storefront, prevSum.avgChannel.storefront),
       grab: pctChange(curSum.avgChannel.grab, prevSum.avgChannel.grab),
       lineman: pctChange(curSum.avgChannel.lineman, prevSum.avgChannel.lineman),
+      shopee: pctChange(curSum.avgChannel.shopee, prevSum.avgChannel.shopee),
     },
   };
 }

@@ -109,7 +109,7 @@ async function DashboardData({ year, month }: { year: number; month: number }) {
     prisma.dailySales.groupBy({
       by: ["branchId"],
       where: { date: { gte: start, lte: end } },
-      _sum: { cashPos: true, transfer: true, cashTransferCombined: true, grab: true, lineman: true },
+      _sum: { cashPos: true, transfer: true, cashTransferCombined: true, grab: true, lineman: true, shopee: true },
     }),
     prisma.companyChannelDaily.aggregate({
       where: { date: { gte: start, lte: end } },
@@ -136,11 +136,14 @@ async function DashboardData({ year, month }: { year: number; month: number }) {
   const rows = branches.map((b) => {
     const s = salesByBranch.get(b.id);
     const storefront = b.type === "CASH" ? (s?.cashPos ?? 0) + (s?.transfer ?? 0) : s?.cashTransferCombined ?? 0;
-    const delivery = (s?.grab ?? 0) + (s?.lineman ?? 0);
+    // ค่าเช่า/GP ฝั่ง Delivery คิดจาก Grab + Lineman เท่านั้น — Shopee (เริ่ม 30 ต.ค. 2569) ยังไม่ได้ตกลงว่าห้างคิด GP ด้วยไหม
+    // จึงนับเข้ายอดขายรวม/Delivery ที่แสดง แต่ไม่ส่งเข้าสูตรค่าเช่า
+    const deliveryForRent = (s?.grab ?? 0) + (s?.lineman ?? 0);
+    const delivery = deliveryForRent + (s?.shopee ?? 0);
     const total = storefront + delivery;
 
     const rate = effectiveRates.get(b.id);
-    const rent = b.rentConfig ? computeRent({ ...b.rentConfig, ...rate }, storefront, delivery).rentAmount : 0;
+    const rent = b.rentConfig ? computeRent({ ...b.rentConfig, ...rate }, storefront, deliveryForRent).rentAmount : 0;
 
     return { branch: b, storefront, delivery, total, rent };
   });
@@ -160,7 +163,7 @@ async function DashboardData({ year, month }: { year: number; month: number }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard label="ยอดขายรวมทั้งหมด" value={formatBaht(grandTotal)} accent="text-brand-700" />
         <StatCard label="หน้าร้าน (Storefront)" value={formatBaht(totalStorefront)} />
-        <StatCard label="Delivery (Grab+Lineman)" value={formatBaht(totalDelivery)} />
+        <StatCard label="Delivery (Grab+Lineman+Shopee)" value={formatBaht(totalDelivery)} />
         <StatCard label="E-Commerce" value={formatBaht(ecomTotal)} />
         <StatCard label="Event ชั่วคราว" value={formatBaht(eventTotal)} />
         <StatCard label="ค่าเช่ารวม (ประมาณการ)" value={formatBaht(totalRent)} />

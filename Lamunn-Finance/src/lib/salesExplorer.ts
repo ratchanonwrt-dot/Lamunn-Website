@@ -17,6 +17,7 @@ export interface ExplorerDay {
   storefront: number;
   grab: number;
   lineman: number;
+  shopee: number;
   total: number;
   branchesWithSales: number;
   /** ค่าเฉลี่ยเคลื่อนที่ 7 วัน (เฉพาะวันที่มียอดในหน้าต่าง 7 วันปฏิทินล่าสุด) — null ถ้ายังไม่มีข้อมูล */
@@ -29,6 +30,7 @@ export interface ExplorerBranchRow {
   storefront: number;
   grab: number;
   lineman: number;
+  shopee: number;
   total: number;
   avgPerDay: number;
 }
@@ -54,7 +56,7 @@ export interface ExplorerTrend {
 export interface ExplorerResult {
   days: ExplorerDay[];
   branches: ExplorerBranchRow[];
-  totals: { cash: number; transfer: number; creditStorefront: number; storefront: number; grab: number; lineman: number; total: number };
+  totals: { cash: number; transfer: number; creditStorefront: number; storefront: number; grab: number; lineman: number; shopee: number; total: number };
   trend: ExplorerTrend;
 }
 
@@ -80,7 +82,7 @@ export function computeSalesExplorer(
   const dayMap = new Map<string, ExplorerDay>();
   for (let d = new Date(from); d <= to; d.setUTCDate(d.getUTCDate() + 1)) {
     const key = d.toISOString().slice(0, 10);
-    dayMap.set(key, { date: key, dow: d.getUTCDay(), cash: 0, transfer: 0, creditStorefront: 0, storefront: 0, grab: 0, lineman: 0, total: 0, branchesWithSales: 0, ma7: null });
+    dayMap.set(key, { date: key, dow: d.getUTCDay(), cash: 0, transfer: 0, creditStorefront: 0, storefront: 0, grab: 0, lineman: 0, shopee: 0, total: 0, branchesWithSales: 0, ma7: null });
   }
 
   const perBranch = new Map<string, ExplorerBranchRow>();
@@ -96,7 +98,7 @@ export function computeSalesExplorer(
     const transfer = type === "CASH" ? r.transfer ?? 0 : 0;
     const credit = type === "CASH" ? 0 : r.cashTransferCombined ?? 0;
     const storefront = cash + transfer + credit;
-    const total = storefront + r.grab + r.lineman;
+    const total = storefront + r.grab + r.lineman + r.shopee;
 
     day.cash += cash;
     day.transfer += transfer;
@@ -104,18 +106,20 @@ export function computeSalesExplorer(
     day.storefront += storefront;
     day.grab += r.grab;
     day.lineman += r.lineman;
+    day.shopee += r.shopee;
     day.total += total;
     if (total > 0) day.branchesWithSales += 1;
 
     let b = perBranch.get(r.branchId);
     if (!b) {
       const branch = allBranches.find((x) => x.id === r.branchId)!;
-      b = { branch, openDays: 0, storefront: 0, grab: 0, lineman: 0, total: 0, avgPerDay: 0 };
+      b = { branch, openDays: 0, storefront: 0, grab: 0, lineman: 0, shopee: 0, total: 0, avgPerDay: 0 };
       perBranch.set(r.branchId, b);
     }
     b.storefront += storefront;
     b.grab += r.grab;
     b.lineman += r.lineman;
+    b.shopee += r.shopee;
     b.total += total;
     if (total > 0) b.openDays += 1;
   }
@@ -139,9 +143,10 @@ export function computeSalesExplorer(
       storefront: a.storefront + d.storefront,
       grab: a.grab + d.grab,
       lineman: a.lineman + d.lineman,
+      shopee: a.shopee + d.shopee,
       total: a.total + d.total,
     }),
-    { cash: 0, transfer: 0, creditStorefront: 0, storefront: 0, grab: 0, lineman: 0, total: 0 }
+    { cash: 0, transfer: 0, creditStorefront: 0, storefront: 0, grab: 0, lineman: 0, shopee: 0, total: 0 }
   );
 
   return { days, branches, totals, trend: computeTrend(days) };

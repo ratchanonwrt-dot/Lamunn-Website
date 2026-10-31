@@ -36,11 +36,13 @@ export async function POST(req: NextRequest) {
     cashTransferCombined,
     grab,
     lineman,
+    shopee,
     posCheckTotal,
     note,
     overrideStorefront,
     overrideGrab,
     overrideLineman,
+    overrideShopee,
     overrideCashCounted,
   } = body;
   if (!branchId || !date) return NextResponse.json({ error: "branchId and date are required" }, { status: 400 });
@@ -68,6 +70,10 @@ export async function POST(req: NextRequest) {
   if (overrideLineman) {
     data.lineman = lineman === "" || lineman === undefined ? 0 : Number(lineman);
     data.linemanOverride = true;
+  }
+  if (overrideShopee) {
+    data.shopee = shopee === "" || shopee === undefined ? 0 : Number(shopee);
+    data.shopeeOverride = true;
   }
   if (overrideCashCounted) {
     data.cashCounted = cashCounted === "" || cashCounted === undefined ? null : Number(cashCounted);

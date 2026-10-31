@@ -27,7 +27,7 @@ export default async function BranchRankingPage({
     prisma.dailySales.groupBy({
       by: ["branchId"],
       where: { date: { gte: start, lte: end } },
-      _sum: { cashPos: true, transfer: true, cashTransferCombined: true, grab: true, lineman: true },
+      _sum: { cashPos: true, transfer: true, cashTransferCombined: true, grab: true, lineman: true, shopee: true },
     }),
   ]);
   const salesByBranch = new Map(salesAgg.map((s) => [s.branchId, s._sum]));
@@ -35,7 +35,7 @@ export default async function BranchRankingPage({
   const rows = branches.map((b) => {
     const s = salesByBranch.get(b.id);
     const storefront = b.type === "CASH" ? (s?.cashPos ?? 0) + (s?.transfer ?? 0) : s?.cashTransferCombined ?? 0;
-    const delivery = (s?.grab ?? 0) + (s?.lineman ?? 0);
+    const delivery = (s?.grab ?? 0) + (s?.lineman ?? 0) + (s?.shopee ?? 0);
     const total = storefront + delivery;
     return { branch: b, storefront, delivery, total };
   });

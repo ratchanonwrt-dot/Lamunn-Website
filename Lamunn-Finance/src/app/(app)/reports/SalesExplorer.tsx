@@ -57,6 +57,8 @@ export default function SalesExplorer({ allBranches, r, p }: { allBranches: Bran
   const directionClass = { up: "text-emerald-700 bg-emerald-50 border-emerald-200", down: "text-red-700 bg-red-50 border-red-200", flat: "text-gray-700 bg-gray-50 border-gray-200", none: "text-gray-500 bg-gray-50 border-gray-200" }[t.direction];
   const maxWeekday = Math.max(1, ...t.byWeekday.map((w) => w.avg));
   const channelTotal = r.totals.total || 1;
+  // คอลัมน์ Shopee โชว์เฉพาะช่วงที่มียอด (ช่องทางเริ่ม 30 ต.ค. 2569) — ช่วงก่อนหน้านั้นตารางจะไม่มีคอลัมน์ว่างเพิ่ม
+  const hasShopee = r.totals.shopee !== 0;
   const exportHref =
     p.branchIds.length <= 1 ? `/reports/branch-sales?${new URLSearchParams({ ...(p.branchIds[0] ? { branchId: p.branchIds[0] } : {}), from: p.from, to: p.to }).toString()}` : null;
 
@@ -214,6 +216,7 @@ export default function SalesExplorer({ allBranches, r, p }: { allBranches: Bran
                       ["หน้าร้าน — Credit Term (ห้างเก็บ)", r.totals.creditStorefront],
                       ["Grab", r.totals.grab],
                       ["Lineman", r.totals.lineman],
+                      ["Shopee", r.totals.shopee],
                     ] as const
                   )
                     .filter(([, v]) => v !== 0)
@@ -245,6 +248,7 @@ export default function SalesExplorer({ allBranches, r, p }: { allBranches: Bran
                     <th className="px-3 py-2 text-right">หน้าร้าน</th>
                     <th className="px-3 py-2 text-right">Grab</th>
                     <th className="px-3 py-2 text-right">Lineman</th>
+                    {hasShopee && <th className="px-3 py-2 text-right">Shopee</th>}
                     <th className="px-3 py-2 text-right">รวม</th>
                     <th className="px-3 py-2 text-right">เฉลี่ย/วัน</th>
                   </tr>
@@ -257,6 +261,7 @@ export default function SalesExplorer({ allBranches, r, p }: { allBranches: Bran
                       <td className="px-3 py-1.5 text-right text-gray-600">{formatBaht(b.storefront)}</td>
                       <td className="px-3 py-1.5 text-right text-gray-600">{formatBaht(b.grab)}</td>
                       <td className="px-3 py-1.5 text-right text-gray-600">{formatBaht(b.lineman)}</td>
+                      {hasShopee && <td className="px-3 py-1.5 text-right text-gray-600">{formatBaht(b.shopee)}</td>}
                       <td className="px-3 py-1.5 text-right font-medium text-gray-800">{formatBaht(b.total)}</td>
                       <td className="px-3 py-1.5 text-right text-gray-700">{formatBaht(b.avgPerDay)}</td>
                     </tr>
@@ -278,6 +283,7 @@ export default function SalesExplorer({ allBranches, r, p }: { allBranches: Bran
                   <th className="px-3 py-2 text-right">หน้าร้านรวม</th>
                   <th className="px-3 py-2 text-right">Grab</th>
                   <th className="px-3 py-2 text-right">Lineman</th>
+                  {hasShopee && <th className="px-3 py-2 text-right">Shopee</th>}
                   <th className="px-3 py-2 text-right">รวม</th>
                   <th className="px-3 py-2 text-right">เฉลี่ย 7 วัน</th>
                   {multi && <th className="px-3 py-2 text-right">สาขาที่มียอด</th>}
@@ -297,6 +303,7 @@ export default function SalesExplorer({ allBranches, r, p }: { allBranches: Bran
                       <td className="px-3 py-1.5 text-right text-gray-700">{formatBaht(d.storefront)}</td>
                       <td className="px-3 py-1.5 text-right">{d.grab ? formatBaht(d.grab) : "-"}</td>
                       <td className="px-3 py-1.5 text-right">{d.lineman ? formatBaht(d.lineman) : "-"}</td>
+                      {hasShopee && <td className="px-3 py-1.5 text-right">{d.shopee ? formatBaht(d.shopee) : "-"}</td>}
                       <td className="px-3 py-1.5 text-right font-semibold text-gray-800">{d.total ? formatBaht(d.total) : "-"}</td>
                       <td className="px-3 py-1.5 text-right text-xs text-gray-400">{d.ma7 !== null ? formatBaht(d.ma7) : "-"}</td>
                       {multi && <td className="px-3 py-1.5 text-right text-xs text-gray-400">{d.branchesWithSales}</td>}
@@ -313,6 +320,7 @@ export default function SalesExplorer({ allBranches, r, p }: { allBranches: Bran
                   <td className="px-3 py-2 text-right">{formatBaht(r.totals.storefront)}</td>
                   <td className="px-3 py-2 text-right">{formatBaht(r.totals.grab)}</td>
                   <td className="px-3 py-2 text-right">{formatBaht(r.totals.lineman)}</td>
+                  {hasShopee && <td className="px-3 py-2 text-right">{formatBaht(r.totals.shopee)}</td>}
                   <td className="px-3 py-2 text-right text-brand-700">{formatBaht(r.totals.total)}</td>
                   <td className="px-3 py-2" />
                   {multi && <td className="px-3 py-2" />}
