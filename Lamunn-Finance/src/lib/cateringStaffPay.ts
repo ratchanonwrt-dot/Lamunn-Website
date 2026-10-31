@@ -1,15 +1,20 @@
 /** คิด OT พนักงาน Catering สิ้นเดือน
  *
- * ชั่วโมงของการไปงาน 1 ครั้ง:
- *   - ถ้ากรอก "ชั่วโมง OT" ไว้ในงานนั้น (CateringBookingStaff.otHours) ใช้ค่านั้นเป็นชั่วโมงรวมของทั้งงาน
- *   - ไม่งั้นคิดจากเวลาเริ่ม-จบของงาน × จำนวนวันที่จัด (งานข้ามเที่ยงคืนนับต่อได้)
+ * เวลาทำงานปกติของพนักงานคือ OT_WINDOW_START–OT_WINDOW_END (10:00–19:00) งาน Catering ช่วงนั้นถือเป็นงานปกติ
+ * จึงนับ OT เฉพาะส่วนที่เริ่มก่อน 10:00 และส่วนที่เลย 19:00 เช่น งาน 08:00–21:00 = OT 2 + 2 = 4 ชม., งาน 11:00–17:00 = ไม่มี OT
+ *
+ * ชั่วโมง OT ของการไปงาน 1 ครั้ง:
+ *   - ถ้ากรอก "ชั่วโมง OT" ไว้ในงานนั้น (CateringBookingStaff.otHours) ใช้ค่านั้นเป็น OT รวมของทั้งงาน
+ *   - ไม่งั้นคิดจากเวลาเริ่ม-จบของงาน: วันปกติ = เฉพาะส่วนนอก 10:00–19:00, วันหยุดของคนนั้น = ทั้งงาน
+ *     (วันหยุดไม่มีเวลาทำงานปกติ ไปงานเท่าไหร่ก็เป็น OT ทั้งหมด) งานข้ามเที่ยงคืนนับต่อได้
  * งานหลายวันที่คร่อมเดือน แบ่งชั่วโมงเฉลี่ยต่อวัน แล้วนับเฉพาะวันที่อยู่ในเดือนที่ดู
  * วันที่ตรงกับ "วันหยุดประจำสัปดาห์" ของคนนั้นใช้อัตราวันหยุด (ถ้าไม่ได้ตั้ง ใช้อัตราปกติ)
  *
  * ค่ารถ + ค่าข้าว (สรุปเป็นรอบ 1–15 / 16–สิ้นเดือน):
  *   - ค่ารถ = ยอดที่ให้ล่วงหน้าต่อการไปงาน 1 ครั้ง (CateringBookingStaff.travelCost) นับครั้งเดียวที่วันแรกของงาน
  *     งานหลายวันที่คร่อมรอบจะไม่ถูกนับค่ารถซ้ำสองรอบ
- *   - ค่าข้าว = MEAL_ALLOWANCE บาทต่อวันที่ทำงานเกิน MEAL_MIN_HOURS ชั่วโมง (ใช้ชั่วโมงต่อวันชุดเดียวกับ OT)
+ *   - ค่าข้าว = MEAL_ALLOWANCE บาทต่อวันที่ทำงานเกิน MEAL_MIN_HOURS ชั่วโมง — นับชั่วโมงทำงานทั้งหมดของวันนั้น
+ *     ไม่ใช่เฉพาะชั่วโมง OT (ถ้าไม่มีเวลางาน ใช้ชั่วโมงที่กรอกเองแทน)
  *
  * ไฟล์นี้ไม่ import prisma — ใช้ได้ทั้งฝั่งเซิร์ฟเวอร์และ client (เช่น โชว์ชั่วโมงตั้งต้นในหน้างาน) */
 
@@ -17,6 +22,8 @@ export const DOW_TH = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "�
 
 export const MEAL_ALLOWANCE = 50;
 export const MEAL_MIN_HOURS = 4;
+export const OT_WINDOW_START = "10:00";
+export const OT_WINDOW_END = "19:00";
 
 export function parseDayOffs(s: string | null | undefined): number[] {
   return (s ?? "")
@@ -40,6 +47,20 @@ export function hoursPerDay(start: string | null | undefined, end: string | null
   return Math.round((diff / 60) * 100) / 100;
 }
 
+/** ชั่วโมง OT ต่อวันจากเวลางาน = ส่วนที่อยู่นอก 10:00–19:00 — null ถ้าไม่ได้กรอกเวลาเริ่มหรือจบ */
+export function otHoursPerDay(start: string | null | undefined, end: string | null | undefined): number | null {
+  const a = minutesOf(start);
+  let b = minutesOf(end);
+  if (a === null || b === null) return null;
+  if (b <= a) b += 24 * 60;
+  const ws = minutesOf(OT_WINDOW_START)!;
+  const we = minutesOf(OT_WINDOW_END)!;
+  // งานข้ามเที่ยงคืนอาจคาบเวลาปกติของวันถัดไปด้วย จึงหักช่วง 10–19 ของทั้งสองวัน
+  let normal = 0;
+  for (const off of [0, 24 * 60]) normal += Math.max(0, Math.min(b, we + off) - Math.max(a, ws + off));
+  return Math.round(((b - a - normal) / 60) * 100) / 100;
+}
+
 export function eventDays(eventDate: Date, eventEndDate: Date | null): Date[] {
   const last = eventEndDate && eventEndDate > eventDate ? eventEndDate : eventDate;
   const out: Date[] = [];
@@ -47,10 +68,17 @@ export function eventDays(eventDate: Date, eventEndDate: Date | null): Date[] {
   return out;
 }
 
-/** ชั่วโมงตั้งต้นของการไปงานครั้งนี้ (ทั้งงาน) — ใช้เป็นค่าที่โชว์ในช่องถ้ายังไม่ได้กรอกเอง */
-export function defaultAssignmentHours(b: { eventDate: Date; eventEndDate: Date | null; eventStartTime: string | null; eventEndTime: string | null }): number | null {
-  const h = hoursPerDay(b.eventStartTime, b.eventEndTime);
-  return h === null ? null : Math.round(h * eventDays(b.eventDate, b.eventEndDate).length * 100) / 100;
+/** ชั่วโมง OT ตั้งต้นของการไปงานครั้งนี้ (ทั้งงาน) — ใช้เป็นค่าที่โชว์ในช่องถ้ายังไม่ได้กรอกเอง
+ * dayOffs = วันหยุดของคนนั้น (วันที่ตรงวันหยุดนับทั้งงานเป็น OT) */
+export function defaultAssignmentHours(
+  b: { eventDate: Date; eventEndDate: Date | null; eventStartTime: string | null; eventEndTime: string | null },
+  dayOffs: number[] = [],
+): number | null {
+  const work = hoursPerDay(b.eventStartTime, b.eventEndTime);
+  const ot = otHoursPerDay(b.eventStartTime, b.eventEndTime);
+  if (work === null || ot === null) return null;
+  const total = eventDays(b.eventDate, b.eventEndDate).reduce((sum, d) => sum + (dayOffs.includes(d.getUTCDay()) ? work : ot), 0);
+  return Math.round(total * 100) / 100;
 }
 
 export interface RosterStaff {
@@ -79,7 +107,7 @@ export interface StaffJobLine {
   dates: string[]; // YYYY-MM-DD ในช่วงที่ดู
   dayOffDates: string[];
   mealDates: string[]; // วันที่ทำงานเกิน MEAL_MIN_HOURS ชม. → ได้ค่าข้าว
-  hoursPerDay: number;
+  hoursPerDay: number; // ชั่วโมงทำงานต่อวัน (ใช้ตัดสินค่าข้าว) — ไม่ใช่ชั่วโมง OT
   normalHours: number;
   dayOffHours: number;
   hoursMissing: boolean; // ไม่มีเวลางานและไม่ได้กรอกชั่วโมงเอง → นับเป็น 0 ชม. (ไม่ได้ค่าข้าวด้วย)
@@ -143,7 +171,8 @@ export function computePeriodPay(roster: RosterStaff[], bookings: PayBooking[], 
     const allDays = eventDays(b.eventDate, b.eventEndDate);
     const inMonth = allDays.filter((d) => d >= start && d <= end);
     if (inMonth.length === 0) continue;
-    const perDayDefault = hoursPerDay(b.eventStartTime, b.eventEndTime);
+    const workPerDay = hoursPerDay(b.eventStartTime, b.eventEndTime);
+    const otPerDay = otHoursPerDay(b.eventStartTime, b.eventEndTime);
     const seen = new Set<string>();
 
     for (const a of b.staffAssignments) {
@@ -158,7 +187,8 @@ export function computePeriodPay(roster: RosterStaff[], bookings: PayBooking[], 
         byKey.set(key, row);
       }
       const offs = new Set(parseDayOffs(row.staff?.dayOffs));
-      const perDay = a.otHours != null ? a.otHours / allDays.length : perDayDefault ?? 0;
+      const manualPerDay = a.otHours != null ? a.otHours / allDays.length : null;
+      const mealHours = workPerDay ?? manualPerDay ?? 0;
       const rate = row.staff?.otRatePerHour ?? 0;
       const offRate = row.staff?.dayOffRatePerHour ?? rate;
 
@@ -168,10 +198,10 @@ export function computePeriodPay(roster: RosterStaff[], bookings: PayBooking[], 
         dates: [],
         dayOffDates: [],
         mealDates: [],
-        hoursPerDay: r2(perDay),
+        hoursPerDay: r2(mealHours),
         normalHours: 0,
         dayOffHours: 0,
-        hoursMissing: a.otHours == null && perDayDefault === null,
+        hoursMissing: a.otHours == null && workPerDay === null,
         pay: 0,
         travel: allDays[0] >= start ? a.travelCost ?? 0 : 0,
         meal: 0,
@@ -179,12 +209,12 @@ export function computePeriodPay(roster: RosterStaff[], bookings: PayBooking[], 
       for (const d of inMonth) {
         const iso = d.toISOString().slice(0, 10);
         line.dates.push(iso);
-        if (perDay > MEAL_MIN_HOURS) line.mealDates.push(iso);
+        if (mealHours > MEAL_MIN_HOURS) line.mealDates.push(iso);
         if (offs.has(d.getUTCDay())) {
           line.dayOffDates.push(iso);
-          line.dayOffHours += perDay;
+          line.dayOffHours += manualPerDay ?? workPerDay ?? 0;
         } else {
-          line.normalHours += perDay;
+          line.normalHours += manualPerDay ?? otPerDay ?? 0;
         }
       }
       line.normalHours = r2(line.normalHours);

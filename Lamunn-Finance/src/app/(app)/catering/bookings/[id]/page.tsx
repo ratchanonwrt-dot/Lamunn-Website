@@ -65,9 +65,15 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
   const pickNames = [...roster.map((r) => r.name), ...knownNames.filter((n) => !rosterLower.has(n.toLowerCase()))];
   const jobDows = new Set(eventDays(booking.eventDate, booking.eventEndDate).map((d) => d.getUTCDay()));
   const offNames: Record<string, string> = {};
+  // คนที่งานนี้ตรงวันหยุดของเขา OT ตั้งต้นต่างจากคนอื่น (วันหยุดนับทั้งงาน ไม่หักช่วง 10:00–19:00)
+  const offDefaultHours: Record<string, number | null> = {};
   for (const r of roster) {
-    const hit = parseDayOffs(r.dayOffs).filter((d) => jobDows.has(d));
-    if (hit.length) offNames[r.name.trim().toLowerCase()] = hit.map((d) => DOW_TH[d]).join(" ");
+    const offs = parseDayOffs(r.dayOffs);
+    const hit = offs.filter((d) => jobDows.has(d));
+    if (!hit.length) continue;
+    const key = r.name.trim().toLowerCase();
+    offNames[key] = hit.map((d) => DOW_TH[d]).join(" ");
+    offDefaultHours[key] = defaultAssignmentHours(booking, offs);
   }
   const defaultHours = defaultAssignmentHours(booking);
 
@@ -138,7 +144,7 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
         requiredStaff={needStaff}
       />
 
-      <BookingStaffPanel bookingId={booking.id} assignments={booking.staffAssignments} knownNames={pickNames} busyNames={busyNames} servings={servings} required={needStaff} offNames={offNames} defaultHours={defaultHours} />
+      <BookingStaffPanel bookingId={booking.id} assignments={booking.staffAssignments} knownNames={pickNames} busyNames={busyNames} servings={servings} required={needStaff} offNames={offNames} defaultHours={defaultHours} offDefaultHours={offDefaultHours} />
 
       <div>
         <ReportSection title="แก้ไขรายละเอียดงาน" summary="วันที่ เวลา สถานที่ จำนวนเสิร์ฟ ยอดเงิน สถานะ หมายเหตุ">
