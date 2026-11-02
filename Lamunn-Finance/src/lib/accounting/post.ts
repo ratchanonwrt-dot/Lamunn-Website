@@ -2,6 +2,7 @@ import { prisma } from "@lamunn/db-finance";
 import type { AccEntryStatus, AccJournalType, Prisma } from "@lamunn/db-finance";
 import { toBaht, toSatang } from "./money";
 import { recordAutokeyLearning } from "./autokey";
+import { syncFixedAssetsFromPostedEntry } from "./fixedAssetSync";
 
 /** เครื่องมือกลางสำหรับสร้าง/ผ่านรายการใบสำคัญ
  *
@@ -125,7 +126,7 @@ export async function createEntry(draft: DraftEntry) {
   const journalType = draft.journalType ?? "GENERAL";
   const status = draft.status ?? "DRAFT";
 
-  return prisma.$transaction(async (tx) => {
+  const entry = await prisma.$transaction(async (tx) => {
     if (draft.sourceType && draft.sourceKey) {
       const existing = await tx.accJournalEntry.findUnique({
         where: { sourceType_sourceKey: { sourceType: draft.sourceType, sourceKey: draft.sourceKey } },
@@ -166,6 +167,8 @@ export async function createEntry(draft: DraftEntry) {
       },
     });
   });
+  if (entry.status === "POSTED") await syncFixedAssetsFromPostedEntry(entry.id, draft.userId);
+  return entry;
 }
 
 /** แก้ไขใบสำคัญที่ยังเป็นร่าง — ลบบรรทัดเดิมทิ้งแล้วสร้างใหม่ทั้งหมด (ง่ายกว่า diff ทีละบรรทัด
@@ -233,6 +236,7 @@ export async function postEntry(entryId: string, userId?: string | null) {
   ]);
   // เรียนรู้หลังผ่านรายการเท่านั้น ร่างที่ยังไม่ตรวจหรือถูกยกเลิกจึงไม่มีทางทำให้กฎบัญชีเพี้ยน
   if (entry.sourceType === "AI_AUTOKEY") await recordAutokeyLearning(entryId);
+  await syncFixedAssetsFromPostedEntry(entryId, userId);
   return updated;
 }
 
@@ -249,6 +253,8 @@ export async function unpostEntry(entryId: string, userId?: string | null) {
     throw new AccountingError("ใบสำคัญนี้ถูกยกเลิกไปแล้ว ถอนการผ่านรายการไม่ได้");
   }
   await assertPeriodOpen(entry.date);
+  const soldAsset = await prisma.accFixedAsset.findFirst({ where: { sourceLine: { entryId }, disposals: { some: {} } }, select: { code: true } });
+  if (soldAsset) throw new AccountingError(`ถอนการผ่านรายการไม่ได้ เพราะทรัพย์สิน ${soldAsset.code} มีประวัติการขายแล้ว`);
 
   // ต้องอัปเดตสถานะที่บรรทัดด้วย เพราะคิวรีงบ/รายงานภาษีอ่านสถานะจากบรรทัด (ดู schema.prisma)
   const [updated] = await prisma.$transaction([
@@ -257,6 +263,8 @@ export async function unpostEntry(entryId: string, userId?: string | null) {
       data: { status: "DRAFT", postedAt: null, postedBy: null, createdBy: userId ?? entry.createdBy },
     }),
     prisma.accJournalLine.updateMany({ where: { entryId }, data: { status: "DRAFT" } }),
+    // ทะเบียนอัตโนมัติมีได้เฉพาะใบที่ผ่านรายการ เมื่อผ่านใหม่จะสร้างกลับด้วย sourceLineId เดิม
+    prisma.accFixedAsset.deleteMany({ where: { sourceLine: { entryId } } }),
   ]);
   return updated;
 }
@@ -287,12 +295,15 @@ export async function voidEntry(entryId: string, userId?: string | null) {
   const entry = await prisma.accJournalEntry.findUnique({ where: { id: entryId } });
   if (!entry) throw new AccountingError("ไม่พบใบสำคัญนี้");
   await assertPeriodOpen(entry.date);
+  const soldAsset = await prisma.accFixedAsset.findFirst({ where: { sourceLine: { entryId }, disposals: { some: {} } }, select: { code: true } });
+  if (soldAsset) throw new AccountingError(`ยกเลิกใบสำคัญไม่ได้ เพราะทรัพย์สิน ${soldAsset.code} มีประวัติการขายแล้ว`);
   const [updated] = await prisma.$transaction([
     prisma.accJournalEntry.update({
       where: { id: entryId },
       data: { status: "VOID", postedBy: userId ?? entry.postedBy },
     }),
     prisma.accJournalLine.updateMany({ where: { entryId }, data: { status: "VOID" } }),
+    prisma.accFixedAsset.deleteMany({ where: { sourceLine: { entryId } } }),
   ]);
   return updated;
 }

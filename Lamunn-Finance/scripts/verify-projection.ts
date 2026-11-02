@@ -17,10 +17,11 @@ function check(label: string, actual: unknown, expected: unknown) {
 }
 
 async function main() {
-  const [{ prisma }, { createEntry }, { loadProjectionReport }] = await Promise.all([
+  const [{ prisma }, { createEntry }, { loadProjectionReport }, { buildProjectionWorkbook, projectionExcelFilename }] = await Promise.all([
     import("@lamunn/db-finance"),
     import("../src/lib/accounting/post"),
     import("../src/lib/accounting/projection"),
+    import("../src/lib/accounting/projectionExcel"),
   ]);
   const accountIds: string[] = [];
   const entryIds: string[] = [];
@@ -78,6 +79,15 @@ async function main() {
     check("ขาดทุนยกมารวม 5 ปี", report.totalLossAvailable, 15_000);
     check("ประมาณการหลังหักขาดทุนยกมา", report.totals.estimatedAfterLoss, 45_000);
     check("ผลจริงหลังหักขาดทุนยกมา", report.totals.actualAfterLoss, 25_000);
+
+    const workbook = buildProjectionWorkbook(report, "[test] บริษัททดสอบประมาณการ จำกัด");
+    const sheet = workbook.getWorksheet("ประมาณการเทียบผลจริง");
+    check("Excel: ชื่อบริษัท", sheet?.getCell("A1").value, "[test] บริษัททดสอบประมาณการ จำกัด");
+    check("Excel: รายได้ประมาณการเดือนมกราคมเป็นบาท", sheet?.getCell("B6").value, 1000);
+    check("Excel: รายได้จริงเดือนมกราคมเป็นบาท", sheet?.getCell("C6").value, 1200);
+    check("Excel: ยอดรวมหลังหักขาดทุนยกมา", sheet?.getCell("AA10").value, 250);
+    check("Excel: ชื่อไฟล์", projectionExcelFilename(YEAR), `projection-vs-actual-${YEAR}.xlsx`);
+    check("Excel: เขียนไฟล์ได้", (await workbook.xlsx.writeBuffer()).byteLength > 0, true);
   } finally {
     console.log("\n=== ลบข้อมูลทดสอบตาม id ===");
     for (const id of entryIds.reverse()) await prisma.accJournalEntry.delete({ where: { id } }).catch(() => undefined);

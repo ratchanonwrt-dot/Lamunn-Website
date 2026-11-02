@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Printer, Save } from "lucide-react";
+import { FileSpreadsheet, Printer, Save } from "lucide-react";
 import { useServerRefresh } from "./useServerRefresh";
 import ProjectionTable from "./ProjectionTable";
 import type { ProjectionReport } from "@/lib/accounting/projection";
@@ -124,13 +124,21 @@ export default function ProjectionWorkspace({ initialReport, selectedMonth }: { 
           <h2 className="font-semibold text-gray-900">เปรียบเทียบประมาณการกับผลที่เกิดขึ้นจริง</h2>
           <p className="text-xs text-gray-500">ผลจริงดึงจากงบกำไรขาดทุนเฉพาะใบสำคัญที่ผ่านรายการแล้ว</p>
         </div>
-        <Link
-          href={`/print/projection?year=${report.year}`}
-          target="_blank"
-          className="flex shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-        >
-          <Printer size={15} /> พิมพ์ / บันทึก PDF
-        </Link>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <a
+            href={`/api/accounting/projections/export?year=${report.year}`}
+            className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+          >
+            <FileSpreadsheet size={15} /> Export Excel
+          </a>
+          <Link
+            href={`/print/projection?year=${report.year}`}
+            target="_blank"
+            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            <Printer size={15} /> พิมพ์ / บันทึก PDF
+          </Link>
+        </div>
       </div>
 
       <ProjectionTable report={report} selectedMonth={selectedMonth} />

@@ -82,6 +82,10 @@ export const DEFAULT_CHART: SeedAccount[] = [
   { code: "1620", nameTh: "เครื่องตกแต่งและติดตั้ง", type: "ASSET", parentCode: "1600" },
   { code: "1630", nameTh: "ยานพาหนะ", type: "ASSET", parentCode: "1600" },
   { code: "1640", nameTh: "คอมพิวเตอร์และอุปกรณ์สำนักงาน", type: "ASSET", parentCode: "1600" },
+  { code: "1650", nameTh: "ที่ดิน", type: "ASSET", parentCode: "1600" },
+  { code: "1660", nameTh: "อาคาร", type: "ASSET", parentCode: "1600" },
+  { code: "1670", nameTh: "ซอฟต์แวร์คอมพิวเตอร์", type: "ASSET", parentCode: "1600" },
+  { code: "1680", nameTh: "เครื่องจักรและอุปกรณ์ในโรงงาน", type: "ASSET", parentCode: "1600" },
   { code: "1690", nameTh: "ค่าเสื่อมราคาสะสม", type: "ASSET", parentCode: "1600" },
 
   // ── 2 หนี้สิน ──────────────────────────────────────────────────
