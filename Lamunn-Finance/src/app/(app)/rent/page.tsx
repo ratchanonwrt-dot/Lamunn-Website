@@ -217,8 +217,14 @@ async function RentData({ year, month }: { year: number; month: number }) {
   const salesByBranch = new Map(salesAgg.map((s) => [s.branchId, s._sum]));
   const paymentByBranch = new Map(paymentRows.map((p) => [p.branchId, { status: p.status as PaymentStatus, minimumPaid: p.minimumPaid }]));
 
+  // นับค่าเช่าเฉพาะสาขาที่เปิดจริงในเดือนนั้น (มียอดขาย) — สาขาที่ยังไม่เปิด/ปิดไปแล้วมีค่าเช่าคงที่หรือขั้นต่ำค้างอยู่ในตั้งค่า
+  // ถ้าไม่กรอง ยอดรวมจะนับค่าเช่าที่ไม่ได้จ่ายจริงเข้าไปด้วย (เช่น ส.ค. 2569 มี 6 สาขายังไม่เปิดแต่ถูกคิดเต็มเดือน 150,000)
   const rows: Row[] = branches
     .filter((b) => b.rentConfig)
+    .filter((b) => {
+      const s = salesByBranch.get(b.id);
+      return (s?.cashPos ?? 0) + (s?.transfer ?? 0) + (s?.cashTransferCombined ?? 0) + (s?.grab ?? 0) + (s?.lineman ?? 0) > 0;
+    })
     .map((b) => {
       const s = salesByBranch.get(b.id);
       const storefront = b.type === "CASH" ? (s?.cashPos ?? 0) + (s?.transfer ?? 0) : s?.cashTransferCombined ?? 0;

@@ -143,7 +143,8 @@ async function DashboardData({ year, month }: { year: number; month: number }) {
     const total = storefront + delivery;
 
     const rate = effectiveRates.get(b.id);
-    const rent = b.rentConfig ? computeRent({ ...b.rentConfig, ...rate }, storefront, deliveryForRent).rentAmount : 0;
+    // สาขาที่ไม่มียอดขายในเดือนนั้น (ยังไม่เปิด/ปิดแล้ว) ไม่นับค่าเช่า — ให้ตรงกับหน้าค่าเช่า
+    const rent = b.rentConfig && total > 0 ? computeRent({ ...b.rentConfig, ...rate }, storefront, deliveryForRent).rentAmount : 0;
 
     return { branch: b, storefront, delivery, total, rent };
   });
