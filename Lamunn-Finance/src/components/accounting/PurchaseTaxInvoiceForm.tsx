@@ -35,6 +35,7 @@ export default function PurchaseTaxInvoiceForm({
   partners,
   expenseAccounts,
   creditAccounts,
+  paymentAccounts,
   vatRate,
 }: {
   partners: PartnerOption[];
@@ -42,6 +43,8 @@ export default function PurchaseTaxInvoiceForm({
   expenseAccounts: AccountOption[];
   /** บัญชีเงินสด/ธนาคาร/เจ้าหนี้ ที่จะเครดิต */
   creditAccounts: AccountOption[];
+  /** บัญชีเงินสด/ธนาคารสำหรับใบสำคัญจ่ายเมื่อมีหัก ณ ที่จ่าย */
+  paymentAccounts: AccountOption[];
   vatRate: number;
 }) {
   const { refresh, refreshing } = useServerRefresh();
@@ -148,6 +151,7 @@ export default function PurchaseTaxInvoiceForm({
     ? allocationTarget
     : activeExpenseLines.reduce((sum, line) => sum + Math.max(0, signedInputToSatang(line.amount)), 0);
   const allocationDifference = allocationTarget - allocationTotal;
+  const settlementAccounts = whtEnabled ? paymentAccounts : creditAccounts;
 
   return (
     <form onSubmit={submit} className="w-full rounded-xl border border-gray-200 bg-white p-5">
@@ -309,6 +313,9 @@ export default function PurchaseTaxInvoiceForm({
                   ...form,
                   whtIncomeType: e.target.value,
                   whtRatePercent: selected ? String(selected.rate * 100) : "",
+                   ...(e.target.value && !paymentAccounts.some((account) => account.id === form.creditAccountId)
+                     ? { creditAccountId: "" }
+                     : {}),
                 });
               }}
               className={field}
@@ -447,10 +454,19 @@ export default function PurchaseTaxInvoiceForm({
           </div>
 
           <div className={label}>
-            {isCreditNote ? "รับคืน / ลดเจ้าหนี้ (เดบิต)" : "จ่ายด้วย / เจ้าหนี้ (เครดิต)"}
+            {isCreditNote
+              ? "รับคืน / ลดเจ้าหนี้ (เดบิต)"
+              : whtEnabled
+                ? "บัญชีเงินสด/ธนาคารที่ใช้จ่ายสุทธิ (สมุดรายวันจ่าย)"
+                : "จ่ายด้วย / เจ้าหนี้ (เครดิต)"}
             <div className="mt-1">
-              <AccountCombobox accounts={creditAccounts} value={form.creditAccountId} onChange={(id) => setForm({ ...form, creditAccountId: id })} />
+              <AccountCombobox accounts={settlementAccounts} value={form.creditAccountId} onChange={(id) => setForm({ ...form, creditAccountId: id })} />
             </div>
+            {whtEnabled && (
+              <span className="mt-1 block text-xs text-gray-500">
+                ระบบจะตั้งเจ้าหนี้ 2110 ในใบสำคัญซื้อ แล้วตัดจ่ายสุทธิพร้อมตั้งภาษีหัก 27124 ในใบสำคัญจ่าย
+              </span>
+            )}
           </div>
         </div>
       </div>

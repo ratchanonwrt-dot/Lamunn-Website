@@ -35,6 +35,7 @@ export default function EditPurchaseInvoiceButton({ id }: { id: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [entry, setEntry] = useState<LinkedEntry | null>(null);
+  const [paymentEntry, setPaymentEntry] = useState<LinkedEntry | null>(null);
   const [form, setForm] = useState<InvoiceData | null>(null);
   const [amount, setAmount] = useState("");
   const [amountDirty, setAmountDirty] = useState(false);
@@ -53,6 +54,7 @@ export default function EditPurchaseInvoiceButton({ id }: { id: string }) {
     }
     setForm(data.invoice);
     setEntry(data.entry);
+    setPaymentEntry(data.paymentEntry ?? null);
     setAmount(String(data.invoice.totalAmount));
     setAmountDirty(false);
     setAmountIncludesVat(true);
@@ -90,7 +92,7 @@ export default function EditPurchaseInvoiceButton({ id }: { id: string }) {
     refresh();
   }
 
-  const amountLocked = entry?.status === "POSTED";
+  const amountLocked = entry?.status === "POSTED" || paymentEntry?.status === "POSTED";
   const isCreditNote = signedInputToSatang(amount) < 0;
   const field = "mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50 disabled:text-gray-400";
   const label = "text-xs text-gray-500";
@@ -122,6 +124,12 @@ export default function EditPurchaseInvoiceButton({ id }: { id: string }) {
                     {amountLocked
                       ? " ซึ่งผ่านรายการแล้ว — แก้ได้เฉพาะเลขที่/ชื่อ/รายการ ถ้าจะแก้ยอดเงินหรือวันที่ ให้กด \"ยกเลิกผ่านรายการ\" ในสมุดรายวันก่อน"
                       : " (ยังเป็นร่าง) — แก้ยอดเงินหรือวันที่แล้ว ระบบจะปรับบรรทัดในใบสำคัญให้ตรงกัน"}
+                  </p>
+                )}
+                {paymentEntry && paymentEntry.status !== "VOID" && (
+                  <p className={`mb-3 rounded-lg px-3 py-2 text-xs ${paymentEntry.status === "POSTED" ? "bg-amber-50 text-amber-800" : "bg-violet-50 text-violet-800"}`}>
+                    ใบที่มีหัก ณ ที่จ่ายผูกกับใบสำคัญจ่าย <span className="font-mono">{paymentEntry.entryNo}</span>
+                    {paymentEntry.status === "POSTED" ? " ซึ่งผ่านรายการแล้ว" : " (ยังเป็นร่าง)"}
                   </p>
                 )}
 

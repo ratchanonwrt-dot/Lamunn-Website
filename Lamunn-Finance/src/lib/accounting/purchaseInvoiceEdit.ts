@@ -6,6 +6,7 @@ import { AccountingError, postEntry, unpostEntry, updateEntry } from "./post";
 import { SYSTEM_ACCOUNTS } from "./chartOfAccounts";
 import { withholdingFromPercent } from "./withholdingMath";
 import { parsePurchaseTaxClaimPeriod } from "./purchaseTaxClaimPeriod";
+import { purchasePaymentEntryDescriptionFor } from "./purchaseWhtJournals";
 
 /** แก้ไขใบกำกับภาษีซื้อที่บันทึกไปแล้ว — ใช้กรณีคีย์เลขที่ใบกำกับ/ชื่อ/ยอดผิด
  *
@@ -119,7 +120,112 @@ export async function updatePurchaseInvoice(
       })
     : null;
 
-  if (entry && entry.status !== "VOID") {
+  const paymentEntry = linkedWht?.entryId && linkedWht.entryId !== current.entryId
+    ? await prisma.accJournalEntry.findUnique({
+        where: { id: linkedWht.entryId },
+        include: { lines: { orderBy: { sortOrder: "asc" }, include: { account: { select: { code: true, vatRole: true } } } } },
+      })
+    : null;
+
+  if (entry && paymentEntry && entry.status !== "VOID" && paymentEntry.status !== "VOID") {
+    const purchaseVatLine = entry.lines.find((line) => line.account.vatRole === "INPUT");
+    const purchasePayableLine = entry.lines.find((line) => line.account.code === SYSTEM_ACCOUNTS.TRADE_PAYABLE && toSatang(line.credit) > 0);
+    const purchaseExpenseLines = entry.lines.filter((line) => line !== purchaseVatLine && line !== purchasePayableLine);
+    const paymentPayableLine = paymentEntry.lines.find((line) => line.account.code === SYSTEM_ACCOUNTS.TRADE_PAYABLE && toSatang(line.debit) > 0);
+    const paymentWhtLine = paymentEntry.lines.find((line) =>
+      (line.account.code === SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE || line.account.code === SYSTEM_ACCOUNTS.WHT_PAYABLE)
+      && toSatang(line.credit) > 0
+    );
+    const paymentCashLine = paymentEntry.lines.find((line) => line !== paymentPayableLine && line !== paymentWhtLine && toSatang(line.credit) > 0);
+    const pnd53Account = paymentWhtLine?.account.code === SYSTEM_ACCOUNTS.WHT_PAYABLE
+      ? await prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE } })
+      : null;
+
+    if (!purchaseVatLine || !purchasePayableLine || !paymentPayableLine || !paymentWhtLine || !paymentCashLine) {
+      throw new AccountingError(
+        `ใบสำคัญ ${entry.entryNo}/${paymentEntry.entryNo} ถูกแก้ไขจนไม่ใช่รูปแบบมาตรฐาน — แก้ยอดที่ใบสำคัญโดยตรงแทน`
+      );
+    }
+    if (paymentWhtLine.account.code === SYSTEM_ACCOUNTS.WHT_PAYABLE && !pnd53Account) {
+      throw new AccountingError(`ไม่พบบัญชีภาษีหัก ณ ที่จ่าย - ภ.ง.ด.53 รหัส ${SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE} ในผังบัญชี`);
+    }
+
+    if (amountChanged || dateChanged) {
+      const postedEntry = [entry, paymentEntry].find((item) => item.status === "POSTED");
+      if (postedEntry) {
+        throw new AccountingError(
+          `ใบสำคัญ ${postedEntry.entryNo} ผ่านรายการแล้ว — ไปกด "ยกเลิกผ่านรายการ" ในสมุดรายวันก่อน จึงจะแก้ยอดเงินหรือวันที่ได้`
+        );
+      }
+      if (purchaseExpenseLines.length !== 1) {
+        throw new AccountingError(
+          `ใบสำคัญ ${entry.entryNo} แบ่งค่าใช้จ่ายหลายบัญชี — แก้ยอดที่ใบสำคัญโดยตรงเพื่อระบุยอดแต่ละบัญชี`
+        );
+      }
+      if (!linkedWhtCalc) throw new AccountingError("ไม่พบยอดภาษีหัก ณ ที่จ่ายที่เชื่อมกับใบสำคัญจ่าย");
+      const expenseLine = purchaseExpenseLines[0];
+      const total = base + vat;
+      await updateEntry(entry.id, {
+        date: invoiceDate,
+        journalType: "PURCHASE",
+        description: entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)
+          ? entryDescriptionFor(vendorName, invoiceNo, false)
+          : entry.description,
+        lines: [
+          { accountId: expenseLine.accountId, debit: toBaht(base), partnerId: expenseLine.partnerId, branchId: expenseLine.branchId, memo: expenseLine.memo, docNo: expenseLine.docNo },
+          { accountId: purchaseVatLine.accountId, debit: toBaht(vat), partnerId: purchaseVatLine.partnerId, branchId: purchaseVatLine.branchId, memo: purchaseVatLine.memo, docNo: invoiceNo },
+          { accountId: purchasePayableLine.accountId, credit: toBaht(total), partnerId: purchasePayableLine.partnerId, branchId: purchasePayableLine.branchId, memo: purchasePayableLine.memo },
+        ],
+      });
+      await updateEntry(paymentEntry.id, {
+        date: invoiceDate,
+        journalType: "PAYMENT",
+        description: paymentEntry.description === purchasePaymentEntryDescriptionFor(current.vendorName, current.invoiceNo)
+          ? purchasePaymentEntryDescriptionFor(vendorName, invoiceNo)
+          : paymentEntry.description,
+        lines: [
+          { accountId: paymentPayableLine.accountId, debit: toBaht(total), partnerId: paymentPayableLine.partnerId, branchId: paymentPayableLine.branchId, memo: paymentPayableLine.memo },
+          { accountId: paymentCashLine.accountId, credit: toBaht(total - linkedWhtCalc.amount), partnerId: paymentCashLine.partnerId, branchId: paymentCashLine.branchId, memo: paymentCashLine.memo },
+          { accountId: pnd53Account?.id ?? paymentWhtLine.accountId, credit: toBaht(linkedWhtCalc.amount), partnerId: paymentWhtLine.partnerId, branchId: paymentWhtLine.branchId, memo: paymentWhtLine.memo },
+        ],
+      });
+    } else {
+      if (identityChanged && entry.status === "DRAFT" && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)) {
+        await updateEntry(entry.id, {
+          date: entry.date,
+          journalType: entry.journalType,
+          description: entryDescriptionFor(vendorName, invoiceNo, false),
+          lines: entry.lines.map((line) => ({
+            accountId: line.accountId,
+            debit: Number(line.debit),
+            credit: Number(line.credit),
+            partnerId: line.partnerId,
+            branchId: line.branchId,
+            channel: line.channel,
+            memo: line.memo,
+            docNo: line.account.vatRole === "INPUT" ? invoiceNo : line.docNo,
+          })),
+        });
+      }
+      if (identityChanged && paymentEntry.status === "DRAFT" && paymentEntry.description === purchasePaymentEntryDescriptionFor(current.vendorName, current.invoiceNo)) {
+        await updateEntry(paymentEntry.id, {
+          date: paymentEntry.date,
+          journalType: paymentEntry.journalType,
+          description: purchasePaymentEntryDescriptionFor(vendorName, invoiceNo),
+          lines: paymentEntry.lines.map((line) => ({
+            accountId: line.accountId,
+            debit: Number(line.debit),
+            credit: Number(line.credit),
+            partnerId: line.partnerId,
+            branchId: line.branchId,
+            channel: line.channel,
+            memo: line.memo,
+            docNo: line.docNo,
+          })),
+        });
+      }
+    }
+  } else if (entry && entry.status !== "VOID") {
     const legacyWhtLine = linkedWht?.formType === "PND53"
       ? entry.lines.find((line) => line.account.code === SYSTEM_ACCOUNTS.WHT_PAYABLE && toSatang(line.credit) > 0)
       : null;
@@ -199,8 +305,22 @@ export async function updatePurchaseInvoice(
         })),
       });
       if (wasPosted) await postEntry(entry.id, opts.userId);
-    } else if (identityChanged && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)) {
-      await prisma.accJournalEntry.update({ where: { id: entry.id }, data: { description: entryDescriptionFor(vendorName, invoiceNo, isCreditNote) } });
+    } else if (identityChanged && entry.status === "DRAFT" && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)) {
+      await updateEntry(entry.id, {
+        date: entry.date,
+        journalType: entry.journalType,
+        description: entryDescriptionFor(vendorName, invoiceNo, isCreditNote),
+        lines: entry.lines.map((line) => ({
+          accountId: line.accountId,
+          debit: Number(line.debit),
+          credit: Number(line.credit),
+          partnerId: line.partnerId,
+          branchId: line.branchId,
+          channel: line.channel,
+          memo: line.memo,
+          docNo: line.account.vatRole === "INPUT" ? invoiceNo : line.docNo,
+        })),
+      });
     }
   }
 
