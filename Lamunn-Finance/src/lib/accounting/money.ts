@@ -60,7 +60,7 @@ export function addVatExclusive(
   vatRate: number,
   rounding: VatRounding = "NEAREST"
 ): { base: number; vat: number } {
-  if (vatRate <= 0) return { base: baseSatang, vat: 0 };
+  if (vatRate <= 0 || baseSatang === 0) return { base: baseSatang, vat: 0 };
   const denominator = 1_000_000n;
   const rateNumerator = BigInt(Math.round(vatRate * Number(denominator)));
   const magnitude = BigInt(Math.abs(Math.trunc(baseSatang)));
