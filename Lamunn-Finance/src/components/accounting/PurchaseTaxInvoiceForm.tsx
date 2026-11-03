@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useServerRefresh } from "./useServerRefresh";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import PartnerCombobox from "./PartnerCombobox";
 import AccountCombobox from "./AccountCombobox";
 import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
@@ -49,6 +49,7 @@ export default function PurchaseTaxInvoiceForm({
   const [submitting, setSubmitting] = useState(false);
   const busy = submitting || refreshing;
   const [error, setError] = useState<string | null>(null);
+  const nextExpenseLineKey = useRef(2);
   const [form, setForm] = useState({
     invoiceNo: "",
     invoiceDate: today(),
@@ -64,7 +65,7 @@ export default function PurchaseTaxInvoiceForm({
     amountIncludesVat: true,
     isClaimable: true,
     note: "",
-    expenseAccountId: "",
+    expenseLines: [{ key: "expense-1", accountId: "", amount: "" }],
     creditAccountId: "",
     whtIncomeType: "",
     whtRatePercent: "",
@@ -110,6 +111,7 @@ export default function PurchaseTaxInvoiceForm({
       whtIncomeType: "",
       whtRatePercent: "",
       whtBaseAmount: "",
+      expenseLines: form.expenseLines.map((line) => ({ ...line, amount: "" })),
     });
     setOpen(false);
     refresh();
@@ -140,6 +142,12 @@ export default function PurchaseTaxInvoiceForm({
   const total = base + vat;
   const netPayable = total - wht.amount;
   const partnerBranches = partnerBranchChoices(partners, form.partnerId);
+  const allocationTarget = Math.abs(base);
+  const activeExpenseLines = form.expenseLines.filter((line) => line.accountId || line.amount.trim());
+  const allocationTotal = activeExpenseLines.length === 1 && activeExpenseLines[0].accountId && !activeExpenseLines[0].amount.trim()
+    ? allocationTarget
+    : activeExpenseLines.reduce((sum, line) => sum + Math.max(0, signedInputToSatang(line.amount)), 0);
+  const allocationDifference = allocationTarget - allocationTotal;
 
   return (
     <form onSubmit={submit} className="w-full rounded-xl border border-gray-200 bg-white p-5">
@@ -361,18 +369,83 @@ export default function PurchaseTaxInvoiceForm({
       <div className="mt-4 rounded-lg border border-brand-200 bg-brand-50/50 p-3">
         <p className="mb-2 text-sm font-medium text-gray-800">ลงบัญชีให้เลย (ไม่บังคับ)</p>
         <p className="mb-3 text-xs text-gray-500">
-          เลือกบัญชีให้ครบทั้งสองช่อง ระบบจะสร้างใบสำคัญเป็นร่างให้เอง แล้วผูกกับเอกสารใบนี้ —
+          แบ่งฐานก่อน VAT ไปยังบัญชีค่าใช้จ่าย/สินทรัพย์ได้หลายบรรทัด แล้วเลือกบัญชีเครดิต ระบบจะสร้างใบสำคัญเป็นร่างให้เอง —
           ไม่ต้องไปคีย์ในสมุดรายวันซ้ำ และรายงานภาษีจะไม่นับยอดสองรอบ
           <br />
-          ถ้าเว้นว่างไว้ เอกสารจะถูกบันทึกอย่างเดียว ต้องไปคีย์ใบสำคัญเองทีหลัง
+          ถ้ามีบัญชีเดบิตเพียงบรรทัดเดียว สามารถเว้นยอดไว้เพื่อใช้ฐานก่อน VAT ทั้งจำนวนได้
+          หากไม่เลือกทั้งบัญชีเดบิตและเครดิต ระบบจะบันทึกเฉพาะเอกสารโดยไม่ลงบัญชี
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className={label}>
-            บัญชีค่าใช้จ่าย/สินทรัพย์ ({isCreditNote ? "เครดิตเพื่อลดยอด" : "เดบิต"})
-            <div className="mt-1">
-              <AccountCombobox accounts={expenseAccounts} value={form.expenseAccountId} onChange={(id) => setForm({ ...form, expenseAccountId: id })} />
+        <div className="space-y-2">
+          {form.expenseLines.map((line, index) => (
+            <div key={line.key} className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto]">
+              <div className={label}>
+                บัญชีค่าใช้จ่าย/สินทรัพย์ บรรทัดที่ {index + 1} ({isCreditNote ? "เครดิตเพื่อลดยอด" : "เดบิต"})
+                <div className="mt-1">
+                  <AccountCombobox
+                    accounts={expenseAccounts}
+                    value={line.accountId}
+                    onChange={(accountId) => setForm((current) => ({
+                      ...current,
+                      expenseLines: current.expenseLines.map((item) => item.key === line.key ? { ...item, accountId } : item),
+                    }))}
+                  />
+                </div>
+              </div>
+              <label className={label}>
+                ยอดก่อน VAT (บาท)
+                <input
+                  inputMode="decimal"
+                  value={line.amount}
+                  onChange={(event) => {
+                    const amount = event.target.value;
+                    setForm((current) => ({
+                      ...current,
+                      expenseLines: current.expenseLines.map((item) => item.key === line.key ? { ...item, amount } : item),
+                    }));
+                  }}
+                  placeholder={form.expenseLines.length === 1 ? fmtSatang(allocationTarget, { zeroDash: false }) : "0.00"}
+                  className={field}
+                />
+              </label>
+              <button
+                type="button"
+                aria-label={`ลบบรรทัดบัญชีที่ ${index + 1}`}
+                disabled={form.expenseLines.length === 1}
+                onClick={() => setForm((current) => ({
+                  ...current,
+                  expenseLines: current.expenseLines.filter((item) => item.key !== line.key),
+                }))}
+                className="mb-0.5 rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setForm((current) => ({
+              ...current,
+              expenseLines: [
+                ...current.expenseLines,
+                { key: `expense-${nextExpenseLineKey.current++}`, accountId: "", amount: "" },
+              ],
+            }))}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50"
+          >
+            <Plus size={14} /> เพิ่มบรรทัดบัญชี
+          </button>
+
+          <div className="grid grid-cols-3 gap-2 rounded-lg bg-white p-2 text-xs">
+            <div><span className="block text-gray-500">ฐานก่อน VAT</span><strong>{fmtSatang(allocationTarget, { zeroDash: false })}</strong></div>
+            <div><span className="block text-gray-500">แบ่งบัญชีแล้ว</span><strong>{fmtSatang(allocationTotal, { zeroDash: false })}</strong></div>
+            <div>
+              <span className="block text-gray-500">{allocationDifference >= 0 ? "คงเหลือ" : "เกิน"}</span>
+              <strong className={allocationDifference === 0 ? "text-emerald-700" : "text-rose-700"}>
+                {fmtSatang(Math.abs(allocationDifference), { zeroDash: false })}
+              </strong>
             </div>
           </div>
+
           <div className={label}>
             {isCreditNote ? "รับคืน / ลดเจ้าหนี้ (เดบิต)" : "จ่ายด้วย / เจ้าหนี้ (เครดิต)"}
             <div className="mt-1">

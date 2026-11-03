@@ -10,6 +10,10 @@ import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
 import { nextWhtDocNo } from "@/lib/accounting/withholding";
 import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
 import { parsePurchaseTaxClaimPeriod } from "@/lib/accounting/purchaseTaxClaimPeriod";
+import {
+  PurchaseTaxAccountAllocationError,
+  resolvePurchaseTaxAccountAllocations,
+} from "@/lib/accounting/purchaseTaxAccountAllocation";
 
 /** บันทึกใบกำกับภาษีซื้อ (ใบที่ผู้ขายออกให้เรา) — ตัวป้อนข้อมูลของรายงานภาษีซื้อและ ภ.พ.30
  * เลขที่ใบกำกับมาจากผู้ขาย ไม่ได้รันเอง จึงรับค่าจากผู้กรอกโดยตรง */
@@ -32,6 +36,7 @@ export async function POST(req: NextRequest) {
     amountIncludesVat,
     isClaimable,
     note,
+    expenseLines,
     expenseAccountId,
     creditAccountId,
     whtIncomeType,
@@ -66,8 +71,17 @@ export async function POST(req: NextRequest) {
   const whtBase = String(whtBaseAmount ?? "").trim() ? toSatang(whtBaseAmount) : base;
   const wht = withholdingFromPercent(whtBase, whtRatePercent ?? 0);
 
-  if (Boolean(expenseAccountId) !== Boolean(creditAccountId)) {
-    return NextResponse.json({ error: "ถ้าต้องการลงบัญชีอัตโนมัติ กรุณาเลือกบัญชีเดบิตและเครดิตให้ครบทั้งสองช่อง" }, { status: 400 });
+  let accountAllocations: ReturnType<typeof resolvePurchaseTaxAccountAllocations>;
+  try {
+    accountAllocations = resolvePurchaseTaxAccountAllocations(expenseLines, base, expenseAccountId);
+  } catch (error) {
+    if (error instanceof PurchaseTaxAccountAllocationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    throw error;
+  }
+  if (Boolean(accountAllocations.length) !== Boolean(creditAccountId)) {
+    return NextResponse.json({ error: "ถ้าต้องการลงบัญชีอัตโนมัติ กรุณาเลือกบัญชีเดบิตและเครดิตให้ครบ" }, { status: 400 });
   }
   if (whtEnabled) {
     if (isCreditNote) return NextResponse.json({ error: "ใบลดหนี้ไม่สร้างภาษีหัก ณ ที่จ่าย กรุณาเลือก 'ไม่หักภาษี ณ ที่จ่าย'" }, { status: 400 });
@@ -105,7 +119,7 @@ export async function POST(req: NextRequest) {
   // ลงบัญชีให้เลยถ้าเลือกบัญชีมาครบ — ผูก entryId ไว้ด้วย เพื่อไม่ให้รายงานภาษีซื้อ
   // นับซ้ำกับใบสำคัญใบเดียวกันที่ถูกดึงมาจากสมุดรายวัน (ดู journalTaxLines.ts)
   let entryId: string | null = null;
-  if (expenseAccountId && creditAccountId) {
+  if (accountAllocations.length > 0 && creditAccountId) {
     const [inputVatAccount, whtPayableAccount] = await Promise.all([
       prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.INPUT_VAT }, select: { id: true } }),
       whtEnabled
@@ -119,7 +133,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `ไม่พบบัญชีภาษีหัก ณ ที่จ่าย - ภ.ง.ด.53 รหัส ${SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE} ในผังบัญชี` }, { status: 400 });
     }
     try {
-      const absoluteBase = Math.abs(base);
       const absoluteVat = Math.abs(vat);
       const absoluteTotal = Math.abs(base + vat);
       const entry = await createEntry({
@@ -128,11 +141,21 @@ export async function POST(req: NextRequest) {
         description: `${isCreditNote ? "ใบลดหนี้" : "ซื้อ"} ${String(vendorName).trim()} ใบกำกับ ${String(invoiceNo).trim()}`,
         userId: staff.staffId,
         lines: isCreditNote ? [
-          { accountId: expenseAccountId, credit: toBaht(absoluteBase), partnerId: partnerId || null, memo: description || undefined },
+          ...accountAllocations.map((line) => ({
+            accountId: line.accountId,
+            credit: toBaht(line.amountSatang),
+            partnerId: partnerId || null,
+            memo: description || undefined,
+          })),
           { accountId: inputVatAccount.id, credit: toBaht(absoluteVat), memo: "ลดภาษีซื้อ", docNo: String(invoiceNo).trim() },
           { accountId: creditAccountId, debit: toBaht(absoluteTotal), partnerId: partnerId || null, memo: "ลดเจ้าหนี้/เงินรับคืน" },
         ] : [
-          { accountId: expenseAccountId, debit: toBaht(base), partnerId: partnerId || null, memo: description || undefined },
+          ...accountAllocations.map((line) => ({
+            accountId: line.accountId,
+            debit: toBaht(line.amountSatang),
+            partnerId: partnerId || null,
+            memo: description || undefined,
+          })),
           { accountId: inputVatAccount.id, debit: toBaht(vat), memo: "ภาษีซื้อ", docNo: String(invoiceNo).trim() },
           { accountId: creditAccountId, credit: toBaht(base + vat - (whtEnabled ? wht.amount : 0)), partnerId: partnerId || null },
           ...(whtEnabled && whtPayableAccount
