@@ -37,7 +37,19 @@ export default async function WhtReportView({
     prisma.accPartner.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, type: true, phone: true, taxId: true, branchTag: true, address: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        phone: true,
+        taxId: true,
+        branchTag: true,
+        address: true,
+        branches: {
+          orderBy: [{ isDefault: "desc" }, { branchTag: "asc" }],
+          select: { id: true, branchTag: true, address: true, isDefault: true, isActive: true },
+        },
+      },
     }),
     // บัญชีสำหรับสร้างใบสำคัญให้อัตโนมัติ — เดบิตเป็นค่าใช้จ่าย/สินทรัพย์ เครดิตเป็นเงิน/เจ้าหนี้
     prisma.accAccount.findMany({

@@ -9,6 +9,7 @@ import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
 import { addVatExclusive, fmtSatang, signedInputToSatang, splitVatInclusive, toSatang } from "@/lib/accounting/money";
 import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
 import PurchaseTaxClaimPeriodSelect from "./PurchaseTaxClaimPeriodSelect";
+import { activePartnerBranches, resolvePartnerBranch } from "@/lib/accounting/partnerBranchSelection";
 
 interface PartnerOption {
   id: string;
@@ -53,6 +54,7 @@ export default function PurchaseTaxInvoiceForm({
     invoiceDate: today(),
     claimPeriod: today().slice(0, 7),
     partnerId: "",
+    partnerBranchId: "",
     vendorName: "",
     vendorTaxId: "",
     vendorAddress: "",
@@ -73,15 +75,15 @@ export default function PurchaseTaxInvoiceForm({
    * (ชื่อบนใบกำกับบางใบไม่ตรงกับชื่อที่เราบันทึกไว้เป๊ะ ต้องยึดตามใบกำกับ) */
   function pickPartner(id: string) {
     const p = partners.find((x) => x.id === id);
-    const defaultBranch = p?.branches.find((branch) => branch.isActive && branch.isDefault)
-      ?? p?.branches.find((branch) => branch.isActive);
+    const branch = resolvePartnerBranch(p);
     setForm((f) => ({
       ...f,
       partnerId: id,
+      partnerBranchId: branch.partnerBranchId,
       vendorName: p ? p.name : f.vendorName,
       vendorTaxId: p?.taxId ?? f.vendorTaxId,
-      vendorBranchTag: defaultBranch?.branchTag ?? p?.branchTag ?? f.vendorBranchTag,
-      vendorAddress: defaultBranch?.address ?? p?.address ?? f.vendorAddress,
+      vendorBranchTag: branch.branchTag || f.vendorBranchTag,
+      vendorAddress: branch.address || f.vendorAddress,
     }));
   }
 
@@ -138,8 +140,7 @@ export default function PurchaseTaxInvoiceForm({
   const total = base + vat;
   const netPayable = total - wht.amount;
   const selectedPartner = partners.find((partner) => partner.id === form.partnerId);
-  const partnerBranches = selectedPartner?.branches.filter((branch) => branch.isActive) ?? [];
-  const selectedBranchId = partnerBranches.find((branch) => branch.branchTag === form.vendorBranchTag && branch.address === form.vendorAddress)?.id ?? "";
+  const partnerBranches = activePartnerBranches(selectedPartner);
 
   return (
     <form onSubmit={submit} className="w-full rounded-xl border border-gray-200 bg-white p-5">
@@ -196,10 +197,15 @@ export default function PurchaseTaxInvoiceForm({
           สำนักงานใหญ่ / สาขาที่
           {partnerBranches.length > 0 ? (
             <select
-              value={selectedBranchId}
+              value={form.partnerBranchId}
               onChange={(event) => {
-                const branch = partnerBranches.find((item) => item.id === event.target.value);
-                if (branch) setForm({ ...form, vendorBranchTag: branch.branchTag, vendorAddress: branch.address });
+                const branch = resolvePartnerBranch(selectedPartner, event.target.value);
+                setForm((current) => ({
+                  ...current,
+                  partnerBranchId: branch.partnerBranchId,
+                  vendorBranchTag: branch.branchTag,
+                  vendorAddress: branch.address,
+                }));
               }}
               className={field}
             >

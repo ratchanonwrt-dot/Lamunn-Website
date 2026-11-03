@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import PartnerCombobox from "./PartnerCombobox";
 import AccountCombobox from "./AccountCombobox";
 import { WHT_INCOME_TYPES, WHT_FORM_LABELS } from "@/lib/accounting/whtTypes";
+import { activePartnerBranches, resolvePartnerBranch } from "@/lib/accounting/partnerBranchSelection";
 
 interface PartnerOption {
   id: string;
@@ -15,6 +16,7 @@ interface PartnerOption {
   taxId: string | null;
   branchTag: string | null;
   address: string | null;
+  branches: Array<{ id: string; branchTag: string; address: string; isDefault: boolean; isActive: boolean }>;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -47,6 +49,7 @@ export default function WhtCertificateForm({
     payDate: today(),
     formType: defaultFormType,
     partnerId: "",
+    partnerBranchId: "",
     payeeName: "",
     payeeTaxId: "",
     payeeBranchTag: "สำนักงานใหญ่",
@@ -67,13 +70,15 @@ export default function WhtCertificateForm({
 
   function pickPartner(id: string) {
     const p = partners.find((x) => x.id === id);
+    const branch = resolvePartnerBranch(p);
     setForm((f) => ({
       ...f,
       partnerId: id,
+      partnerBranchId: branch.partnerBranchId,
       payeeName: p ? p.name : f.payeeName,
       payeeTaxId: p?.taxId ?? f.payeeTaxId,
-      payeeBranchTag: p?.branchTag ?? f.payeeBranchTag,
-      payeeAddress: p?.address ?? f.payeeAddress,
+      payeeBranchTag: branch.branchTag || f.payeeBranchTag,
+      payeeAddress: branch.address || f.payeeAddress,
     }));
   }
 
@@ -116,6 +121,8 @@ export default function WhtCertificateForm({
 
   const field = "mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900";
   const label = "text-xs text-gray-500";
+  const selectedPartner = partners.find((partner) => partner.id === form.partnerId);
+  const partnerBranches = activePartnerBranches(selectedPartner);
 
   return (
     <form onSubmit={submit} className="w-full rounded-xl border border-gray-200 bg-white p-5">
@@ -141,7 +148,27 @@ export default function WhtCertificateForm({
         </div>
         <label className={label}>
           สำนักงานใหญ่ / สาขาที่
-          <input value={form.payeeBranchTag} onChange={(e) => setForm({ ...form, payeeBranchTag: e.target.value })} className={field} />
+          {partnerBranches.length > 0 ? (
+            <select
+              value={form.partnerBranchId}
+              onChange={(event) => {
+                const branch = resolvePartnerBranch(selectedPartner, event.target.value);
+                setForm((current) => ({
+                  ...current,
+                  partnerBranchId: branch.partnerBranchId,
+                  payeeBranchTag: branch.branchTag,
+                  payeeAddress: branch.address,
+                }));
+              }}
+              className={field}
+            >
+              {partnerBranches.map((branch) => (
+                <option key={branch.id} value={branch.id}>{branch.branchTag}{branch.isDefault ? " (สาขาหลัก)" : ""}</option>
+              ))}
+            </select>
+          ) : (
+            <input value={form.payeeBranchTag} onChange={(e) => setForm({ ...form, payeeBranchTag: e.target.value })} className={field} />
+          )}
         </label>
 
         <label className={`${label} sm:col-span-2`}>
