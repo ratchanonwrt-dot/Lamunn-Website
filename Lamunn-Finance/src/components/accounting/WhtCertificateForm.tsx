@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 import PartnerCombobox from "./PartnerCombobox";
 import AccountCombobox from "./AccountCombobox";
 import { WHT_INCOME_TYPES, WHT_FORM_LABELS } from "@/lib/accounting/whtTypes";
-import { activePartnerBranches, resolvePartnerBranch } from "@/lib/accounting/partnerBranchSelection";
+import { partnerBranchChoices, resolvePartnerBranchChoice } from "@/lib/accounting/partnerBranchSelection";
 
 interface PartnerOption {
   id: string;
@@ -70,7 +70,7 @@ export default function WhtCertificateForm({
 
   function pickPartner(id: string) {
     const p = partners.find((x) => x.id === id);
-    const branch = resolvePartnerBranch(p);
+    const branch = resolvePartnerBranchChoice(partners, id);
     setForm((f) => ({
       ...f,
       partnerId: id,
@@ -121,8 +121,7 @@ export default function WhtCertificateForm({
 
   const field = "mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900";
   const label = "text-xs text-gray-500";
-  const selectedPartner = partners.find((partner) => partner.id === form.partnerId);
-  const partnerBranches = activePartnerBranches(selectedPartner);
+  const partnerBranches = partnerBranchChoices(partners, form.partnerId);
 
   return (
     <form onSubmit={submit} className="w-full rounded-xl border border-gray-200 bg-white p-5">
@@ -152,7 +151,7 @@ export default function WhtCertificateForm({
             <select
               value={form.partnerBranchId}
               onChange={(event) => {
-                const branch = resolvePartnerBranch(selectedPartner, event.target.value);
+                const branch = resolvePartnerBranchChoice(partners, form.partnerId, event.target.value);
                 setForm((current) => ({
                   ...current,
                   partnerBranchId: branch.partnerBranchId,
