@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { activePartnerBranches, resolvePartnerBranch } from "../src/lib/accounting/partnerBranchSelection";
+import {
+  activePartnerBranches,
+  partnerBranchChoices,
+  resolvePartnerBranch,
+  resolvePartnerBranchChoice,
+} from "../src/lib/accounting/partnerBranchSelection";
 
 const branches = [
   { id: "[test]-head", branchTag: "สำนักงานใหญ่", address: "[test] ที่อยู่สำนักงานใหญ่", isDefault: true, isActive: true },
@@ -31,7 +36,17 @@ try {
   assert.equal(legacyBranches[0].isDefault, true);
   assert.equal(resolvePartnerBranch(legacyPartner).address, "[test] ที่อยู่คู่ค้าเก่า");
 
-  console.log("PASS: เลือกสาขาคู่ค้าแล้วที่อยู่เปลี่ยน และคู่ค้าเก่ามีตัวเลือกสำนักงานใหญ่");
+  const legacyPartners = [
+    { id: "[test]-partner-head", taxId: "0100000000001", branchTag: "สำนักงานใหญ่", address: "[test] ที่อยู่สำนักงานใหญ่", branches: [] },
+    { id: "[test]-partner-branch", taxId: "0-1000-00000-00-1", branchTag: "00002", address: "[test] ที่อยู่สาขา 00002", branches: [] },
+    { id: "[test]-other", taxId: "0100000000002", branchTag: "00003", address: "[test] ที่อยู่อื่น", branches: [] },
+  ];
+  const grouped = partnerBranchChoices(legacyPartners, "[test]-partner-head");
+  assert.deepEqual(grouped.map((branch) => branch.branchTag), ["สำนักงานใหญ่", "00002"]);
+  const groupedChanged = resolvePartnerBranchChoice(legacyPartners, "[test]-partner-head", "partner:[test]-partner-branch");
+  assert.equal(groupedChanged.address, "[test] ที่อยู่สาขา 00002");
+
+  console.log("PASS: Dropdown รวมคู่ค้าเลขผู้เสียภาษีเดียวกัน และที่อยู่เปลี่ยนตามสาขา");
 } finally {
   branches.splice(0, branches.length);
 }

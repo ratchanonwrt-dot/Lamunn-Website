@@ -9,7 +9,7 @@ import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
 import { addVatExclusive, fmtSatang, signedInputToSatang, splitVatInclusive, toSatang } from "@/lib/accounting/money";
 import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
 import PurchaseTaxClaimPeriodSelect from "./PurchaseTaxClaimPeriodSelect";
-import { activePartnerBranches, resolvePartnerBranch } from "@/lib/accounting/partnerBranchSelection";
+import { partnerBranchChoices, resolvePartnerBranchChoice } from "@/lib/accounting/partnerBranchSelection";
 
 interface PartnerOption {
   id: string;
@@ -75,7 +75,7 @@ export default function PurchaseTaxInvoiceForm({
    * (ชื่อบนใบกำกับบางใบไม่ตรงกับชื่อที่เราบันทึกไว้เป๊ะ ต้องยึดตามใบกำกับ) */
   function pickPartner(id: string) {
     const p = partners.find((x) => x.id === id);
-    const branch = resolvePartnerBranch(p);
+    const branch = resolvePartnerBranchChoice(partners, id);
     setForm((f) => ({
       ...f,
       partnerId: id,
@@ -139,8 +139,7 @@ export default function PurchaseTaxInvoiceForm({
   const wht = withholdingFromPercent(whtBase, form.whtRatePercent);
   const total = base + vat;
   const netPayable = total - wht.amount;
-  const selectedPartner = partners.find((partner) => partner.id === form.partnerId);
-  const partnerBranches = activePartnerBranches(selectedPartner);
+  const partnerBranches = partnerBranchChoices(partners, form.partnerId);
 
   return (
     <form onSubmit={submit} className="w-full rounded-xl border border-gray-200 bg-white p-5">
@@ -199,7 +198,7 @@ export default function PurchaseTaxInvoiceForm({
             <select
               value={form.partnerBranchId}
               onChange={(event) => {
-                const branch = resolvePartnerBranch(selectedPartner, event.target.value);
+                const branch = resolvePartnerBranchChoice(partners, form.partnerId, event.target.value);
                 setForm((current) => ({
                   ...current,
                   partnerBranchId: branch.partnerBranchId,
