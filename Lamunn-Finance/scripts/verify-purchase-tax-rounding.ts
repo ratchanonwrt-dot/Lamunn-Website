@@ -16,9 +16,9 @@ async function main() {
   const invoiceIds: string[] = [];
 
   try {
-    const upward = addVatExclusive(10_100, 0.07, "UP");
-    const downward = addVatExclusive(10_100, 0.07, "DOWN");
-    if (upward.vat !== 708 || downward.vat !== 706) {
+    const upward = addVatExclusive(1_000_500, 0.07, "UP");
+    const downward = addVatExclusive(1_000_500, 0.07, "DOWN");
+    if (upward.vat !== 70_036 || downward.vat !== 70_034) {
       throw new Error(`ผลปัดภาษีไม่ถูกต้อง: ขึ้น=${upward.vat} ลง=${downward.vat}`);
     }
 
