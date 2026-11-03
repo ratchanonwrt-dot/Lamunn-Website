@@ -209,7 +209,7 @@ export default function PurchaseTaxInvoiceForm({
               className={field}
             >
               {partnerBranches.map((branch) => (
-                <option key={branch.id} value={branch.id}>{branch.branchTag}{branch.isDefault ? " (สาขาหลัก)" : ""}</option>
+                <option key={branch.id} value={branch.id}>{branch.branchTag}</option>
               ))}
             </select>
           ) : (
