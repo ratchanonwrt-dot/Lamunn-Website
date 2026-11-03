@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@lamunn/db-finance";
 import { requireSectionApi } from "@/lib/permissions";
-import { AccountingError } from "@/lib/accounting/post";
+import { AccountingError, voidEntry } from "@/lib/accounting/post";
 import { updatePurchaseInvoice } from "@/lib/accounting/purchaseInvoiceEdit";
 
 /** อ่านใบกำกับภาษีซื้อหนึ่งใบพร้อมสถานะใบสำคัญที่ผูกไว้ — หน้าจอแก้ไขใช้ตัดสินว่าให้แก้ยอด/วันที่ได้ไหม */
@@ -17,6 +17,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const entry = invoice.entryId
     ? await prisma.accJournalEntry.findUnique({ where: { id: invoice.entryId }, select: { id: true, entryNo: true, status: true } })
     : null;
+  const paymentEntry = invoice.whtCertificate?.entryId && invoice.whtCertificate.entryId !== invoice.entryId
+    ? await prisma.accJournalEntry.findUnique({
+        where: { id: invoice.whtCertificate.entryId },
+        select: { id: true, entryNo: true, status: true },
+      })
+    : null;
   return NextResponse.json({
     invoice: {
       ...invoice,
@@ -27,6 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       totalAmount: Number(invoice.totalAmount),
     },
     entry,
+    paymentEntry,
   });
 }
 
@@ -52,6 +59,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const { action } = await req.json();
   if (action !== "void") return NextResponse.json({ error: "action ต้องเป็น void" }, { status: 400 });
+
+  const existing = await prisma.accPurchaseTaxInvoice.findUnique({
+    where: { id: params.id },
+    include: { whtCertificate: { select: { entryId: true } } },
+  });
+  if (!existing) return NextResponse.json({ error: "ไม่พบใบกำกับภาษีซื้อนี้" }, { status: 404 });
+
+  // ใบซื้อและใบจ่ายเป็นผลจากเอกสารต้นทางเดียวกัน จึงต้องยกเลิกทั้งคู่ก่อนปิดเอกสารภาษี
+  const linkedEntryIds = Array.from(new Set([existing.entryId, existing.whtCertificate?.entryId].filter((id): id is string => Boolean(id))));
+  try {
+    for (const entryId of linkedEntryIds) await voidEntry(entryId, staff.staffId);
+  } catch (error) {
+    if (error instanceof AccountingError) return NextResponse.json({ error: error.message }, { status: 400 });
+    throw error;
+  }
 
   const invoice = await prisma.$transaction(async (tx) => {
     const updated = await tx.accPurchaseTaxInvoice.update({ where: { id: params.id }, data: { voided: true } });

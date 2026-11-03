@@ -4,7 +4,7 @@ import { requireSectionApi } from "@/lib/permissions";
 import { parseDateOnly } from "@/lib/dates";
 import { getAllSettings } from "@/lib/settings";
 import { splitVatInclusive, addVatExclusive, signedInputToSatang, toBaht, toSatang } from "@/lib/accounting/money";
-import { createEntry, AccountingError } from "@/lib/accounting/post";
+import { createEntry, voidEntry, AccountingError } from "@/lib/accounting/post";
 import { SYSTEM_ACCOUNTS } from "@/lib/accounting/chartOfAccounts";
 import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
 import { nextWhtDocNo } from "@/lib/accounting/withholding";
@@ -14,6 +14,7 @@ import {
   PurchaseTaxAccountAllocationError,
   resolvePurchaseTaxAccountAllocations,
 } from "@/lib/accounting/purchaseTaxAccountAllocation";
+import { buildPurchaseWhtJournalLines, purchasePaymentEntryDescriptionFor } from "@/lib/accounting/purchaseWhtJournals";
 
 /** บันทึกใบกำกับภาษีซื้อ (ใบที่ผู้ขายออกให้เรา) — ตัวป้อนข้อมูลของรายงานภาษีซื้อและ ภ.พ.30
  * เลขที่ใบกำกับมาจากผู้ขาย ไม่ได้รันเอง จึงรับค่าจากผู้กรอกโดยตรง */
@@ -119,11 +120,15 @@ export async function POST(req: NextRequest) {
   // ลงบัญชีให้เลยถ้าเลือกบัญชีมาครบ — ผูก entryId ไว้ด้วย เพื่อไม่ให้รายงานภาษีซื้อ
   // นับซ้ำกับใบสำคัญใบเดียวกันที่ถูกดึงมาจากสมุดรายวัน (ดู journalTaxLines.ts)
   let entryId: string | null = null;
+  let paymentEntryId: string | null = null;
   if (accountAllocations.length > 0 && creditAccountId) {
-    const [inputVatAccount, whtPayableAccount] = await Promise.all([
+    const [inputVatAccount, whtPayableAccount, tradePayableAccount] = await Promise.all([
       prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.INPUT_VAT }, select: { id: true } }),
       whtEnabled
         ? prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE }, select: { id: true } })
+        : Promise.resolve(null),
+      whtEnabled
+        ? prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.TRADE_PAYABLE }, select: { id: true } })
         : Promise.resolve(null),
     ]);
     if (!inputVatAccount) {
@@ -132,15 +137,33 @@ export async function POST(req: NextRequest) {
     if (whtEnabled && !whtPayableAccount) {
       return NextResponse.json({ error: `ไม่พบบัญชีภาษีหัก ณ ที่จ่าย - ภ.ง.ด.53 รหัส ${SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE} ในผังบัญชี` }, { status: 400 });
     }
+    if (whtEnabled && !tradePayableAccount) {
+      return NextResponse.json({ error: `ไม่พบบัญชีเจ้าหนี้การค้ารหัส ${SYSTEM_ACCOUNTS.TRADE_PAYABLE} ในผังบัญชี` }, { status: 400 });
+    }
     try {
       const absoluteVat = Math.abs(vat);
       const absoluteTotal = Math.abs(base + vat);
-      const entry = await createEntry({
+      const whtDrafts = whtEnabled && whtPayableAccount && tradePayableAccount
+        ? buildPurchaseWhtJournalLines({
+            allocations: accountAllocations,
+            inputVatAccountId: inputVatAccount.id,
+            tradePayableAccountId: tradePayableAccount.id,
+            paymentAccountId: creditAccountId,
+            whtPayableAccountId: whtPayableAccount.id,
+            baseSatang: base,
+            vatSatang: vat,
+            whtSatang: wht.amount,
+            partnerId: partnerId || null,
+            description,
+            invoiceNo: String(invoiceNo).trim(),
+          })
+        : null;
+      const purchaseEntry = await createEntry({
         date: invoiceDateValue,
         journalType: "PURCHASE",
         description: `${isCreditNote ? "ใบลดหนี้" : "ซื้อ"} ${String(vendorName).trim()} ใบกำกับ ${String(invoiceNo).trim()}`,
         userId: staff.staffId,
-        lines: isCreditNote ? [
+        lines: whtDrafts ? whtDrafts.purchaseLines : isCreditNote ? [
           ...accountAllocations.map((line) => ({
             accountId: line.accountId,
             credit: toBaht(line.amountSatang),
@@ -157,20 +180,31 @@ export async function POST(req: NextRequest) {
             memo: description || undefined,
           })),
           { accountId: inputVatAccount.id, debit: toBaht(vat), memo: "ภาษีซื้อ", docNo: String(invoiceNo).trim() },
-          { accountId: creditAccountId, credit: toBaht(base + vat - (whtEnabled ? wht.amount : 0)), partnerId: partnerId || null },
-          ...(whtEnabled && whtPayableAccount
-            ? [{ accountId: whtPayableAccount.id, credit: toBaht(wht.amount), partnerId: partnerId || null, memo: "ภาษีหัก ณ ที่จ่าย - ภ.ง.ด.53" }]
-            : []),
+          { accountId: creditAccountId, credit: toBaht(base + vat), partnerId: partnerId || null },
         ],
       });
-      entryId = entry.id;
+      entryId = purchaseEntry.id;
+      if (whtDrafts) {
+        const paymentEntry = await createEntry({
+          date: invoiceDateValue,
+          journalType: "PAYMENT",
+          description: purchasePaymentEntryDescriptionFor(String(vendorName).trim(), String(invoiceNo).trim()),
+          userId: staff.staffId,
+          lines: whtDrafts.paymentLines,
+        });
+        paymentEntryId = paymentEntry.id;
+      }
     } catch (e) {
+      // หากสร้างใบจ่ายไม่สำเร็จ ใบซื้อที่เพิ่งสร้างต้องไม่ค้างเป็นร่างโดดเดี่ยวให้คนเผลอผ่านรายการ
+      if (entryId) await voidEntry(entryId, staff.staffId).catch(() => undefined);
       if (e instanceof AccountingError) return NextResponse.json({ error: e.message }, { status: 400 });
       throw e;
     }
   }
 
-  const result = await prisma.$transaction(async (tx) => {
+  let result;
+  try {
+    result = await prisma.$transaction(async (tx) => {
     const invoice = await tx.accPurchaseTaxInvoice.create({
       data: {
         invoiceNo: String(invoiceNo).trim(),
@@ -206,14 +240,20 @@ export async function POST(req: NextRequest) {
             baseAmount: toBaht(whtBase),
             whtRate: wht.rate,
             whtAmount: toBaht(wht.amount),
-            entryId,
+            entryId: paymentEntryId ?? entryId,
             note: note || null,
             createdBy: staff.staffId,
           },
         })
       : null;
-    return { invoice, certificate };
-  });
+      return { invoice, certificate };
+    });
+  } catch (error) {
+    for (const linkedId of [paymentEntryId, entryId]) {
+      if (linkedId) await voidEntry(linkedId, staff.staffId).catch(() => undefined);
+    }
+    throw error;
+  }
 
   return NextResponse.json(result);
 }

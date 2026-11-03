@@ -25,7 +25,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
   const month = Number(searchParams.month) || now.getUTCMonth() + 1;
   const { start, end } = monthRange(year, month - 1);
 
-  const [settings, report, partners, expenseAccounts, creditAccounts] = await Promise.all([
+  const [settings, report, partners, expenseAccounts, creditAccounts, paymentAccounts] = await Promise.all([
     getAllSettings(),
     buildInputVatReport(start, end),
     prisma.accPartner.findMany({
@@ -54,6 +54,18 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
     }),
     prisma.accAccount.findMany({
       where: { isActive: true, isPostable: true, type: { in: ["ASSET", "LIABILITY"] }, vatRole: null },
+      orderBy: { code: "asc" },
+      select: { id: true, code: true, nameTh: true },
+    }),
+    // ใบสำคัญจ่ายต้องตัดเงินจริง จึงไม่ให้บัญชีเจ้าหนี้หรือสินทรัพย์อื่นปะปนในช่องบัญชีจ่าย
+    prisma.accAccount.findMany({
+      where: {
+        isActive: true,
+        isPostable: true,
+        type: "ASSET",
+        vatRole: null,
+        OR: [{ code: { startsWith: "111" } }, { code: { startsWith: "112" } }],
+      },
       orderBy: { code: "asc" },
       select: { id: true, code: true, nameTh: true },
     }),
@@ -92,6 +104,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
               partners={partners}
               expenseAccounts={expenseAccounts}
               creditAccounts={creditAccounts}
+              paymentAccounts={paymentAccounts}
               vatRate={Number(settings.vatRate)}
             />
           )}

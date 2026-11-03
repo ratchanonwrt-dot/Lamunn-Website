@@ -37,6 +37,8 @@ export const GROUP = {
 export const SYSTEM_ACCOUNTS = {
   CASH: "1110",
   BANK: "1120",
+  TRADE_RECEIVABLE: "11310",
+  TRADE_PAYABLE: "2110",
   AR_MALL: "1140",
   AR_GRAB: "1141",
   AR_LINEMAN: "1142",
