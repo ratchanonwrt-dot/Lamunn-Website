@@ -109,14 +109,14 @@ export async function POST(req: NextRequest) {
     const [inputVatAccount, whtPayableAccount] = await Promise.all([
       prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.INPUT_VAT }, select: { id: true } }),
       whtEnabled
-        ? prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.WHT_PAYABLE }, select: { id: true } })
+        ? prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE }, select: { id: true } })
         : Promise.resolve(null),
     ]);
     if (!inputVatAccount) {
       return NextResponse.json({ error: `ไม่พบบัญชีภาษีซื้อรหัส ${SYSTEM_ACCOUNTS.INPUT_VAT} ในผังบัญชี` }, { status: 400 });
     }
     if (whtEnabled && !whtPayableAccount) {
-      return NextResponse.json({ error: `ไม่พบบัญชีภาษีหัก ณ ที่จ่ายค้างนำส่งรหัส ${SYSTEM_ACCOUNTS.WHT_PAYABLE} ในผังบัญชี` }, { status: 400 });
+      return NextResponse.json({ error: `ไม่พบบัญชีภาษีหัก ณ ที่จ่าย - ภ.ง.ด.53 รหัส ${SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE} ในผังบัญชี` }, { status: 400 });
     }
     try {
       const absoluteBase = Math.abs(base);
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
           { accountId: inputVatAccount.id, debit: toBaht(vat), memo: "ภาษีซื้อ", docNo: String(invoiceNo).trim() },
           { accountId: creditAccountId, credit: toBaht(base + vat - (whtEnabled ? wht.amount : 0)), partnerId: partnerId || null },
           ...(whtEnabled && whtPayableAccount
-            ? [{ accountId: whtPayableAccount.id, credit: toBaht(wht.amount), partnerId: partnerId || null, memo: "ภาษีหัก ณ ที่จ่าย" }]
+            ? [{ accountId: whtPayableAccount.id, credit: toBaht(wht.amount), partnerId: partnerId || null, memo: "ภาษีหัก ณ ที่จ่าย - ภ.ง.ด.53" }]
             : []),
         ],
       });
