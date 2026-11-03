@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const body = await req.json();
   try {
-    const invoice = await updatePurchaseInvoice(params.id, body);
+    const invoice = await updatePurchaseInvoice(params.id, body, { userId: staff.staffId });
     return NextResponse.json({ invoice });
   } catch (e) {
     if (e instanceof AccountingError) return NextResponse.json({ error: e.message }, { status: 400 });
