@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { useServerRefresh } from "./useServerRefresh";
 import PartnerBranchManager, { type PartnerBranchItem } from "./PartnerBranchManager";
+import { partnerAccountForType } from "@/lib/accounting/partnerAccounts";
 
 export interface PartnerListItem {
   id: string;
@@ -96,7 +97,12 @@ export default function PartnerList({ partners, canEdit }: { partners: PartnerLi
           {TYPE_ORDER.filter((t) => filtered.some((p) => p.type === t)).map((type) => (
             <div key={type} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
               <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-2.5">
-                <p className="text-sm font-semibold text-gray-800">{TYPE_LABELS[type]}</p>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{TYPE_LABELS[type]}</p>
+                  <p className="mt-0.5 text-xs font-medium text-brand-700">
+                    ผูกบัญชี {partnerAccountForType(type).code} {partnerAccountForType(type).nameTh}
+                  </p>
+                </div>
                 <span className="text-xs text-gray-400">{filtered.filter((p) => p.type === type).length} ราย</span>
               </div>
               <table className="w-full text-sm">
@@ -316,6 +322,9 @@ function PartnerEditForm({
             <option value="CREDITOR">เจ้าหนี้ / ซัพพลายเออร์</option>
             <option value="DEBTOR">ลูกหนี้</option>
           </select>
+          <span className="mt-1 block text-[11px] font-medium text-brand-700">
+            ผูกบัญชี {partnerAccountForType(form.type).code} {partnerAccountForType(form.type).nameTh}
+          </span>
         </label>
         <label className={label}>
           เลขประจำตัวผู้เสียภาษี

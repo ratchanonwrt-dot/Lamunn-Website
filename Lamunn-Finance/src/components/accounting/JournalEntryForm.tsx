@@ -7,6 +7,7 @@ import AccountCombobox from "@/components/accounting/AccountCombobox";
 import PartnerCombobox from "@/components/accounting/PartnerCombobox";
 import { useServerRefresh } from "@/components/accounting/useServerRefresh";
 import { signedInputToSatang } from "@/lib/accounting/money";
+import { resolvePartnerAccountId } from "@/lib/accounting/partnerAccounts";
 
 interface AccountOption {
   id: string;
@@ -125,6 +126,16 @@ export default function JournalEntryForm({
 
   function update(i: number, patch: Partial<Line>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  }
+
+  function updatePartner(i: number, partnerId: string) {
+    const partner = partners.find((item) => item.id === partnerId);
+    const linkedAccountId = partner ? resolvePartnerAccountId(partner.type, accounts) : null;
+    // ผู้ใช้ที่เลือกบัญชีไว้แล้วย่อมตั้งใจเลือกเอง จึงเติมบัญชีคู่ค้าเฉพาะบรรทัดว่างเท่านั้น
+    update(i, {
+      partnerId,
+      ...(!lines[i].accountId && linkedAccountId ? { accountId: linkedAccountId } : {}),
+    });
   }
 
   function moveNegativeToOppositeSide(i: number, side: "debit" | "credit") {
@@ -274,7 +285,7 @@ export default function JournalEntryForm({
                   </select>
                 </td>
                 <td className="py-1.5 px-2">
-                  <PartnerCombobox partners={partners} value={l.partnerId} onChange={(partnerId) => update(i, { partnerId })} showBranch />
+                  <PartnerCombobox partners={partners} value={l.partnerId} onChange={(partnerId) => updatePartner(i, partnerId)} showBranch />
                 </td>
                 <td className="py-1.5 px-2">
                   {/* ใส่ที่บรรทัดภาษีซื้อ/ขาย — ใบสำคัญใบเดียวมีใบกำกับได้หลายใบ รายงานภาษีจะแยกบรรทัดตามเลขนี้ */}

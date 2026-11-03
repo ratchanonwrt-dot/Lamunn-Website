@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useServerRefresh } from "./useServerRefresh";
 import { Plus } from "lucide-react";
+import { partnerAccountForType, type PartnerAccountType } from "@/lib/accounting/partnerAccounts";
 
 export default function AddPartnerForm() {
   const { refresh, refreshing } = useServerRefresh();
@@ -11,6 +12,7 @@ export default function AddPartnerForm() {
   const busy = submitting || refreshing;
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", type: "CREDITOR", phone: "", taxId: "", branchTag: "", address: "", note: "" });
+  const linkedAccount = partnerAccountForType(form.type as PartnerAccountType);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,6 +70,9 @@ export default function AddPartnerForm() {
             <option value="CREDITOR">เจ้าหนี้ / ซัพพลายเออร์ (เราจ่ายให้)</option>
             <option value="DEBTOR">ลูกหนี้ (ค้างรับจากเรา)</option>
           </select>
+          <span className="mt-1 block text-[11px] font-medium text-brand-700">
+            ผูกบัญชี {linkedAccount.code} {linkedAccount.nameTh}
+          </span>
         </label>
         <label className="text-xs text-gray-500">
           เบอร์โทร
