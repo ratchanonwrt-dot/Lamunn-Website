@@ -27,6 +27,17 @@ export async function POST(req: NextRequest) {
       branchTag: String(branchTag ?? "").trim() || null,
       address: address || null,
       note: note || null,
+      ...(String(address ?? "").trim()
+        ? {
+            branches: {
+              create: {
+                branchTag: String(branchTag ?? "").trim() || "สำนักงานใหญ่",
+                address: String(address).trim(),
+                isDefault: true,
+              },
+            },
+          }
+        : {}),
     },
   });
   revalidateAccountingRef(ACC_PARTNERS_TAG);

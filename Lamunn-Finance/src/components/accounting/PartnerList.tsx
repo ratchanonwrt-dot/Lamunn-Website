@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { useServerRefresh } from "./useServerRefresh";
+import PartnerBranchManager, { type PartnerBranchItem } from "./PartnerBranchManager";
 
 export interface PartnerListItem {
   id: string;
@@ -15,6 +16,7 @@ export interface PartnerListItem {
   note: string | null;
   isActive: boolean;
   usedCount: number;
+  branches: PartnerBranchItem[];
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -34,6 +36,7 @@ export default function PartnerList({ partners, canEdit }: { partners: PartnerLi
   const [items, setItems] = useState(partners);
   const [query, setQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [branchPartnerId, setBranchPartnerId] = useState<string | null>(null);
 
   useEffect(() => {
     setItems(partners);
@@ -46,7 +49,10 @@ export default function PartnerList({ partners, canEdit }: { partners: PartnerLi
   const q = query.trim().toLowerCase();
   const filtered = useMemo(() => {
     if (!q) return items;
-    return items.filter((p) => [p.name, p.taxId, p.phone, p.branchTag, p.note, p.address].some((f) => (f ?? "").toLowerCase().includes(q)));
+    return items.filter((p) =>
+      [p.name, p.taxId, p.phone, p.branchTag, p.note, p.address, ...p.branches.flatMap((branch) => [branch.branchTag, branch.address])]
+        .some((f) => (f ?? "").toLowerCase().includes(q))
+    );
   }, [items, q]);
 
   return (
@@ -97,8 +103,8 @@ export default function PartnerList({ partners, canEdit }: { partners: PartnerLi
                 <tbody>
                   {filtered
                     .filter((p) => p.type === type)
-                    .map((p) =>
-                      editingId === p.id ? (
+                    .flatMap((p) => {
+                      const partnerRow = editingId === p.id ? (
                         <tr key={p.id} className="border-b border-gray-100 bg-brand-50/40">
                           <td colSpan={7} className="p-4">
                             <PartnerEditForm
@@ -129,14 +135,23 @@ export default function PartnerList({ partners, canEdit }: { partners: PartnerLi
                               <RowActions
                                 partner={p}
                                 onEdit={() => setEditingId(p.id)}
+                                onBranches={() => setBranchPartnerId((current) => current === p.id ? null : p.id)}
                                 onToggled={(isActive) => patch(p.id, { isActive })}
                                 onRemoved={() => remove(p.id)}
                               />
                             )}
                           </td>
                         </tr>
-                      )
-                    )}
+                      );
+                      const branchRow = branchPartnerId === p.id ? (
+                        <tr key={`${p.id}-branches`} className="border-b border-gray-100">
+                          <td colSpan={7} className="p-4 pt-1">
+                            <PartnerBranchManager partnerId={p.id} partnerName={p.name} initialBranches={p.branches} />
+                          </td>
+                        </tr>
+                      ) : null;
+                      return [partnerRow, branchRow];
+                    })}
                 </tbody>
               </table>
             </div>
@@ -164,11 +179,13 @@ function Highlight({ text, query }: { text: string; query: string }) {
 function RowActions({
   partner,
   onEdit,
+  onBranches,
   onToggled,
   onRemoved,
 }: {
   partner: PartnerListItem;
   onEdit: () => void;
+  onBranches: () => void;
   onToggled: (isActive: boolean) => void;
   onRemoved: () => void;
 }) {
@@ -215,6 +232,9 @@ function RowActions({
       {error && <span className="text-xs text-rose-600">{error}</span>}
       <button type="button" onClick={onEdit} className="text-xs text-brand-700 hover:underline">
         แก้ไข
+      </button>
+      <button type="button" onClick={onBranches} className="whitespace-nowrap text-xs text-indigo-700 hover:underline">
+        สาขา ({partner.branches.length})
       </button>
       <button type="button" disabled={busy} onClick={toggleActive} className="text-xs text-gray-500 hover:underline disabled:opacity-50">
         {partner.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}
