@@ -281,8 +281,8 @@ export default function PurchaseTaxInvoiceForm({
             onChange={(e) => setForm({ ...form, vatRounding: e.target.value as VatRounding })}
             className={field}
           >
-            <option value="UP">ปัดขึ้น</option>
-            <option value="DOWN">ปัดลง</option>
+            <option value="UP">ปัดขึ้นเป็นบาทเต็ม</option>
+            <option value="DOWN">ปัดลงเป็นบาทเต็ม</option>
           </select>
         </label>
         <label className={label}>
