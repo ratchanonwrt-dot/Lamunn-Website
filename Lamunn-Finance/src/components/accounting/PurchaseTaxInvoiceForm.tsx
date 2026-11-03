@@ -6,7 +6,7 @@ import { Plus, Trash2 } from "lucide-react";
 import PartnerCombobox from "./PartnerCombobox";
 import AccountCombobox from "./AccountCombobox";
 import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
-import { addVatExclusive, fmtSatang, signedInputToSatang, splitVatInclusive, toSatang } from "@/lib/accounting/money";
+import { addVatExclusive, fmtSatang, signedInputToSatang, toSatang, type VatRounding } from "@/lib/accounting/money";
 import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
 import PurchaseTaxClaimPeriodSelect from "./PurchaseTaxClaimPeriodSelect";
 import { partnerBranchChoices, resolvePartnerBranchChoice } from "@/lib/accounting/partnerBranchSelection";
@@ -62,8 +62,8 @@ export default function PurchaseTaxInvoiceForm({
     vendorAddress: "",
     vendorBranchTag: "สำนักงานใหญ่",
     description: "ค่าสินค้า/บริการ",
-    amount: "",
-    amountIncludesVat: true,
+    baseAmount: "",
+    vatRounding: "UP" as VatRounding,
     isClaimable: true,
     note: "",
     expenseLines: [{ key: "expense-1", accountId: "", amount: "" }],
@@ -97,7 +97,12 @@ export default function PurchaseTaxInvoiceForm({
     const res = await fetch("/api/accounting/purchase-tax-invoices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        // API ยังรับรูปแบบเดิมสำหรับงานนำเข้าเก่า แต่หน้าจอใหม่นี้ยึดยอดก่อนภาษีเป็นต้นทางเสมอ
+        amount: form.baseAmount,
+        amountIncludesVat: false,
+      }),
     });
     const data = await res.json();
     setSubmitting(false);
@@ -108,7 +113,7 @@ export default function PurchaseTaxInvoiceForm({
     setForm({
       ...form,
       invoiceNo: "",
-      amount: "",
+      baseAmount: "",
       note: "",
       whtIncomeType: "",
       whtRatePercent: "",
@@ -133,11 +138,9 @@ export default function PurchaseTaxInvoiceForm({
 
   const field = "mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900";
   const label = "text-xs text-gray-500";
-  const entered = signedInputToSatang(form.amount);
-  const isCreditNote = entered < 0;
-  const { base, vat } = form.amountIncludesVat
-    ? splitVatInclusive(entered, vatRate)
-    : addVatExclusive(entered, vatRate);
+  const enteredBase = signedInputToSatang(form.baseAmount);
+  const isCreditNote = enteredBase < 0;
+  const { base, vat } = addVatExclusive(enteredBase, vatRate, form.vatRounding);
   const whtEnabled = Boolean(form.whtIncomeType);
   const whtBase = form.whtBaseAmount.trim() ? toSatang(form.whtBaseAmount) : base;
   const wht = withholdingFromPercent(whtBase, form.whtRatePercent);
@@ -246,35 +249,51 @@ export default function PurchaseTaxInvoiceForm({
         </label>
 
         <label className={label}>
-          ยอดเงิน
+          ยอดก่อนภาษี
           <input
             required
             inputMode="decimal"
-            value={form.amount}
+            value={form.baseAmount}
             onChange={(e) => {
-              const amount = e.target.value;
+              const baseAmount = e.target.value;
               setForm({
                 ...form,
-                amount,
-                ...(signedInputToSatang(amount) < 0 ? { whtIncomeType: "", whtRatePercent: "", whtBaseAmount: "" } : {}),
+                baseAmount,
+                ...(signedInputToSatang(baseAmount) < 0 ? { whtIncomeType: "", whtRatePercent: "", whtBaseAmount: "" } : {}),
               });
             }}
-            placeholder="เช่น 1070 หรือ (1070)"
+            placeholder="เช่น 1000 หรือ (1000)"
             className={field}
           />
         </label>
         <label className={label}>
-          ยอดที่กรอก
+          ภาษี
+          <input
+            readOnly
+            value={fmtSatang(vat, { zeroDash: false })}
+            className={`${field} bg-gray-50 tabular-nums`}
+          />
+        </label>
+        <label className={label}>
+          การปัดเศษภาษี
           <select
-            value={form.amountIncludesVat ? "inc" : "exc"}
-            onChange={(e) => setForm({ ...form, amountIncludesVat: e.target.value === "inc" })}
+            value={form.vatRounding}
+            onChange={(e) => setForm({ ...form, vatRounding: e.target.value as VatRounding })}
             className={field}
           >
-            <option value="inc">รวม VAT แล้ว</option>
-            <option value="exc">ยังไม่รวม VAT</option>
+            <option value="UP">ปัดขึ้น</option>
+            <option value="DOWN">ปัดลง</option>
           </select>
         </label>
-        <label className={`${label} sm:col-span-2`}>
+        <label className={label}>
+          ยอดรวม
+          <input
+            readOnly
+            value={fmtSatang(total, { zeroDash: false })}
+            className={`${field} bg-gray-50 font-medium tabular-nums`}
+          />
+        </label>
+        <label className={`${label} sm:col-span-2 lg:col-span-4`}>
           หมายเหตุ
           <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} className={field} />
         </label>
@@ -372,11 +391,11 @@ export default function PurchaseTaxInvoiceForm({
       <div className="mt-4 rounded-lg border border-brand-200 bg-brand-50/50 p-3">
         <p className="mb-2 text-sm font-medium text-gray-800">ลงบัญชีให้เลย (ไม่บังคับ)</p>
         <p className="mb-3 text-xs text-gray-500">
-          แบ่งฐานก่อน VAT ไปยังบัญชีค่าใช้จ่าย/สินทรัพย์ได้หลายบรรทัด แล้วเลือกบัญชีเครดิต ระบบจะสร้างใบสำคัญเป็นร่างให้เอง —
+          แบ่งฐานก่อน VAT ไปยังบัญชีค่าใช้จ่าย/สินทรัพย์ได้หลายบรรทัด แล้วเลือกบัญชีที่ใช้จ่าย ระบบจะสร้างใบสำคัญเป็นร่างให้เอง —
           ไม่ต้องไปคีย์ในสมุดรายวันซ้ำ และรายงานภาษีจะไม่นับยอดสองรอบ
           <br />
           ถ้ามีบัญชีเดบิตเพียงบรรทัดเดียว สามารถเว้นยอดไว้เพื่อใช้ฐานก่อน VAT ทั้งจำนวนได้
-          หากไม่เลือกทั้งบัญชีเดบิตและเครดิต ระบบจะบันทึกเฉพาะเอกสารโดยไม่ลงบัญชี
+          หากไม่เลือกบัญชีค่าใช้จ่าย/สินทรัพย์ ระบบจะบันทึกเฉพาะเอกสารโดยไม่ลงบัญชี
         </p>
         <div className="space-y-2">
           {form.expenseLines.map((line, index) => (

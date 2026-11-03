@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
     description,
     amount,
     amountIncludesVat,
+    vatRounding,
     isClaimable,
     note,
     expenseLines,
@@ -56,8 +57,10 @@ export async function POST(req: NextRequest) {
 
   const settings = await getAllSettings();
   const vatRate = Number(settings.vatRate);
-  const { base, vat } =
-    amountIncludesVat === false ? addVatExclusive(amountSatang, vatRate) : splitVatInclusive(amountSatang, vatRate);
+  const rounding = vatRounding === "UP" || vatRounding === "DOWN" ? vatRounding : "NEAREST";
+  const { base, vat } = amountIncludesVat === false
+    ? addVatExclusive(amountSatang, vatRate, rounding)
+    : splitVatInclusive(amountSatang, vatRate);
   const invoiceDateValue = parseDateOnly(invoiceDate);
   const paymentDateValue = paymentDate ? parseDateOnly(paymentDate) : invoiceDateValue;
   let claimPeriodValue: Date;
