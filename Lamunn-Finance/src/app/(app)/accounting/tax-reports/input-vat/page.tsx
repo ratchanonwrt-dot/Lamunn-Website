@@ -25,7 +25,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
   const month = Number(searchParams.month) || now.getUTCMonth() + 1;
   const { start, end } = monthRange(year, month - 1);
 
-  const [settings, report, partners, expenseAccounts, creditAccounts, paymentAccounts] = await Promise.all([
+  const [settings, report, partners, expenseAccounts, paymentAccounts] = await Promise.all([
     getAllSettings(),
     buildInputVatReport(start, end),
     prisma.accPartner.findMany({
@@ -49,11 +49,6 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
     // บัญชีสำหรับสร้างใบสำคัญให้อัตโนมัติ — เดบิตเป็นค่าใช้จ่าย/สินทรัพย์ เครดิตเป็นเงิน/เจ้าหนี้
     prisma.accAccount.findMany({
       where: { isActive: true, isPostable: true, type: { in: ["EXPENSE", "ASSET"] }, vatRole: null },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, nameTh: true },
-    }),
-    prisma.accAccount.findMany({
-      where: { isActive: true, isPostable: true, type: { in: ["ASSET", "LIABILITY"] }, vatRole: null },
       orderBy: { code: "asc" },
       select: { id: true, code: true, nameTh: true },
     }),
@@ -103,7 +98,6 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
             <PurchaseTaxInvoiceForm
               partners={partners}
               expenseAccounts={expenseAccounts}
-              creditAccounts={creditAccounts}
               paymentAccounts={paymentAccounts}
               vatRate={Number(settings.vatRate)}
             />

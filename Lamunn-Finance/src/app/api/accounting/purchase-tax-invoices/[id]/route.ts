@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@lamunn/db-finance";
 import { requireSectionApi } from "@/lib/permissions";
-import { AccountingError, voidEntry } from "@/lib/accounting/post";
+import { AccountingError } from "@/lib/accounting/post";
 import { updatePurchaseInvoice } from "@/lib/accounting/purchaseInvoiceEdit";
+import { voidPurchaseTaxInvoice } from "@/lib/accounting/purchaseInvoiceVoid";
 
 /** อ่านใบกำกับภาษีซื้อหนึ่งใบพร้อมสถานะใบสำคัญที่ผูกไว้ — หน้าจอแก้ไขใช้ตัดสินว่าให้แก้ยอด/วันที่ได้ไหม */
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -17,16 +18,25 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const entry = invoice.entryId
     ? await prisma.accJournalEntry.findUnique({ where: { id: invoice.entryId }, select: { id: true, entryNo: true, status: true } })
     : null;
-  const paymentEntry = invoice.whtCertificate?.entryId && invoice.whtCertificate.entryId !== invoice.entryId
+  const sourcedPaymentEntry = invoice.entryId
     ? await prisma.accJournalEntry.findUnique({
-        where: { id: invoice.whtCertificate.entryId },
-        select: { id: true, entryNo: true, status: true },
+        where: { sourceType_sourceKey: { sourceType: "PURCHASE_TAX_PAYMENT", sourceKey: invoice.entryId } },
+        select: { id: true, entryNo: true, status: true, date: true },
       })
     : null;
+  const paymentEntry = sourcedPaymentEntry ?? (
+    invoice.whtCertificate?.entryId && invoice.whtCertificate.entryId !== invoice.entryId
+      ? await prisma.accJournalEntry.findUnique({
+          where: { id: invoice.whtCertificate.entryId },
+          select: { id: true, entryNo: true, status: true, date: true },
+        })
+      : null
+  );
   return NextResponse.json({
     invoice: {
       ...invoice,
       invoiceDate: invoice.invoiceDate.toISOString().slice(0, 10),
+      paymentDate: paymentEntry?.date.toISOString().slice(0, 10) ?? null,
       claimPeriod: (invoice.claimPeriod ?? invoice.invoiceDate).toISOString().slice(0, 7),
       baseAmount: Number(invoice.baseAmount),
       vatAmount: Number(invoice.vatAmount),
@@ -60,26 +70,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { action } = await req.json();
   if (action !== "void") return NextResponse.json({ error: "action ต้องเป็น void" }, { status: 400 });
 
-  const existing = await prisma.accPurchaseTaxInvoice.findUnique({
-    where: { id: params.id },
-    include: { whtCertificate: { select: { entryId: true } } },
-  });
-  if (!existing) return NextResponse.json({ error: "ไม่พบใบกำกับภาษีซื้อนี้" }, { status: 404 });
-
-  // ใบซื้อและใบจ่ายเป็นผลจากเอกสารต้นทางเดียวกัน จึงต้องยกเลิกทั้งคู่ก่อนปิดเอกสารภาษี
-  const linkedEntryIds = Array.from(new Set([existing.entryId, existing.whtCertificate?.entryId].filter((id): id is string => Boolean(id))));
   try {
-    for (const entryId of linkedEntryIds) await voidEntry(entryId, staff.staffId);
+    const invoice = await voidPurchaseTaxInvoice(params.id, staff.staffId);
+    return NextResponse.json({ invoice });
   } catch (error) {
-    if (error instanceof AccountingError) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error instanceof AccountingError) {
+      const status = error.message === "ไม่พบใบกำกับภาษีซื้อนี้" ? 404 : 400;
+      return NextResponse.json({ error: error.message }, { status });
+    }
     throw error;
   }
-
-  const invoice = await prisma.$transaction(async (tx) => {
-    const updated = await tx.accPurchaseTaxInvoice.update({ where: { id: params.id }, data: { voided: true } });
-    // หนังสือรับรองเป็นผลจากใบกำกับใบเดียวกัน จึงต้องยกเลิกพร้อมกันเพื่อไม่ให้ ภ.ง.ด.53 ค้างยอดที่ไม่มีเอกสารต้นทาง
-    await tx.accWhtCertificate.updateMany({ where: { purchaseInvoiceId: params.id }, data: { voided: true } });
-    return updated;
-  });
-  return NextResponse.json({ invoice });
 }

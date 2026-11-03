@@ -120,12 +120,20 @@ export async function updatePurchaseInvoice(
       })
     : null;
 
-  const paymentEntry = linkedWht?.entryId && linkedWht.entryId !== current.entryId
+  const sourcedPaymentEntry = current.entryId
     ? await prisma.accJournalEntry.findUnique({
-        where: { id: linkedWht.entryId },
+        where: { sourceType_sourceKey: { sourceType: "PURCHASE_TAX_PAYMENT", sourceKey: current.entryId } },
         include: { lines: { orderBy: { sortOrder: "asc" }, include: { account: { select: { code: true, vatRole: true } } } } },
       })
     : null;
+  const paymentEntry = sourcedPaymentEntry ?? (
+    linkedWht?.entryId && linkedWht.entryId !== current.entryId
+      ? await prisma.accJournalEntry.findUnique({
+          where: { id: linkedWht.entryId },
+          include: { lines: { orderBy: { sortOrder: "asc" }, include: { account: { select: { code: true, vatRole: true } } } } },
+        })
+      : null
+  );
 
   if (entry && paymentEntry && entry.status !== "VOID" && paymentEntry.status !== "VOID") {
     const purchaseVatLine = entry.lines.find((line) => line.account.vatRole === "INPUT");
@@ -141,12 +149,12 @@ export async function updatePurchaseInvoice(
       ? await prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE } })
       : null;
 
-    if (!purchaseVatLine || !purchasePayableLine || !paymentPayableLine || !paymentWhtLine || !paymentCashLine) {
+    if (!purchaseVatLine || !purchasePayableLine || !paymentPayableLine || !paymentCashLine || (linkedWht && !paymentWhtLine)) {
       throw new AccountingError(
         `ใบสำคัญ ${entry.entryNo}/${paymentEntry.entryNo} ถูกแก้ไขจนไม่ใช่รูปแบบมาตรฐาน — แก้ยอดที่ใบสำคัญโดยตรงแทน`
       );
     }
-    if (paymentWhtLine.account.code === SYSTEM_ACCOUNTS.WHT_PAYABLE && !pnd53Account) {
+    if (paymentWhtLine?.account.code === SYSTEM_ACCOUNTS.WHT_PAYABLE && !pnd53Account) {
       throw new AccountingError(`ไม่พบบัญชีภาษีหัก ณ ที่จ่าย - ภ.ง.ด.53 รหัส ${SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE} ในผังบัญชี`);
     }
 
@@ -162,7 +170,7 @@ export async function updatePurchaseInvoice(
           `ใบสำคัญ ${entry.entryNo} แบ่งค่าใช้จ่ายหลายบัญชี — แก้ยอดที่ใบสำคัญโดยตรงเพื่อระบุยอดแต่ละบัญชี`
         );
       }
-      if (!linkedWhtCalc) throw new AccountingError("ไม่พบยอดภาษีหัก ณ ที่จ่ายที่เชื่อมกับใบสำคัญจ่าย");
+      if (linkedWht && !linkedWhtCalc) throw new AccountingError("ไม่พบยอดภาษีหัก ณ ที่จ่ายที่เชื่อมกับใบสำคัญจ่าย");
       const expenseLine = purchaseExpenseLines[0];
       const total = base + vat;
       await updateEntry(entry.id, {
@@ -178,15 +186,17 @@ export async function updatePurchaseInvoice(
         ],
       });
       await updateEntry(paymentEntry.id, {
-        date: invoiceDate,
+        date: paymentEntry.date,
         journalType: "PAYMENT",
         description: paymentEntry.description === purchasePaymentEntryDescriptionFor(current.vendorName, current.invoiceNo)
           ? purchasePaymentEntryDescriptionFor(vendorName, invoiceNo)
           : paymentEntry.description,
         lines: [
           { accountId: paymentPayableLine.accountId, debit: toBaht(total), partnerId: paymentPayableLine.partnerId, branchId: paymentPayableLine.branchId, memo: paymentPayableLine.memo },
-          { accountId: paymentCashLine.accountId, credit: toBaht(total - linkedWhtCalc.amount), partnerId: paymentCashLine.partnerId, branchId: paymentCashLine.branchId, memo: paymentCashLine.memo },
-          { accountId: pnd53Account?.id ?? paymentWhtLine.accountId, credit: toBaht(linkedWhtCalc.amount), partnerId: paymentWhtLine.partnerId, branchId: paymentWhtLine.branchId, memo: paymentWhtLine.memo },
+          { accountId: paymentCashLine.accountId, credit: toBaht(total - (linkedWhtCalc?.amount ?? 0)), partnerId: paymentCashLine.partnerId, branchId: paymentCashLine.branchId, memo: paymentCashLine.memo },
+          ...(linkedWhtCalc && paymentWhtLine
+            ? [{ accountId: pnd53Account?.id ?? paymentWhtLine.accountId, credit: toBaht(linkedWhtCalc.amount), partnerId: paymentWhtLine.partnerId, branchId: paymentWhtLine.branchId, memo: paymentWhtLine.memo }]
+            : []),
         ],
       });
     } else {
@@ -328,7 +338,7 @@ export async function updatePurchaseInvoice(
     await prisma.accWhtCertificate.update({
       where: { id: linkedWht.id },
       data: {
-        payDate: invoiceDate,
+        payDate: paymentEntry?.date ?? linkedWht.payDate,
         payeeName: vendorName,
         payeeTaxId: vendorTaxId,
         payeeBranchTag: vendorBranchTag,
