@@ -28,6 +28,11 @@ async function main() {
       throw new Error(`ผลปรับภาษีหนึ่งสตางค์ไม่ถูกต้อง: ขึ้น=${exactUpward.vat} ลง=${exactDownward.vat}`);
     }
 
+    const emptyAmount = addVatExclusive(0, 0.07, "UP");
+    if (emptyAmount.vat !== 0) {
+      throw new Error(`ยอดก่อนภาษีว่างต้องไม่มีภาษี: ${emptyAmount.vat}`);
+    }
+
     for (const [mode, calculated] of [["UP", upward], ["DOWN", downward]] as const) {
       const invoice = await prisma.accPurchaseTaxInvoice.create({
         data: {
