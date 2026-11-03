@@ -23,7 +23,28 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (note !== undefined) data.note = note || null;
   if (isActive !== undefined) data.isActive = !!isActive;
 
-  const partner = await prisma.accPartner.update({ where: { id: params.id }, data });
+  const partner = await prisma.$transaction(async (tx) => {
+    let updated = await tx.accPartner.update({ where: { id: params.id }, data });
+    if (branchTag !== undefined || address !== undefined) {
+      const defaultBranch = await tx.accPartnerBranch.findFirst({ where: { partnerId: params.id, isDefault: true } });
+      const nextTag = String(updated.branchTag ?? "").trim() || "สำนักงานใหญ่";
+      const nextAddress = String(updated.address ?? "").trim();
+      if (nextAddress) {
+        if (defaultBranch) {
+          await tx.accPartnerBranch.update({ where: { id: defaultBranch.id }, data: { branchTag: nextTag, address: nextAddress } });
+        } else {
+          await tx.accPartnerBranch.create({ data: { partnerId: params.id, branchTag: nextTag, address: nextAddress, isDefault: true } });
+        }
+      } else if (defaultBranch) {
+        // สาขาที่ผูกเอกสารภาษีแล้วต้องไม่เสียที่อยู่เพราะล้างช่องในฟอร์มคู่ค้าโดยไม่ตั้งใจ
+        updated = await tx.accPartner.update({
+          where: { id: params.id },
+          data: { branchTag: defaultBranch.branchTag, address: defaultBranch.address },
+        });
+      }
+    }
+    return updated;
+  });
   revalidateAccountingRef(ACC_PARTNERS_TAG);
   return NextResponse.json({ partner });
 }

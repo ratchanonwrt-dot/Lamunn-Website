@@ -11,7 +11,10 @@ export default async function PartnersPage() {
   const canEdit = permissions.ACCOUNTING.canEdit;
 
   const [partners, usage] = await Promise.all([
-    prisma.accPartner.findMany({ orderBy: { name: "asc" } }),
+    prisma.accPartner.findMany({
+      orderBy: { name: "asc" },
+      include: { branches: { orderBy: [{ isDefault: "desc" }, { branchTag: "asc" }] } },
+    }),
     prisma.accJournalLine.groupBy({ by: ["partnerId"], _count: { _all: true } }),
   ]);
   const usedCount = new Map(usage.filter((u) => u.partnerId).map((u) => [u.partnerId as string, u._count._all]));
@@ -44,6 +47,13 @@ export default async function PartnersPage() {
           note: p.note,
           isActive: p.isActive,
           usedCount: usedCount.get(p.id) ?? 0,
+          branches: p.branches.map((branch) => ({
+            id: branch.id,
+            branchTag: branch.branchTag,
+            address: branch.address,
+            isDefault: branch.isDefault,
+            isActive: branch.isActive,
+          })),
         }))}
       />
     </div>

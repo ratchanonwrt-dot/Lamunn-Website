@@ -829,12 +829,32 @@ model AccPartner {
   lines               AccJournalLine[]
   purchaseTaxInvoices AccPurchaseTaxInvoice[]
   whtCertificates     AccWhtCertificate[]
+  branches            AccPartnerBranch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([type])
   @@map("acc_partners")
+}
+
+// ที่อยู่แยกตามสาขาของคู่ค้า — เอกสารภาษีต้องใช้ที่อยู่ของสาขาบนใบกำกับ ไม่ใช่ที่อยู่รวมของคู่ค้า
+model AccPartnerBranch {
+  id        String  @id @default(cuid())
+  partnerId String
+  branchTag String
+  address   String
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+
+  partner AccPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([partnerId, branchTag])
+  @@index([partnerId, isActive])
+  @@map("acc_partner_branches")
 }
 
 enum AccPeriodStatus {

@@ -18,6 +18,7 @@ interface PartnerOption {
   taxId: string | null;
   branchTag: string | null;
   address: string | null;
+  branches: Array<{ id: string; branchTag: string; address: string; isDefault: boolean; isActive: boolean }>;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -72,13 +73,15 @@ export default function PurchaseTaxInvoiceForm({
    * (ชื่อบนใบกำกับบางใบไม่ตรงกับชื่อที่เราบันทึกไว้เป๊ะ ต้องยึดตามใบกำกับ) */
   function pickPartner(id: string) {
     const p = partners.find((x) => x.id === id);
+    const defaultBranch = p?.branches.find((branch) => branch.isActive && branch.isDefault)
+      ?? p?.branches.find((branch) => branch.isActive);
     setForm((f) => ({
       ...f,
       partnerId: id,
       vendorName: p ? p.name : f.vendorName,
       vendorTaxId: p?.taxId ?? f.vendorTaxId,
-      vendorBranchTag: p?.branchTag ?? f.vendorBranchTag,
-      vendorAddress: p?.address ?? f.vendorAddress,
+      vendorBranchTag: defaultBranch?.branchTag ?? p?.branchTag ?? f.vendorBranchTag,
+      vendorAddress: defaultBranch?.address ?? p?.address ?? f.vendorAddress,
     }));
   }
 
@@ -134,6 +137,9 @@ export default function PurchaseTaxInvoiceForm({
   const wht = withholdingFromPercent(whtBase, form.whtRatePercent);
   const total = base + vat;
   const netPayable = total - wht.amount;
+  const selectedPartner = partners.find((partner) => partner.id === form.partnerId);
+  const partnerBranches = selectedPartner?.branches.filter((branch) => branch.isActive) ?? [];
+  const selectedBranchId = partnerBranches.find((branch) => branch.branchTag === form.vendorBranchTag && branch.address === form.vendorAddress)?.id ?? "";
 
   return (
     <form onSubmit={submit} className="w-full rounded-xl border border-gray-200 bg-white p-5">
@@ -188,7 +194,22 @@ export default function PurchaseTaxInvoiceForm({
         </div>
         <label className={label}>
           สำนักงานใหญ่ / สาขาที่
-          <input value={form.vendorBranchTag} onChange={(e) => setForm({ ...form, vendorBranchTag: e.target.value })} className={field} />
+          {partnerBranches.length > 0 ? (
+            <select
+              value={selectedBranchId}
+              onChange={(event) => {
+                const branch = partnerBranches.find((item) => item.id === event.target.value);
+                if (branch) setForm({ ...form, vendorBranchTag: branch.branchTag, vendorAddress: branch.address });
+              }}
+              className={field}
+            >
+              {partnerBranches.map((branch) => (
+                <option key={branch.id} value={branch.id}>{branch.branchTag}{branch.isDefault ? " (สาขาหลัก)" : ""}</option>
+              ))}
+            </select>
+          ) : (
+            <input value={form.vendorBranchTag} onChange={(e) => setForm({ ...form, vendorBranchTag: e.target.value })} className={field} />
+          )}
         </label>
 
         <label className={`${label} sm:col-span-2`}>
@@ -198,6 +219,10 @@ export default function PurchaseTaxInvoiceForm({
         <label className={label}>
           เลขประจำตัวผู้เสียภาษีผู้ขาย
           <input value={form.vendorTaxId} onChange={(e) => setForm({ ...form, vendorTaxId: e.target.value })} maxLength={13} className={field} />
+        </label>
+        <label className={`${label} sm:col-span-2`}>
+          ที่อยู่ผู้ขายตามสาขา
+          <input value={form.vendorAddress} onChange={(e) => setForm({ ...form, vendorAddress: e.target.value })} className={field} />
         </label>
         <label className={label}>
           รายการ
@@ -305,15 +330,10 @@ export default function PurchaseTaxInvoiceForm({
                   className={field}
                 />
               </label>
-              <label className={`${label} sm:col-span-2`}>
-                ที่อยู่ผู้ถูกหักภาษี (แสดงในหนังสือรับรอง)
-                <input
-                  required
-                  value={form.vendorAddress}
-                  onChange={(e) => setForm({ ...form, vendorAddress: e.target.value })}
-                  className={field}
-                />
-              </label>
+              <div className={`${label} rounded-lg border border-violet-100 bg-white px-3 py-2 sm:col-span-2`}>
+                ที่อยู่ในหนังสือรับรอง 50 ทวิ
+                <p className="mt-1 text-sm text-gray-800">{form.vendorAddress || "กรุณากรอกที่อยู่ผู้ขายตามสาขาด้านบน"}</p>
+              </div>
               <div className="grid grid-cols-2 gap-2 sm:col-span-2 lg:grid-cols-4">
                 {[
                   ["ฐานก่อน VAT", base],
