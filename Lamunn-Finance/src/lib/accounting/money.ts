@@ -7,6 +7,7 @@ import type { Prisma } from "@lamunn/db-finance";
  * ในฐานข้อมูลเก็บเป็น Decimal(15,2) — ฟังก์ชันพวกนี้เป็นสะพานระหว่างสองฝั่ง */
 
 export type Money = Prisma.Decimal | number | string | null | undefined;
+export type VatRounding = "NEAREST" | "UP" | "DOWN";
 
 /** แปลงค่าจากฐานข้อมูล (Decimal) หรือฟอร์ม (string/number) เป็นสตางค์ */
 export function toSatang(v: Money): number {
@@ -49,8 +50,25 @@ export function splitVatInclusive(totalSatang: number, vatRate: number): { base:
   return { base: totalSatang - vat, vat };
 }
 
-/** คิด VAT จากราคาที่ยังไม่รวมภาษี */
-export function addVatExclusive(baseSatang: number, vatRate: number): { base: number; vat: number } {
+/** คิด VAT จากราคาที่ยังไม่รวมภาษี โดยปัดที่ระดับสตางค์
+ *
+ * แปลงอัตราเป็นเศษส่วนจำนวนเต็มก่อนคูณ เพื่อไม่ให้เลขฐานสองของ float ทำยอดที่ลงตัว
+ * เช่น 7.00 กลายเป็น 7.01 เมื่อเลือกปัดขึ้น */
+export function addVatExclusive(
+  baseSatang: number,
+  vatRate: number,
+  rounding: VatRounding = "NEAREST"
+): { base: number; vat: number } {
   if (vatRate <= 0) return { base: baseSatang, vat: 0 };
-  return { base: baseSatang, vat: Math.round(baseSatang * vatRate) };
+  const denominator = 1_000_000n;
+  const rateNumerator = BigInt(Math.round(vatRate * Number(denominator)));
+  const magnitude = BigInt(Math.abs(Math.trunc(baseSatang)));
+  const product = magnitude * rateNumerator;
+  const rounded = rounding === "UP"
+    ? (product + denominator - 1n) / denominator
+    : rounding === "DOWN"
+      ? product / denominator
+      : (product + denominator / 2n) / denominator;
+  const vat = Number(rounded) * (baseSatang < 0 ? -1 : 1);
+  return { base: baseSatang, vat };
 }
