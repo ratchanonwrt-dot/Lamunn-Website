@@ -7,7 +7,7 @@ import JournalEntryForm, { type JournalEntryInitial } from "./JournalEntryForm";
 
 interface AccountOption { id: string; code: string; nameTh: string; vatRole?: string | null }
 interface BranchOption { id: string; name: string }
-interface PartnerOption { id: string; name: string; type: "DEBTOR" | "CREDITOR"; phone: string | null; taxId?: string | null }
+interface PartnerOption { id: string; name: string; type: "DEBTOR" | "CREDITOR"; phone: string | null; taxId?: string | null; branchTag: string | null }
 interface AiDraft {
   draftId: string; pageNumber: number; entryId: string | null;
   date: string; documentType?: "INVOICE" | "CREDIT_NOTE"; journalType: string; description: string; docNo: string | null;

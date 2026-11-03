@@ -12,6 +12,7 @@ interface PartnerOption {
   name: string;
   type: "DEBTOR" | "CREDITOR";
   phone: string | null;
+  branchTag: string | null;
 }
 
 export interface JournalFilters {
@@ -144,7 +145,7 @@ export default function JournalFilterBar({
         <div>
           <span className={label}>ซัพพลายเออร์ / คู่ค้า</span>
           <div className="mt-1">
-            <PartnerCombobox partners={partners} value={filters.partnerId} onChange={(id) => go({ partnerId: id })} />
+            <PartnerCombobox partners={partners} value={filters.partnerId} onChange={(id) => go({ partnerId: id })} showBranch />
           </div>
         </div>
         <div>

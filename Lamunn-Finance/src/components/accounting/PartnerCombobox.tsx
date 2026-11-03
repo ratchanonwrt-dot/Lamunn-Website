@@ -7,6 +7,7 @@ interface PartnerOption {
   name: string;
   type: "DEBTOR" | "CREDITOR";
   phone: string | null;
+  branchTag?: string | null;
 }
 
 /** ช่องเลือกคู่ค้า (ซัพพลายเออร์/ลูกหนี้) แบบพิมพ์ค้นหาได้ — โครงเดียวกับ AccountCombobox
@@ -15,10 +16,13 @@ export default function PartnerCombobox({
   partners,
   value,
   onChange,
+  showBranch = false,
 }: {
   partners: PartnerOption[];
   value: string;
   onChange: (partnerId: string) => void;
+  /** หน้าบันทึกบัญชีต้องแยกคู่ค้าชื่อเดียวกันที่อยู่คนละสาขาให้เห็นชัด */
+  showBranch?: boolean;
 }) {
   const selected = partners.find((p) => p.id === value) ?? null;
   const [open, setOpen] = useState(false);
@@ -28,8 +32,16 @@ export default function PartnerCombobox({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  const partnerLabel = (partner: PartnerOption) => {
+    const branch = String(partner.branchTag ?? "").trim();
+    if (!showBranch || !branch) return partner.name;
+    const branchLabel = branch === "สำนักงานใหญ่" || branch.startsWith("สาขา") ? branch : `สาขา ${branch}`;
+    return `${partner.name} (${branchLabel})`;
+  };
   const q = query.trim().toLowerCase();
-  const filtered = q ? partners.filter((p) => p.name.toLowerCase().includes(q) || p.phone?.includes(q)) : partners;
+  const filtered = q
+    ? partners.filter((p) => partnerLabel(p).toLowerCase().includes(q) || p.phone?.includes(q))
+    : partners;
 
   function measure() {
     const el = inputRef.current;
@@ -96,8 +108,8 @@ export default function PartnerCombobox({
     <>
       <input
         ref={inputRef}
-        value={open ? query : selected ? selected.name : ""}
-        placeholder={selected ? selected.name : "— ไม่ระบุ —"}
+        value={open ? query : selected ? partnerLabel(selected) : ""}
+        placeholder={selected ? partnerLabel(selected) : "— ไม่ระบุ —"}
         onFocus={openList}
         onClick={() => !open && openList()}
         onChange={(e) => {
@@ -147,7 +159,7 @@ export default function PartnerCombobox({
               <span className={`mr-1.5 rounded px-1 py-0.5 text-[10px] font-medium ${p.type === "CREDITOR" ? "bg-rose-100 text-rose-600" : "bg-sky-100 text-sky-600"}`}>
                 {p.type === "CREDITOR" ? "จ่าย" : "รับ"}
               </span>
-              {p.name}
+              {partnerLabel(p)}
             </button>
           ))}
         </div>
