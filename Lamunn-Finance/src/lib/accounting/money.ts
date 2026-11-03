@@ -53,8 +53,8 @@ export function splitVatInclusive(totalSatang: number, vatRate: number): { base:
 /** คิด VAT จากราคาที่ยังไม่รวมภาษี
  *
  * แปลงอัตราเป็นเศษส่วนจำนวนเต็มก่อนคูณ เพื่อไม่ให้เลขฐานสองของ float ทำยอดคลาดเคลื่อน
- * เช่น ภาษี 7.07 ปัดขึ้นเป็น 8.00 หรือปัดลงเป็น 7.00
- * โหมด UP/DOWN ปัดเป็นบาทเต็มตามการเลือกของผู้ใช้ ส่วน NEAREST ยังคงปัดระดับสตางค์สำหรับ flow เดิม */
+ * เช่น ภาษี 7.07 ปัดขึ้นเป็น 7.08 หรือปัดลงเป็น 7.06
+ * โหมด UP/DOWN ใช้สำหรับปรับเศษภาษีครั้งละหนึ่งสตางค์ตามเอกสารจริง */
 export function addVatExclusive(
   baseSatang: number,
   vatRate: number,
@@ -65,12 +65,12 @@ export function addVatExclusive(
   const rateNumerator = BigInt(Math.round(vatRate * Number(denominator)));
   const magnitude = BigInt(Math.abs(Math.trunc(baseSatang)));
   const product = magnitude * rateNumerator;
-  const wholeBahtDenominator = denominator * 100n;
+  const nearestSatang = (product + denominator / 2n) / denominator;
   const rounded = rounding === "UP"
-    ? ((product + wholeBahtDenominator - 1n) / wholeBahtDenominator) * 100n
+    ? nearestSatang + 1n
     : rounding === "DOWN"
-      ? (product / wholeBahtDenominator) * 100n
-      : (product + denominator / 2n) / denominator;
+      ? nearestSatang > 0n ? nearestSatang - 1n : 0n
+      : nearestSatang;
   const vat = Number(rounded) * (baseSatang < 0 ? -1 : 1);
   return { base: baseSatang, vat };
 }

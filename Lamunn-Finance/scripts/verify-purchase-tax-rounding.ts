@@ -1,4 +1,4 @@
-/** พิสูจน์การปัดภาษีซื้อขึ้น/ลงเป็นบาทเต็ม และบันทึกยอดรวมได้ตรงสูตร
+/** พิสูจน์การปรับภาษีซื้อขึ้น/ลงครั้งละหนึ่งสตางค์ และบันทึกยอดรวมได้ตรงสูตร
  *
  * รัน: npx tsx scripts/verify-purchase-tax-rounding.ts
  */
@@ -18,14 +18,14 @@ async function main() {
   try {
     const upward = addVatExclusive(10_100, 0.07, "UP");
     const downward = addVatExclusive(10_100, 0.07, "DOWN");
-    if (upward.vat !== 800 || downward.vat !== 700) {
+    if (upward.vat !== 708 || downward.vat !== 706) {
       throw new Error(`ผลปัดภาษีไม่ถูกต้อง: ขึ้น=${upward.vat} ลง=${downward.vat}`);
     }
 
     const exactUpward = addVatExclusive(10_000, 0.07, "UP");
     const exactDownward = addVatExclusive(10_000, 0.07, "DOWN");
-    if (exactUpward.vat !== 700 || exactDownward.vat !== 700) {
-      throw new Error(`ยอดภาษีที่เป็นบาทเต็มถูกปัดผิด: ขึ้น=${exactUpward.vat} ลง=${exactDownward.vat}`);
+    if (exactUpward.vat !== 701 || exactDownward.vat !== 699) {
+      throw new Error(`ผลปรับภาษีหนึ่งสตางค์ไม่ถูกต้อง: ขึ้น=${exactUpward.vat} ลง=${exactDownward.vat}`);
     }
 
     for (const [mode, calculated] of [["UP", upward], ["DOWN", downward]] as const) {
