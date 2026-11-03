@@ -4,23 +4,27 @@ import { toBaht } from "./money";
 export const purchasePaymentEntryDescriptionFor = (vendorName: string, invoiceNo: string) =>
   `จ่าย ${vendorName} ใบกำกับ ${invoiceNo}`;
 
-export function buildPurchaseWhtJournalLines(input: {
+export function buildPurchasePaymentJournalLines(input: {
   allocations: { accountId: string; amountSatang: number }[];
   inputVatAccountId: string;
   tradePayableAccountId: string;
   paymentAccountId: string;
-  whtPayableAccountId: string;
+  whtPayableAccountId?: string | null;
   baseSatang: number;
   vatSatang: number;
-  whtSatang: number;
+  whtSatang?: number;
   partnerId?: string | null;
   description?: string | null;
   invoiceNo: string;
 }): { purchaseLines: DraftLine[]; paymentLines: DraftLine[] } {
+  const whtSatang = input.whtSatang ?? 0;
   const totalSatang = input.baseSatang + input.vatSatang;
-  const netPaymentSatang = totalSatang - input.whtSatang;
-  if (input.baseSatang <= 0 || input.vatSatang < 0 || input.whtSatang <= 0 || netPaymentSatang <= 0) {
-    throw new AccountingError("ยอดซื้อ ภาษีซื้อ หรือภาษีหัก ณ ที่จ่ายไม่ถูกต้อง");
+  const netPaymentSatang = totalSatang - whtSatang;
+  if (input.baseSatang <= 0 || input.vatSatang < 0 || whtSatang < 0 || netPaymentSatang <= 0) {
+    throw new AccountingError("ยอดซื้อ ภาษีซื้อ หรือยอดจ่ายไม่ถูกต้อง");
+  }
+  if (whtSatang > 0 && !input.whtPayableAccountId) {
+    throw new AccountingError("ไม่พบบัญชีภาษีหัก ณ ที่จ่ายสำหรับสร้างใบสำคัญจ่าย");
   }
 
   return {
@@ -50,14 +54,19 @@ export function buildPurchaseWhtJournalLines(input: {
         accountId: input.paymentAccountId,
         credit: toBaht(netPaymentSatang),
         partnerId: input.partnerId ?? null,
-        memo: "จ่ายสุทธิหลังหักภาษี ณ ที่จ่าย",
+        memo: whtSatang > 0 ? "จ่ายสุทธิหลังหักภาษี ณ ที่จ่าย" : "จ่ายชำระเจ้าหนี้",
       },
-      {
-        accountId: input.whtPayableAccountId,
-        credit: toBaht(input.whtSatang),
-        partnerId: input.partnerId ?? null,
-        memo: "ภาษีหัก ณ ที่จ่าย - ภ.ง.ด.53",
-      },
+      ...(whtSatang > 0 && input.whtPayableAccountId
+        ? [{
+            accountId: input.whtPayableAccountId,
+            credit: toBaht(whtSatang),
+            partnerId: input.partnerId ?? null,
+            memo: "ภาษีหัก ณ ที่จ่าย - ภ.ง.ด.53",
+          }]
+        : []),
     ],
   };
 }
+
+/** ชื่อเดิมคงไว้เพื่อให้สคริปต์และโค้ดที่เรียกกรณีหัก ณ ที่จ่ายยังทำงานต่อได้ */
+export const buildPurchaseWhtJournalLines = buildPurchasePaymentJournalLines;

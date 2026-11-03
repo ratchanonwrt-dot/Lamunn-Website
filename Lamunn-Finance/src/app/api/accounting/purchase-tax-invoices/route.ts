@@ -14,7 +14,7 @@ import {
   PurchaseTaxAccountAllocationError,
   resolvePurchaseTaxAccountAllocations,
 } from "@/lib/accounting/purchaseTaxAccountAllocation";
-import { buildPurchaseWhtJournalLines, purchasePaymentEntryDescriptionFor } from "@/lib/accounting/purchaseWhtJournals";
+import { buildPurchasePaymentJournalLines, purchasePaymentEntryDescriptionFor } from "@/lib/accounting/purchaseWhtJournals";
 
 /** บันทึกใบกำกับภาษีซื้อ (ใบที่ผู้ขายออกให้เรา) — ตัวป้อนข้อมูลของรายงานภาษีซื้อและ ภ.พ.30
  * เลขที่ใบกำกับมาจากผู้ขาย ไม่ได้รันเอง จึงรับค่าจากผู้กรอกโดยตรง */
@@ -39,7 +39,8 @@ export async function POST(req: NextRequest) {
     note,
     expenseLines,
     expenseAccountId,
-    creditAccountId,
+    paymentDate,
+    paymentAccountId,
     whtIncomeType,
     whtRatePercent,
     whtBaseAmount,
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
   const { base, vat } =
     amountIncludesVat === false ? addVatExclusive(amountSatang, vatRate) : splitVatInclusive(amountSatang, vatRate);
   const invoiceDateValue = parseDateOnly(invoiceDate);
+  const paymentDateValue = paymentDate ? parseDateOnly(paymentDate) : invoiceDateValue;
   let claimPeriodValue: Date;
   try {
     claimPeriodValue = parsePurchaseTaxClaimPeriod(claimPeriod, invoiceDateValue);
@@ -81,8 +83,8 @@ export async function POST(req: NextRequest) {
     }
     throw error;
   }
-  if (Boolean(accountAllocations.length) !== Boolean(creditAccountId)) {
-    return NextResponse.json({ error: "ถ้าต้องการลงบัญชีอัตโนมัติ กรุณาเลือกบัญชีเดบิตและเครดิตให้ครบ" }, { status: 400 });
+  if (accountAllocations.length > 0 && (!paymentAccountId || !paymentDate)) {
+    return NextResponse.json({ error: "ถ้าต้องการลงบัญชีอัตโนมัติ กรุณาเลือกวันที่จ่ายและบัญชีที่ใช้จ่ายให้ครบ" }, { status: 400 });
   }
   if (whtEnabled) {
     if (isCreditNote) return NextResponse.json({ error: "ใบลดหนี้ไม่สร้างภาษีหัก ณ ที่จ่าย กรุณาเลือก 'ไม่หักภาษี ณ ที่จ่าย'" }, { status: 400 });
@@ -121,15 +123,13 @@ export async function POST(req: NextRequest) {
   // นับซ้ำกับใบสำคัญใบเดียวกันที่ถูกดึงมาจากสมุดรายวัน (ดู journalTaxLines.ts)
   let entryId: string | null = null;
   let paymentEntryId: string | null = null;
-  if (accountAllocations.length > 0 && creditAccountId) {
+  if (accountAllocations.length > 0 && paymentAccountId) {
     const [inputVatAccount, whtPayableAccount, tradePayableAccount] = await Promise.all([
       prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.INPUT_VAT }, select: { id: true } }),
       whtEnabled
         ? prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE }, select: { id: true } })
         : Promise.resolve(null),
-      whtEnabled
-        ? prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.TRADE_PAYABLE }, select: { id: true } })
-        : Promise.resolve(null),
+      prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.TRADE_PAYABLE }, select: { id: true } }),
     ]);
     if (!inputVatAccount) {
       return NextResponse.json({ error: `ไม่พบบัญชีภาษีซื้อรหัส ${SYSTEM_ACCOUNTS.INPUT_VAT} ในผังบัญชี` }, { status: 400 });
@@ -137,22 +137,22 @@ export async function POST(req: NextRequest) {
     if (whtEnabled && !whtPayableAccount) {
       return NextResponse.json({ error: `ไม่พบบัญชีภาษีหัก ณ ที่จ่าย - ภ.ง.ด.53 รหัส ${SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE} ในผังบัญชี` }, { status: 400 });
     }
-    if (whtEnabled && !tradePayableAccount) {
+    if (!isCreditNote && !tradePayableAccount) {
       return NextResponse.json({ error: `ไม่พบบัญชีเจ้าหนี้การค้ารหัส ${SYSTEM_ACCOUNTS.TRADE_PAYABLE} ในผังบัญชี` }, { status: 400 });
     }
     try {
       const absoluteVat = Math.abs(vat);
       const absoluteTotal = Math.abs(base + vat);
-      const whtDrafts = whtEnabled && whtPayableAccount && tradePayableAccount
-        ? buildPurchaseWhtJournalLines({
+      const paymentDrafts = !isCreditNote && tradePayableAccount
+        ? buildPurchasePaymentJournalLines({
             allocations: accountAllocations,
             inputVatAccountId: inputVatAccount.id,
             tradePayableAccountId: tradePayableAccount.id,
-            paymentAccountId: creditAccountId,
-            whtPayableAccountId: whtPayableAccount.id,
+            paymentAccountId,
+            whtPayableAccountId: whtPayableAccount?.id,
             baseSatang: base,
             vatSatang: vat,
-            whtSatang: wht.amount,
+            whtSatang: whtEnabled ? wht.amount : 0,
             partnerId: partnerId || null,
             description,
             invoiceNo: String(invoiceNo).trim(),
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
         journalType: "PURCHASE",
         description: `${isCreditNote ? "ใบลดหนี้" : "ซื้อ"} ${String(vendorName).trim()} ใบกำกับ ${String(invoiceNo).trim()}`,
         userId: staff.staffId,
-        lines: whtDrafts ? whtDrafts.purchaseLines : isCreditNote ? [
+        lines: paymentDrafts ? paymentDrafts.purchaseLines : isCreditNote ? [
           ...accountAllocations.map((line) => ({
             accountId: line.accountId,
             credit: toBaht(line.amountSatang),
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
             memo: description || undefined,
           })),
           { accountId: inputVatAccount.id, credit: toBaht(absoluteVat), memo: "ลดภาษีซื้อ", docNo: String(invoiceNo).trim() },
-          { accountId: creditAccountId, debit: toBaht(absoluteTotal), partnerId: partnerId || null, memo: "ลดเจ้าหนี้/เงินรับคืน" },
+          { accountId: paymentAccountId, debit: toBaht(absoluteTotal), partnerId: partnerId || null, memo: "ลดเจ้าหนี้/เงินรับคืน" },
         ] : [
           ...accountAllocations.map((line) => ({
             accountId: line.accountId,
@@ -180,17 +180,20 @@ export async function POST(req: NextRequest) {
             memo: description || undefined,
           })),
           { accountId: inputVatAccount.id, debit: toBaht(vat), memo: "ภาษีซื้อ", docNo: String(invoiceNo).trim() },
-          { accountId: creditAccountId, credit: toBaht(base + vat), partnerId: partnerId || null },
+          { accountId: paymentAccountId, credit: toBaht(base + vat), partnerId: partnerId || null },
         ],
       });
       entryId = purchaseEntry.id;
-      if (whtDrafts) {
+      if (paymentDrafts) {
         const paymentEntry = await createEntry({
-          date: invoiceDateValue,
+          date: paymentDateValue,
           journalType: "PAYMENT",
           description: purchasePaymentEntryDescriptionFor(String(vendorName).trim(), String(invoiceNo).trim()),
+          // ใช้รหัสใบซื้อเป็นกุญแจเชื่อม จึงตามแก้/ยกเลิกใบจ่ายได้โดยไม่ต้องเพิ่มคอลัมน์ฐานข้อมูลใหม่
+          sourceType: "PURCHASE_TAX_PAYMENT",
+          sourceKey: purchaseEntry.id,
           userId: staff.staffId,
-          lines: whtDrafts.paymentLines,
+          lines: paymentDrafts.paymentLines,
         });
         paymentEntryId = paymentEntry.id;
       }
@@ -228,7 +231,7 @@ export async function POST(req: NextRequest) {
       ? await tx.accWhtCertificate.create({
           data: {
             docNo: await nextWhtDocNo(invoiceDateValue, tx),
-            payDate: invoiceDateValue,
+            payDate: paymentDateValue,
             formType: "PND53",
             partnerId: partnerId || null,
             purchaseInvoiceId: invoice.id,

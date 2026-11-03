@@ -34,16 +34,13 @@ interface AccountOption {
 export default function PurchaseTaxInvoiceForm({
   partners,
   expenseAccounts,
-  creditAccounts,
   paymentAccounts,
   vatRate,
 }: {
   partners: PartnerOption[];
   /** บัญชีค่าใช้จ่าย/สินทรัพย์ ที่จะเดบิต */
   expenseAccounts: AccountOption[];
-  /** บัญชีเงินสด/ธนาคาร/เจ้าหนี้ ที่จะเครดิต */
-  creditAccounts: AccountOption[];
-  /** บัญชีเงินสด/ธนาคารสำหรับใบสำคัญจ่ายเมื่อมีหัก ณ ที่จ่าย */
+  /** บัญชีเงินสด/ธนาคารสำหรับใบสำคัญจ่าย */
   paymentAccounts: AccountOption[];
   vatRate: number;
 }) {
@@ -53,6 +50,7 @@ export default function PurchaseTaxInvoiceForm({
   const busy = submitting || refreshing;
   const [error, setError] = useState<string | null>(null);
   const nextExpenseLineKey = useRef(2);
+  const defaultPaymentAccountId = paymentAccounts.find((account) => account.code === "11111")?.id ?? "";
   const [form, setForm] = useState({
     invoiceNo: "",
     invoiceDate: today(),
@@ -69,7 +67,8 @@ export default function PurchaseTaxInvoiceForm({
     isClaimable: true,
     note: "",
     expenseLines: [{ key: "expense-1", accountId: "", amount: "" }],
-    creditAccountId: "",
+    paymentDate: today(),
+    paymentAccountId: defaultPaymentAccountId,
     whtIncomeType: "",
     whtRatePercent: "",
     whtBaseAmount: "",
@@ -151,8 +150,6 @@ export default function PurchaseTaxInvoiceForm({
     ? allocationTarget
     : activeExpenseLines.reduce((sum, line) => sum + Math.max(0, signedInputToSatang(line.amount)), 0);
   const allocationDifference = allocationTarget - allocationTotal;
-  const settlementAccounts = whtEnabled ? paymentAccounts : creditAccounts;
-
   return (
     <form onSubmit={submit} className="w-full rounded-xl border border-gray-200 bg-white p-5">
       <p className="mb-4 text-sm font-semibold text-gray-800">{isCreditNote ? "บันทึกใบลดหนี้" : "บันทึกใบกำกับภาษีซื้อ"}</p>
@@ -178,9 +175,11 @@ export default function PurchaseTaxInvoiceForm({
               const invoiceDate = e.target.value;
               const oldInvoiceMonth = form.invoiceDate.slice(0, 7);
               const newInvoiceMonth = invoiceDate.slice(0, 7);
+              const paymentDate = form.paymentDate === form.invoiceDate ? invoiceDate : form.paymentDate;
               setForm({
                 ...form,
                 invoiceDate,
+                paymentDate,
                 // ถ้ายังไม่เคยเลื่อนงวด ให้ขยับตามวันที่ใหม่; ถ้าเลือกเองแล้วต้องรักษาเดือนที่ผู้ใช้ตั้งใจเคลม
                 claimPeriod: form.claimPeriod === oldInvoiceMonth || form.claimPeriod < newInvoiceMonth ? newInvoiceMonth : form.claimPeriod,
               });
@@ -313,9 +312,6 @@ export default function PurchaseTaxInvoiceForm({
                   ...form,
                   whtIncomeType: e.target.value,
                   whtRatePercent: selected ? String(selected.rate * 100) : "",
-                   ...(e.target.value && !paymentAccounts.some((account) => account.id === form.creditAccountId)
-                     ? { creditAccountId: "" }
-                     : {}),
                 });
               }}
               className={field}
@@ -453,21 +449,33 @@ export default function PurchaseTaxInvoiceForm({
             </div>
           </div>
 
-          <div className={label}>
-            {isCreditNote
-              ? "รับคืน / ลดเจ้าหนี้ (เดบิต)"
-              : whtEnabled
-                ? "บัญชีเงินสด/ธนาคารที่ใช้จ่ายสุทธิ (สมุดรายวันจ่าย)"
-                : "จ่ายด้วย / เจ้าหนี้ (เครดิต)"}
-            <div className="mt-1">
-              <AccountCombobox accounts={settlementAccounts} value={form.creditAccountId} onChange={(id) => setForm({ ...form, creditAccountId: id })} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className={label}>
+              วันที่จ่าย
+              <input
+                type="date"
+                value={form.paymentDate}
+                onChange={(event) => setForm({ ...form, paymentDate: event.target.value })}
+                className={field}
+              />
+            </label>
+            <div className={label}>
+              {isCreditNote ? "บัญชีรับเงินคืน" : "บัญชีที่ใช้จ่าย (สมุดรายวันจ่าย)"}
+              <div className="mt-1">
+                <AccountCombobox
+                  accounts={paymentAccounts}
+                  value={form.paymentAccountId}
+                  onChange={(id) => setForm({ ...form, paymentAccountId: id })}
+                />
+              </div>
             </div>
-            {whtEnabled && (
-              <span className="mt-1 block text-xs text-gray-500">
-                ระบบจะตั้งเจ้าหนี้ 2110 ในใบสำคัญซื้อ แล้วตัดจ่ายสุทธิพร้อมตั้งภาษีหัก 27124 ในใบสำคัญจ่าย
-              </span>
-            )}
           </div>
+          {!isCreditNote && (
+            <span className="block text-xs text-gray-500">
+              ระบบจะตั้งเจ้าหนี้ 2110 ในใบสำคัญซื้อ แล้วตัดจ่ายด้วยบัญชี 11111 ในใบสำคัญจ่าย
+              {whtEnabled ? " พร้อมตั้งภาษีหัก 27124" : ""}
+            </span>
+          )}
         </div>
       </div>
 
