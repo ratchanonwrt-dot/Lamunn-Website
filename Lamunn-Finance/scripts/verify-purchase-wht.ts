@@ -30,6 +30,7 @@ async function main() {
   let entryId: string | null = null;
   let invoiceId: string | null = null;
   let certificateId: string | null = null;
+  let createdWhtAccountId: string | null = null;
 
   try {
     const existingPeriod = await prisma.accPeriod.findUnique({ where: { year_month: { year: YEAR, month: 5 } } });
@@ -38,10 +39,19 @@ async function main() {
       periodId = period.id;
     }
 
-    const [inputVat, whtPayable] = await Promise.all([
-      prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.INPUT_VAT } }),
-      prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.WHT_PAYABLE } }),
-    ]);
+    const inputVat = await prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.INPUT_VAT } });
+    let whtPayable = await prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE } });
+    if (!whtPayable) {
+      whtPayable = await prisma.accAccount.create({
+        data: {
+          code: SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE,
+          nameTh: "[test] ภาษีหัก ณ ที่จ่าย - ภ.ง.ด.53",
+          type: "LIABILITY",
+          vatRole: "WHT",
+        },
+      });
+      createdWhtAccountId = whtPayable.id;
+    }
     if (!inputVat || !whtPayable) throw new Error("ไม่พบบัญชีระบบภาษีซื้อหรือภาษีหักค้างนำส่ง");
 
     const expense = await prisma.accAccount.create({
@@ -128,6 +138,9 @@ async function main() {
     const debit = lines.reduce((sum, line) => sum + Number(line.debit), 0);
     const credit = lines.reduce((sum, line) => sum + Number(line.credit), 0);
     check("เดบิตเท่ากับเครดิตหลังแก้ยอด", [debit, credit], [2140, 2140]);
+    const updatedWhtLine = lines.find((line) => line.accountId === whtPayable.id);
+    check("ภ.ง.ด.53 ผูกบัญชี 27124", Boolean(updatedWhtLine), true);
+    check("ยอดเครดิตบัญชี 27124 ปรับตามใบกำกับ", Number(updatedWhtLine?.credit), 60);
   } finally {
     console.log("ลบข้อมูลทดสอบด้วย id ที่สร้างในรอบนี้...");
     if (certificateId) await prisma.accWhtCertificate.delete({ where: { id: certificateId } }).catch(() => undefined);
@@ -136,6 +149,7 @@ async function main() {
     if (partnerId) await prisma.accPartner.delete({ where: { id: partnerId } }).catch(() => undefined);
     if (expenseId) await prisma.accAccount.delete({ where: { id: expenseId } }).catch(() => undefined);
     if (cashId) await prisma.accAccount.delete({ where: { id: cashId } }).catch(() => undefined);
+    if (createdWhtAccountId) await prisma.accAccount.delete({ where: { id: createdWhtAccountId } }).catch(() => undefined);
     if (periodId) await prisma.accPeriod.delete({ where: { id: periodId } }).catch(() => undefined);
   }
 

@@ -124,7 +124,11 @@ export async function updatePurchaseInvoice(id: string, patch: PurchaseInvoicePa
       }
       const vatLine = entry.lines.find((l) => l.account.vatRole === "INPUT");
       const whtLine = linkedWht
-        ? entry.lines.find((l) => l.account.code === SYSTEM_ACCOUNTS.WHT_PAYABLE && toSatang(l.credit) > 0)
+        // ใบเก่าก่อนแยก ภ.ง.ด.53 อาจยังอยู่บัญชี 2130 จึงต้องแก้ไขได้โดยคงบัญชีเดิม ส่วนใบใหม่ใช้ 27124 เสมอ
+        ? entry.lines.find((l) =>
+            (l.account.code === SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE || l.account.code === SYSTEM_ACCOUNTS.WHT_PAYABLE)
+            && toSatang(l.credit) > 0
+          )
         : null;
       // ใบที่ระบบสร้างเรียง ค่าใช้จ่าย → VAT → เงิน/เจ้าหนี้ → WHT เสมอ จึงใช้ลำดับแทนการเดาจากด้านบัญชี
       // เพราะเมื่อเปลี่ยนเป็นใบลดหนี้ ทุกบรรทัดจะสลับด้านพร้อมกัน
