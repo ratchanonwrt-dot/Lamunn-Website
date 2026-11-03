@@ -19,7 +19,19 @@ try {
   assert.equal(changed.address, "[test] ที่อยู่สาขา 00002");
   assert.deepEqual(activePartnerBranches(partner).map((branch) => branch.id), ["[test]-head", "[test]-branch-2"]);
 
-  console.log("PASS: เลือกสาขาคู่ค้าแล้วชื่อสาขาและที่อยู่เปลี่ยนตาม branchId");
+  const legacyPartner = {
+    id: "[test]-legacy-partner",
+    branchTag: null,
+    address: "[test] ที่อยู่คู่ค้าเก่า",
+    branches: [],
+  };
+  const legacyBranches = activePartnerBranches(legacyPartner);
+  assert.equal(legacyBranches.length, 1);
+  assert.equal(legacyBranches[0].branchTag, "สำนักงานใหญ่");
+  assert.equal(legacyBranches[0].isDefault, true);
+  assert.equal(resolvePartnerBranch(legacyPartner).address, "[test] ที่อยู่คู่ค้าเก่า");
+
+  console.log("PASS: เลือกสาขาคู่ค้าแล้วที่อยู่เปลี่ยน และคู่ค้าเก่ามีตัวเลือกสำนักงานใหญ่");
 } finally {
   branches.splice(0, branches.length);
 }
