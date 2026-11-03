@@ -24,6 +24,7 @@ interface PartnerOption {
   name: string;
   type: "DEBTOR" | "CREDITOR";
   phone: string | null;
+  branchTag: string | null;
 }
 
 interface Line {
@@ -273,7 +274,7 @@ export default function JournalEntryForm({
                   </select>
                 </td>
                 <td className="py-1.5 px-2">
-                  <PartnerCombobox partners={partners} value={l.partnerId} onChange={(partnerId) => update(i, { partnerId })} />
+                  <PartnerCombobox partners={partners} value={l.partnerId} onChange={(partnerId) => update(i, { partnerId })} showBranch />
                 </td>
                 <td className="py-1.5 px-2">
                   {/* ใส่ที่บรรทัดภาษีซื้อ/ขาย — ใบสำคัญใบเดียวมีใบกำกับได้หลายใบ รายงานภาษีจะแยกบรรทัดตามเลขนี้ */}
