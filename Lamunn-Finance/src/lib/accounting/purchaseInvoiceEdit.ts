@@ -2,7 +2,7 @@ import { prisma } from "@lamunn/db-finance";
 import { parseDateOnly } from "@/lib/dates";
 import { getAllSettings } from "@/lib/settings";
 import { splitVatInclusive, addVatExclusive, signedInputToSatang, toBaht, toSatang } from "./money";
-import { AccountingError, updateEntry } from "./post";
+import { AccountingError, postEntry, unpostEntry, updateEntry } from "./post";
 import { SYSTEM_ACCOUNTS } from "./chartOfAccounts";
 import { withholdingFromPercent } from "./withholdingMath";
 import { parsePurchaseTaxClaimPeriod } from "./purchaseTaxClaimPeriod";
@@ -38,7 +38,11 @@ export const entryDescriptionFor = (vendorName: string, invoiceNo: string, isCre
 const str = (v: unknown) => String(v ?? "").trim();
 
 /** opts.vatRate — ส่งมาได้จากสคริปต์ทดสอบ (getAllSettings ใช้แคชของ Next ซึ่งไม่มีนอกเซิร์ฟเวอร์) */
-export async function updatePurchaseInvoice(id: string, patch: PurchaseInvoicePatch, opts: { vatRate?: number } = {}) {
+export async function updatePurchaseInvoice(
+  id: string,
+  patch: PurchaseInvoicePatch,
+  opts: { vatRate?: number; userId?: string | null } = {}
+) {
   const current = await prisma.accPurchaseTaxInvoice.findUnique({
     where: { id },
     include: { whtCertificate: true },
@@ -116,6 +120,16 @@ export async function updatePurchaseInvoice(id: string, patch: PurchaseInvoicePa
     : null;
 
   if (entry && entry.status !== "VOID") {
+    const legacyWhtLine = linkedWht?.formType === "PND53"
+      ? entry.lines.find((line) => line.account.code === SYSTEM_ACCOUNTS.WHT_PAYABLE && toSatang(line.credit) > 0)
+      : null;
+    const pnd53Account = legacyWhtLine
+      ? await prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE } })
+      : null;
+    if (legacyWhtLine && !pnd53Account) {
+      throw new AccountingError(`ไม่พบบัญชีภาษีหัก ณ ที่จ่าย - ภ.ง.ด.53 รหัส ${SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE} ในผังบัญชี`);
+    }
+
     if (amountChanged || dateChanged) {
       if (entry.status === "POSTED") {
         throw new AccountingError(
@@ -124,7 +138,7 @@ export async function updatePurchaseInvoice(id: string, patch: PurchaseInvoicePa
       }
       const vatLine = entry.lines.find((l) => l.account.vatRole === "INPUT");
       const whtLine = linkedWht
-        // ใบเก่าก่อนแยก ภ.ง.ด.53 อาจยังอยู่บัญชี 2130 จึงต้องแก้ไขได้โดยคงบัญชีเดิม ส่วนใบใหม่ใช้ 27124 เสมอ
+        // ใบเก่าก่อนแยก ภ.ง.ด.53 ยังใช้ 2130 จึงต้องหาได้ทั้งสองรหัสก่อนย้ายไป 27124
         ? entry.lines.find((l) =>
             (l.account.code === SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE || l.account.code === SYSTEM_ACCOUNTS.WHT_PAYABLE)
             && toSatang(l.credit) > 0
@@ -159,10 +173,32 @@ export async function updatePurchaseInvoice(id: string, patch: PurchaseInvoicePa
           { accountId: vatLine.accountId, debit: toBaht(vat), partnerId: vatLine.partnerId, branchId: vatLine.branchId, memo: vatLine.memo, docNo: vatLine.docNo },
           { accountId: settlementLine.accountId, credit: toBaht(base + vat - (linkedWhtCalc?.amount ?? 0)), partnerId: settlementLine.partnerId, branchId: settlementLine.branchId, memo: settlementLine.memo, docNo: settlementLine.docNo },
           ...(linkedWht && whtLine && linkedWhtCalc
-            ? [{ accountId: whtLine.accountId, credit: toBaht(linkedWhtCalc.amount), partnerId: whtLine.partnerId, branchId: whtLine.branchId, memo: whtLine.memo, docNo: whtLine.docNo }]
+            ? [{ accountId: pnd53Account?.id ?? whtLine.accountId, credit: toBaht(linkedWhtCalc.amount), partnerId: whtLine.partnerId, branchId: whtLine.branchId, memo: whtLine.memo, docNo: whtLine.docNo }]
             : []),
         ],
       });
+    } else if (legacyWhtLine && pnd53Account) {
+      const wasPosted = entry.status === "POSTED";
+      // ถอนและผ่านรายการกลับทันทีเพื่อให้การย้ายบัญชีใช้กฎงวด/สมดุลจาก post.ts ครบ และผู้ใช้ไม่ต้องไล่แก้ใบเก่าทีละขั้น
+      if (wasPosted) await unpostEntry(entry.id, opts.userId);
+      await updateEntry(entry.id, {
+        date: entry.date,
+        journalType: entry.journalType,
+        description: identityChanged && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)
+          ? entryDescriptionFor(vendorName, invoiceNo, isCreditNote)
+          : entry.description,
+        lines: entry.lines.map((line) => ({
+          accountId: line.id === legacyWhtLine.id ? pnd53Account.id : line.accountId,
+          debit: Number(line.debit),
+          credit: Number(line.credit),
+          partnerId: line.partnerId,
+          branchId: line.branchId,
+          channel: line.channel,
+          memo: line.memo,
+          docNo: line.docNo,
+        })),
+      });
+      if (wasPosted) await postEntry(entry.id, opts.userId);
     } else if (identityChanged && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)) {
       await prisma.accJournalEntry.update({ where: { id: entry.id }, data: { description: entryDescriptionFor(vendorName, invoiceNo, isCreditNote) } });
     }

@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { prisma } from "@lamunn/db-finance";
-import { createEntry } from "../src/lib/accounting/post";
+import { createEntry, postEntry, unpostEntry } from "../src/lib/accounting/post";
 import { updatePurchaseInvoice } from "../src/lib/accounting/purchaseInvoiceEdit";
 import { buildWhtReport } from "../src/lib/accounting/taxReports";
 import { SYSTEM_ACCOUNTS } from "../src/lib/accounting/chartOfAccounts";
@@ -31,6 +31,7 @@ async function main() {
   let invoiceId: string | null = null;
   let certificateId: string | null = null;
   let createdWhtAccountId: string | null = null;
+  let legacyWhtAccountId: string | null = null;
 
   try {
     const existingPeriod = await prisma.accPeriod.findUnique({ where: { year_month: { year: YEAR, month: 5 } } });
@@ -40,6 +41,18 @@ async function main() {
     }
 
     const inputVat = await prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.INPUT_VAT } });
+    let legacyWhtPayable = await prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.WHT_PAYABLE } });
+    if (!legacyWhtPayable) {
+      legacyWhtPayable = await prisma.accAccount.create({
+        data: {
+          code: SYSTEM_ACCOUNTS.WHT_PAYABLE,
+          nameTh: "[test] ภาษีหัก ณ ที่จ่ายค้างนำส่งเดิม",
+          type: "LIABILITY",
+          vatRole: "WHT",
+        },
+      });
+      legacyWhtAccountId = legacyWhtPayable.id;
+    }
     let whtPayable = await prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE } });
     if (!whtPayable) {
       whtPayable = await prisma.accAccount.create({
@@ -52,7 +65,7 @@ async function main() {
       });
       createdWhtAccountId = whtPayable.id;
     }
-    if (!inputVat || !whtPayable) throw new Error("ไม่พบบัญชีระบบภาษีซื้อหรือภาษีหักค้างนำส่ง");
+    if (!inputVat || !legacyWhtPayable || !whtPayable) throw new Error("ไม่พบบัญชีระบบภาษีซื้อหรือภาษีหักค้างนำส่ง");
 
     const expense = await prisma.accAccount.create({
       data: { code: `ZPW-${suffix}-5`, nameTh: "[test] ค่าบริการ", type: "EXPENSE" },
@@ -78,7 +91,7 @@ async function main() {
         { accountId: expense.id, debit: 1000, partnerId: partner.id },
         { accountId: inputVat.id, debit: 70, memo: "ภาษีซื้อ" },
         { accountId: cash.id, credit: 1040, partnerId: partner.id },
-        { accountId: whtPayable.id, credit: 30, partnerId: partner.id, memo: "ภาษีหัก ณ ที่จ่าย" },
+        { accountId: legacyWhtPayable.id, credit: 30, partnerId: partner.id, memo: "ภาษีหัก ณ ที่จ่าย" },
       ],
     });
     entryId = entry.id;
@@ -119,6 +132,23 @@ async function main() {
     });
     certificateId = certificate.id;
 
+    await postEntry(entry.id);
+    await updatePurchaseInvoice(invoice.id, { description: "[test] ค่าบริการแก้ไข" }, { vatRate: 0.07 });
+    const migratedEntry = await prisma.accJournalEntry.findUniqueOrThrow({
+      where: { id: entry.id },
+      include: { lines: true },
+    });
+    check("แก้ใบเก่าแล้วยังผ่านรายการอยู่", migratedEntry.status, "POSTED");
+    check("ย้ายบรรทัด ภ.ง.ด.53 จาก 2130 ไป 27124", migratedEntry.lines.some((line) => line.accountId === whtPayable.id), true);
+    check("ไม่มีบรรทัด ภ.ง.ด.53 ค้างที่ 2130", migratedEntry.lines.some((line) => line.accountId === legacyWhtPayable.id), false);
+    check(
+      "เดบิตเครดิตยังเท่ากันหลังย้ายบัญชี",
+      migratedEntry.lines.reduce((sum, line) => sum + Number(line.debit) - Number(line.credit), 0),
+      0
+    );
+
+    await unpostEntry(entry.id);
+
     const report = await buildWhtReport(
       new Date(Date.UTC(YEAR, 4, 1)),
       new Date(Date.UTC(YEAR, 4, 31, 23, 59, 59)),
@@ -150,6 +180,7 @@ async function main() {
     if (expenseId) await prisma.accAccount.delete({ where: { id: expenseId } }).catch(() => undefined);
     if (cashId) await prisma.accAccount.delete({ where: { id: cashId } }).catch(() => undefined);
     if (createdWhtAccountId) await prisma.accAccount.delete({ where: { id: createdWhtAccountId } }).catch(() => undefined);
+    if (legacyWhtAccountId) await prisma.accAccount.delete({ where: { id: legacyWhtAccountId } }).catch(() => undefined);
     if (periodId) await prisma.accPeriod.delete({ where: { id: periodId } }).catch(() => undefined);
   }
 
