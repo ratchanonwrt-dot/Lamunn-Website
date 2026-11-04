@@ -6,7 +6,7 @@ import { AccountingError, postEntry, unpostEntry, updateEntry } from "./post";
 import { SYSTEM_ACCOUNTS } from "./chartOfAccounts";
 import { withholdingFromPercent } from "./withholdingMath";
 import { parsePurchaseTaxClaimPeriod } from "./purchaseTaxClaimPeriod";
-import { purchasePaymentEntryDescriptionFor } from "./purchaseWhtJournals";
+import { purchaseEntryDescriptionFor, purchasePaymentEntryDescriptionFor } from "./purchaseWhtJournals";
 
 /** แก้ไขใบกำกับภาษีซื้อที่บันทึกไปแล้ว — ใช้กรณีคีย์เลขที่ใบกำกับ/ชื่อ/ยอดผิด
  *
@@ -33,8 +33,8 @@ export interface PurchaseInvoicePatch {
   amountIncludesVat?: boolean;
 }
 
-export const entryDescriptionFor = (vendorName: string, invoiceNo: string, isCreditNote = false) =>
-  `${isCreditNote ? "ใบลดหนี้" : "ซื้อ"} ${vendorName} ใบกำกับ ${invoiceNo}`;
+export const entryDescriptionFor = (vendorName: string, invoiceNo: string, isCreditNote = false, note?: string | null) =>
+  purchaseEntryDescriptionFor(vendorName, invoiceNo, isCreditNote, note);
 
 const str = (v: unknown) => String(v ?? "").trim();
 
@@ -176,8 +176,8 @@ export async function updatePurchaseInvoice(
       await updateEntry(entry.id, {
         date: invoiceDate,
         journalType: "PURCHASE",
-        description: entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)
-          ? entryDescriptionFor(vendorName, invoiceNo, false)
+        description: entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote, current.note)
+          ? entryDescriptionFor(vendorName, invoiceNo, false, note)
           : entry.description,
         lines: [
           { accountId: expenseLine.accountId, debit: toBaht(base), partnerId: expenseLine.partnerId, branchId: expenseLine.branchId, memo: expenseLine.memo, docNo: expenseLine.docNo },
@@ -188,8 +188,8 @@ export async function updatePurchaseInvoice(
       await updateEntry(paymentEntry.id, {
         date: paymentEntry.date,
         journalType: "PAYMENT",
-        description: paymentEntry.description === purchasePaymentEntryDescriptionFor(current.vendorName, current.invoiceNo)
-          ? purchasePaymentEntryDescriptionFor(vendorName, invoiceNo)
+        description: paymentEntry.description === purchasePaymentEntryDescriptionFor(current.vendorName, current.invoiceNo, current.note)
+          ? purchasePaymentEntryDescriptionFor(vendorName, invoiceNo, note)
           : paymentEntry.description,
         lines: [
           { accountId: paymentPayableLine.accountId, debit: toBaht(total), partnerId: paymentPayableLine.partnerId, branchId: paymentPayableLine.branchId, memo: paymentPayableLine.memo },
@@ -200,11 +200,11 @@ export async function updatePurchaseInvoice(
         ],
       });
     } else {
-      if (identityChanged && entry.status === "DRAFT" && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)) {
+      if (identityChanged && entry.status === "DRAFT" && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote, current.note)) {
         await updateEntry(entry.id, {
           date: entry.date,
           journalType: entry.journalType,
-          description: entryDescriptionFor(vendorName, invoiceNo, false),
+          description: entryDescriptionFor(vendorName, invoiceNo, false, note),
           lines: entry.lines.map((line) => ({
             accountId: line.accountId,
             debit: Number(line.debit),
@@ -217,11 +217,11 @@ export async function updatePurchaseInvoice(
           })),
         });
       }
-      if (identityChanged && paymentEntry.status === "DRAFT" && paymentEntry.description === purchasePaymentEntryDescriptionFor(current.vendorName, current.invoiceNo)) {
+      if (identityChanged && paymentEntry.status === "DRAFT" && paymentEntry.description === purchasePaymentEntryDescriptionFor(current.vendorName, current.invoiceNo, current.note)) {
         await updateEntry(paymentEntry.id, {
           date: paymentEntry.date,
           journalType: paymentEntry.journalType,
-          description: purchasePaymentEntryDescriptionFor(vendorName, invoiceNo),
+          description: purchasePaymentEntryDescriptionFor(vendorName, invoiceNo, note),
           lines: paymentEntry.lines.map((line) => ({
             accountId: line.accountId,
             debit: Number(line.debit),
@@ -270,8 +270,8 @@ export async function updatePurchaseInvoice(
           `ใบสำคัญ ${entry.entryNo} ถูกแก้ไขจนไม่ใช่รูปแบบมาตรฐาน (ค่าใช้จ่าย/ภาษีซื้อ/ยอดจ่าย/ภาษีหัก) — แก้ยอดที่ใบสำคัญโดยตรงแทน`
         );
       }
-      const keepOrNew = entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)
-        ? entryDescriptionFor(vendorName, invoiceNo, isCreditNote)
+      const keepOrNew = entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote, current.note)
+        ? entryDescriptionFor(vendorName, invoiceNo, isCreditNote, note)
         : entry.description;
       const absoluteBase = Math.abs(base);
       const absoluteVat = Math.abs(vat);
@@ -300,8 +300,8 @@ export async function updatePurchaseInvoice(
       await updateEntry(entry.id, {
         date: entry.date,
         journalType: entry.journalType,
-        description: identityChanged && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)
-          ? entryDescriptionFor(vendorName, invoiceNo, isCreditNote)
+        description: identityChanged && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote, current.note)
+          ? entryDescriptionFor(vendorName, invoiceNo, isCreditNote, note)
           : entry.description,
         lines: entry.lines.map((line) => ({
           accountId: line.id === legacyWhtLine.id ? pnd53Account.id : line.accountId,
@@ -315,11 +315,11 @@ export async function updatePurchaseInvoice(
         })),
       });
       if (wasPosted) await postEntry(entry.id, opts.userId);
-    } else if (identityChanged && entry.status === "DRAFT" && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote)) {
+    } else if (identityChanged && entry.status === "DRAFT" && entry.description === entryDescriptionFor(current.vendorName, current.invoiceNo, wasCreditNote, current.note)) {
       await updateEntry(entry.id, {
         date: entry.date,
         journalType: entry.journalType,
-        description: entryDescriptionFor(vendorName, invoiceNo, isCreditNote),
+        description: entryDescriptionFor(vendorName, invoiceNo, isCreditNote, note),
         lines: entry.lines.map((line) => ({
           accountId: line.accountId,
           debit: Number(line.debit),

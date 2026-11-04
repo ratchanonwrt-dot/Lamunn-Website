@@ -31,8 +31,10 @@ async function checkJournalNotePure() {
     note,
     invoiceNo: "[test]-INV-PURE",
   });
-  check("หมายเหตุเชื่อมไปสมุดรายวันซื้อ", built.purchaseLines[0].memo, `[test] ค่าบริการ · หมายเหตุ: ${note}`);
-  check("หมายเหตุเชื่อมไปสมุดรายวันจ่าย", built.paymentLines[1].memo, `จ่ายชำระเจ้าหนี้ · หมายเหตุ: ${note}`);
+  check("คำอธิบายใบซื้อมีข้อความที่กรอก", journals.purchaseEntryDescriptionFor("[test] ผู้ขาย", "[test]-INV-PURE", false, note), `ซื้อ [test] ผู้ขาย ใบกำกับ [test]-INV-PURE · ${note}`);
+  check("คำอธิบายใบจ่ายมีข้อความที่กรอก", journals.purchasePaymentEntryDescriptionFor("[test] ผู้ขาย", "[test]-INV-PURE", note), `จ่าย [test] ผู้ขาย ใบกำกับ [test]-INV-PURE · ${note}`);
+  check("หมายเหตุบรรทัดใบซื้อไม่มีคำว่าหมายเหตุ", built.purchaseLines[0].memo, `[test] ค่าบริการ · ${note}`);
+  check("หมายเหตุบรรทัดใบจ่ายไม่มีคำว่าหมายเหตุ", built.paymentLines[1].memo, `จ่ายชำระเจ้าหนี้ · ${note}`);
 }
 
 async function main() {
@@ -98,7 +100,7 @@ async function main() {
     const purchase = await posting.createEntry({
       date,
       journalType: "PURCHASE",
-      description: invoiceEdit.entryDescriptionFor(partner.name, `[test]-INV-${suffix}`),
+      description: invoiceEdit.entryDescriptionFor(partner.name, `[test]-INV-${suffix}`, false, journalNote),
       lines: built.purchaseLines,
     });
     entryIds.push(purchase.id);
@@ -109,7 +111,7 @@ async function main() {
     const payment = await posting.createEntry({
       date,
       journalType: "PAYMENT",
-      description: journals.purchasePaymentEntryDescriptionFor(partner.name, `[test]-INV-${suffix}`),
+      description: journals.purchasePaymentEntryDescriptionFor(partner.name, `[test]-INV-${suffix}`, journalNote),
       lines: built.paymentLines,
     });
     entryIds.push(payment.id);
@@ -122,6 +124,7 @@ async function main() {
         partnerId,
         vendorName: partner.name,
         description: "[test] ค่าบริการ",
+        note: journalNote,
         baseAmount: 1000,
         vatAmount: 70,
         totalAmount: 1070,
@@ -160,8 +163,10 @@ async function main() {
       [bank.code, 0, 1040],
       [chart.SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE, 0, 30],
     ]);
-    check("หมายเหตุอยู่ในสมุดรายวันซื้อ", purchaseLines[0].memo, `[test] ค่าบริการ · หมายเหตุ: ${journalNote}`);
-    check("หมายเหตุอยู่ในสมุดรายวันจ่าย", paymentLines[1].memo, `จ่ายสุทธิหลังหักภาษี ณ ที่จ่าย · หมายเหตุ: ${journalNote}`);
+    check("คำอธิบายสมุดรายวันซื้อมีข้อความที่กรอก", purchase.description, `ซื้อ ${partner.name} ใบกำกับ [test]-INV-${suffix} · ${journalNote}`);
+    check("คำอธิบายสมุดรายวันจ่ายมีข้อความที่กรอก", payment.description, `จ่าย ${partner.name} ใบกำกับ [test]-INV-${suffix} · ${journalNote}`);
+    check("หมายเหตุอยู่ในสมุดรายวันซื้อโดยไม่มีคำนำหน้า", purchaseLines[0].memo, `[test] ค่าบริการ · ${journalNote}`);
+    check("หมายเหตุอยู่ในสมุดรายวันจ่ายโดยไม่มีคำนำหน้า", paymentLines[1].memo, `จ่ายสุทธิหลังหักภาษี ณ ที่จ่าย · ${journalNote}`);
     check("ใบกำกับผูก PV", invoice.entryId, purchase.id);
     check("หนังสือรับรองผูก PY", certificate.entryId, payment.id);
 
