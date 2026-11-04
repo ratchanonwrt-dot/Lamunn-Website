@@ -14,7 +14,7 @@ import {
   PurchaseTaxAccountAllocationError,
   resolvePurchaseTaxAccountAllocations,
 } from "@/lib/accounting/purchaseTaxAccountAllocation";
-import { buildPurchasePaymentJournalLines, purchaseJournalMemo, purchasePaymentEntryDescriptionFor } from "@/lib/accounting/purchaseWhtJournals";
+import { buildPurchasePaymentJournalLines, purchaseEntryDescriptionFor, purchaseJournalMemo, purchasePaymentEntryDescriptionFor } from "@/lib/accounting/purchaseWhtJournals";
 import { summarizePurchaseTaxLineItems } from "@/lib/accounting/purchaseTaxLineItems";
 
 /** บันทึกใบกำกับภาษีซื้อ (ใบที่ผู้ขายออกให้เรา) — ตัวป้อนข้อมูลของรายงานภาษีซื้อและ ภ.พ.30
@@ -177,7 +177,12 @@ export async function POST(req: NextRequest) {
       const purchaseEntry = await createEntry({
         date: invoiceDateValue,
         journalType: "PURCHASE",
-        description: `${isCreditNote ? "ใบลดหนี้" : "ซื้อ"} ${String(vendorName).trim()} ใบกำกับ ${String(invoiceNo).trim()}`,
+        description: purchaseEntryDescriptionFor(
+          String(vendorName).trim(),
+          String(invoiceNo).trim(),
+          isCreditNote,
+          journalNote,
+        ),
         userId: staff.staffId,
         lines: paymentDrafts ? paymentDrafts.purchaseLines : isCreditNote ? [
           ...accountAllocations.map((line, index) => ({
@@ -204,7 +209,7 @@ export async function POST(req: NextRequest) {
         const paymentEntry = await createEntry({
           date: paymentDateValue,
           journalType: "PAYMENT",
-          description: purchasePaymentEntryDescriptionFor(String(vendorName).trim(), String(invoiceNo).trim()),
+          description: purchasePaymentEntryDescriptionFor(String(vendorName).trim(), String(invoiceNo).trim(), journalNote),
           // ใช้รหัสใบซื้อเป็นกุญแจเชื่อม จึงตามแก้/ยกเลิกใบจ่ายได้โดยไม่ต้องเพิ่มคอลัมน์ฐานข้อมูลใหม่
           sourceType: "PURCHASE_TAX_PAYMENT",
           sourceKey: purchaseEntry.id,

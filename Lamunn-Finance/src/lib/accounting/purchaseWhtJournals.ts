@@ -1,14 +1,26 @@
 import { AccountingError, type DraftLine } from "./post";
 import { toBaht } from "./money";
 
-export const purchasePaymentEntryDescriptionFor = (vendorName: string, invoiceNo: string) =>
-  `จ่าย ${vendorName} ใบกำกับ ${invoiceNo}`;
+function appendJournalNote(base: string, note: string | null | undefined): string {
+  const noteText = String(note ?? "").trim();
+  return noteText ? `${base} · ${noteText}` : base;
+}
+
+export const purchaseEntryDescriptionFor = (
+  vendorName: string,
+  invoiceNo: string,
+  isCreditNote = false,
+  note?: string | null,
+) => appendJournalNote(`${isCreditNote ? "ใบลดหนี้" : "ซื้อ"} ${vendorName} ใบกำกับ ${invoiceNo}`, note);
+
+export const purchasePaymentEntryDescriptionFor = (vendorName: string, invoiceNo: string, note?: string | null) =>
+  appendJournalNote(`จ่าย ${vendorName} ใบกำกับ ${invoiceNo}`, note);
 
 export function purchaseJournalMemo(base: string | null | undefined, note: string | null | undefined): string | undefined {
   const baseText = String(base ?? "").trim();
   const noteText = String(note ?? "").trim();
   if (!noteText) return baseText || undefined;
-  return `${baseText ? `${baseText} · ` : ""}หมายเหตุ: ${noteText}`;
+  return `${baseText ? `${baseText} · ` : ""}${noteText}`;
 }
 
 export function buildPurchasePaymentJournalLines(input: {
