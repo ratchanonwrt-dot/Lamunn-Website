@@ -1,30 +1,20 @@
 import Link from "next/link";
 import { requireSectionPage } from "@/lib/permissions";
 import { getAllSettings } from "@/lib/settings";
-import { monthRange } from "@/lib/dates";
-import { thaiMonthLabel } from "@/lib/format";
 import { fmtSatang } from "@/lib/accounting/money";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
-import { loadPurchaseItemReport, PURCHASE_ITEM_CATEGORY_LABELS } from "@/lib/accounting/purchaseItemReport";
+import { loadPurchaseItemReport, purchaseItemReportFilters, PURCHASE_ITEM_CATEGORY_LABELS } from "@/lib/accounting/purchaseItemReport";
 import PrintButton from "@/components/accounting/PrintButton";
 
 export const dynamic = "force-dynamic";
 
-function reportPeriod(searchParams: { year?: string; month?: string }) {
-  const now = new Date();
-  const year = Number(searchParams.year);
-  const month = Number(searchParams.month);
-  return {
-    year: Number.isInteger(year) && year >= 2000 && year <= 2200 ? year : now.getUTCFullYear(),
-    month: Number.isInteger(month) && month >= 1 && month <= 12 ? month : now.getUTCMonth() + 1,
-  };
-}
-
-export default async function PurchaseItemsPrintPage({ searchParams }: { searchParams: { year?: string; month?: string } }) {
+export default async function PurchaseItemsPrintPage({ searchParams }: { searchParams: { from?: string; to?: string; category?: string; year?: string; month?: string } }) {
   await requireSectionPage("ACCOUNTING");
-  const { year, month } = reportPeriod(searchParams);
-  const { start, end } = monthRange(year, month - 1);
-  const [settings, report] = await Promise.all([getAllSettings(), loadPurchaseItemReport(start, end)]);
+  const filters = purchaseItemReportFilters(searchParams);
+  const report = await loadPurchaseItemReport(filters.start, filters.end, filters.category);
+  const settings = await getAllSettings();
+  const query = new URLSearchParams({ from: filters.from, to: filters.to, ...(filters.category ? { category: filters.category } : {}) }).toString();
+  const periodLabel = `${filters.from.split("-").reverse().join("/")} – ${filters.to.split("-").reverse().join("/")}`;
 
   return (
     <div>
@@ -37,14 +27,14 @@ export default async function PurchaseItemsPrintPage({ searchParams }: { searchP
         }
       `}</style>
       <div className="mx-auto mb-4 flex max-w-[297mm] items-center justify-between gap-3 print:hidden">
-        <Link href={`/accounting/purchase-items?year=${year}&month=${month}`} className="text-sm text-gray-500 hover:text-brand-700 hover:underline">← กลับรายงาน</Link>
+        <Link href={`/accounting/purchase-items?${query}`} className="text-sm text-gray-500 hover:text-brand-700 hover:underline">← กลับรายงาน</Link>
         <PrintButton label="พิมพ์ / บันทึก PDF" />
       </div>
       <main className="mx-auto min-h-[190mm] w-full max-w-[297mm] bg-white px-8 py-6 text-black shadow-sm print:min-h-0 print:max-w-none print:p-0 print:shadow-none">
         <header className="mb-5 text-center">
           <h1 className="text-xl font-bold">{settings.companyName || "ชื่อบริษัท"}</h1>
           <h2 className="mt-3 text-lg font-bold">รายงานวัตถุดิบ / บรรจุภัณฑ์ / อื่น ๆ</h2>
-          <p className="mt-0.5 text-sm">ประจำเดือน {thaiMonthLabel(year, month - 1)}</p>
+          <p className="mt-0.5 text-sm">ช่วงวันที่ {periodLabel}{filters.category ? ` · หมวด ${filters.category}` : " · ทุกหมวด"}</p>
         </header>
         <table className="w-full table-fixed border-collapse text-[10px] leading-tight tabular-nums">
           <colgroup><col className="w-[5%]"/><col className="w-[10%]"/><col className="w-[23%]"/><col className="w-[14%]"/><col className="w-[28%]"/><col className="w-[8%]"/><col className="w-[12%]"/></colgroup>

@@ -4,11 +4,11 @@ import { formatPartnerDisplayName } from "./partnerDisplay";
 
 interface PurchaseItemExcelOptions {
   companyName: string;
-  year: number;
-  month: number;
+  from: string;
+  to: string;
+  category: string;
 }
 
-const THAI_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 const HEADERS = ["ลำดับ", "วันที่", "ซัพพลายเออร์", "หมวด", "รายการ", "จำนวน", "ราคาต่อหน่วย"];
 const formatDate = (date: Date) => `${String(date.getUTCDate()).padStart(2, "0")}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${date.getUTCFullYear()}`;
 
@@ -22,7 +22,7 @@ export function buildPurchaseItemWorkbook(report: PurchaseItemReport, options: P
   sheet.mergeCells(2, 1, 2, HEADERS.length);
   sheet.getCell(2, 1).value = "รายงานวัตถุดิบ / บรรจุภัณฑ์ / อื่น ๆ";
   sheet.mergeCells(3, 1, 3, HEADERS.length);
-  sheet.getCell(3, 1).value = `ประจำเดือน ${THAI_MONTHS[options.month - 1]} ${options.year}`;
+  sheet.getCell(3, 1).value = `ช่วงวันที่ ${options.from.split("-").reverse().join("/")} – ${options.to.split("-").reverse().join("/")}${options.category ? ` · หมวด ${options.category}` : " · ทุกหมวด"}`;
   [1, 2, 3].forEach((rowNumber) => {
     const cell = sheet.getCell(rowNumber, 1);
     cell.font = { bold: true, size: rowNumber === 2 ? 14 : 11 };
@@ -60,6 +60,6 @@ export function buildPurchaseItemWorkbook(report: PurchaseItemReport, options: P
   return workbook;
 }
 
-export function purchaseItemExcelFilename(year: number, month: number): string {
-  return `purchase-items-${year}-${String(month).padStart(2, "0")}.xlsx`;
+export function purchaseItemExcelFilename(from: string, to: string): string {
+  return `purchase-items-${from}-${to}.xlsx`;
 }
