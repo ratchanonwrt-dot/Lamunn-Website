@@ -17,7 +17,32 @@ function check(label: string, actual: unknown, expected: unknown) {
   if (!ok) failures++;
 }
 
+async function checkJournalNotePure() {
+  const journals = await import("../src/lib/accounting/purchaseWhtJournals");
+  const note = "[test] หมายเหตุจากใบกำกับ";
+  const built = journals.buildPurchasePaymentJournalLines({
+    allocations: [{ accountId: "[test]-expense", amountSatang: 100_000 }],
+    inputVatAccountId: "[test]-input-vat",
+    tradePayableAccountId: "[test]-payable",
+    paymentAccountId: "[test]-bank",
+    baseSatang: 100_000,
+    vatSatang: 7_000,
+    description: "[test] ค่าบริการ",
+    note,
+    invoiceNo: "[test]-INV-PURE",
+  });
+  check("หมายเหตุเชื่อมไปสมุดรายวันซื้อ", built.purchaseLines[0].memo, `[test] ค่าบริการ · หมายเหตุ: ${note}`);
+  check("หมายเหตุเชื่อมไปสมุดรายวันจ่าย", built.paymentLines[1].memo, `จ่ายชำระเจ้าหนี้ · หมายเหตุ: ${note}`);
+}
+
 async function main() {
+  if (process.argv.includes("--pure")) {
+    await checkJournalNotePure();
+    if (failures) throw new Error(`ไม่ผ่าน ${failures} ข้อ`);
+    console.log("✅ หมายเหตุจากใบกำกับเชื่อมไปสมุดรายวันซื้อและจ่ายถูกต้อง");
+    return;
+  }
+
   const [{ prisma }, journals, posting, invoiceEdit, chart] = await Promise.all([
     import("@lamunn/db-finance"),
     import("../src/lib/accounting/purchaseWhtJournals"),
@@ -32,6 +57,7 @@ async function main() {
   const certificateIds: string[] = [];
   let partnerId: string | null = null;
   let createdPeriodId: string | null = null;
+  const journalNote = `[test] หมายเหตุจากใบกำกับ ${suffix}`;
 
   try {
     const periodBefore = await prisma.accPeriod.findUnique({ where: { year_month: { year: YEAR, month: 1 } } });
@@ -66,6 +92,7 @@ async function main() {
       whtSatang: 3_000,
       partnerId,
       description: "[test] ค่าบริการ",
+      note: journalNote,
       invoiceNo: `[test]-INV-${suffix}`,
     });
     const purchase = await posting.createEntry({
@@ -133,6 +160,8 @@ async function main() {
       [bank.code, 0, 1040],
       [chart.SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE, 0, 30],
     ]);
+    check("หมายเหตุอยู่ในสมุดรายวันซื้อ", purchaseLines[0].memo, `[test] ค่าบริการ · หมายเหตุ: ${journalNote}`);
+    check("หมายเหตุอยู่ในสมุดรายวันจ่าย", paymentLines[1].memo, `จ่ายสุทธิหลังหักภาษี ณ ที่จ่าย · หมายเหตุ: ${journalNote}`);
     check("ใบกำกับผูก PV", invoice.entryId, purchase.id);
     check("หนังสือรับรองผูก PY", certificate.entryId, payment.id);
 
