@@ -7,6 +7,7 @@ import TaxReportTabs from "@/components/accounting/TaxReportTabs";
 import StatementShell from "@/components/accounting/StatementShell";
 import { buildOutputVatReport } from "@/lib/accounting/taxReports";
 import { fmtSatang } from "@/lib/accounting/money";
+import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 
 export const dynamic = "force-dynamic";
 
@@ -75,8 +76,7 @@ export default async function OutputVatPage({ searchParams }: { searchParams: { 
                     )}
                   </td>
                   <td className="py-1.5 px-2 text-gray-800">
-                    {r.customerName}
-                    {r.branchTag && <span className="ml-1.5 text-xs text-gray-400">({r.branchTag})</span>}
+                    {formatPartnerDisplayName(r.customerName, r.branchTag)}
                   </td>
                   <td className="py-1.5 px-2 font-mono text-xs text-gray-500">{r.taxId ?? "-"}</td>
                   <td className="py-1.5 px-2 text-right">{fmtSatang(r.base)}</td>

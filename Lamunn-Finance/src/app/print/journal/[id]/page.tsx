@@ -7,6 +7,7 @@ import { getAllSettings } from "@/lib/settings";
 import { fmtSatang, toSatang } from "@/lib/accounting/money";
 import { bahtTextFromSatang } from "@/lib/accounting/bahtText";
 import PrintButton from "@/components/accounting/PrintButton";
+import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export default async function JournalPrintPage({ params }: { params: { id: strin
           orderBy: { sortOrder: "asc" },
           include: {
             account: { select: { code: true, nameTh: true } },
-            partner: { select: { name: true, taxId: true, address: true } },
+            partner: { select: { name: true, taxId: true, address: true, branchTag: true } },
             branch: { select: { name: true } },
           },
         },
@@ -90,7 +91,7 @@ export default async function JournalPrintPage({ params }: { params: { id: strin
         <div className="mt-4 grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
           <Field label="เลขที่" value={entry.entryNo} mono />
           <Field label="วันที่" value={formatThaiDate(entry.date)} />
-          <Field label={entry.journalType === "RECEIPT" ? "รับจาก" : "จ่ายให้"} value={partner?.name ?? "-"} />
+          <Field label={entry.journalType === "RECEIPT" ? "รับจาก" : "จ่ายให้"} value={partner ? formatPartnerDisplayName(partner.name, partner.branchTag) : "-"} />
           <Field label="เลขประจำตัวผู้เสียภาษี" value={partner?.taxId ?? "-"} mono />
           <div className="sm:col-span-2">
             <Field label="รายการ" value={entry.description} />
@@ -120,7 +121,7 @@ export default async function JournalPrintPage({ params }: { params: { id: strin
                 <td className="py-1.5 px-2 text-gray-800">{l.account.nameTh}</td>
                 <td className="py-1.5 px-2 text-xs text-gray-600">
                   {l.memo ?? ""}
-                  {l.partner && <span className="ml-1.5 text-gray-400">{l.partner.name}</span>}
+                  {l.partner && <span className="ml-1.5 text-gray-400">{formatPartnerDisplayName(l.partner.name, l.partner.branchTag)}</span>}
                   {l.branch && <span className="ml-1.5 text-gray-400">· {l.branch.name}</span>}
                 </td>
                 <td className="py-1.5 px-2 text-right">{fmtSatang(toSatang(l.debit))}</td>

@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import type { InputVatReport } from "./taxReports";
+import { formatPartnerDisplayName } from "./partnerDisplay";
 
 /** สร้างไฟล์ Excel รายงานภาษีซื้อ ตามแบบฟอร์มที่ฝ่ายบัญชีใช้ยื่น (ไฟล์ตัวอย่าง "รายงานภาษีซื้อ.xlsx")
  *
@@ -57,7 +58,7 @@ export function buildInputVatWorkbook(report: InputVatReport, opts: InputVatExce
     row.getCell(1).value = i + 1;
     row.getCell(2).value = fmtDate(r.date);
     row.getCell(3).value = r.invoiceNo; // ใช้เลขจากเอกสารหรือบรรทัด AI เท่านั้น ห้ามเอาเลขที่ใบสำคัญมาแทน
-    row.getCell(4).value = r.vendorName;
+    row.getCell(4).value = formatPartnerDisplayName(r.vendorName, r.branchTag);
     row.getCell(5).value = r.taxId ?? "";
     row.getCell(6).value = r.branchTag ?? "";
     row.getCell(7).value = r.base / 100;

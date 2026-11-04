@@ -1,6 +1,7 @@
 import { prisma } from "@lamunn/db-finance";
 import type { Prisma } from "@lamunn/db-finance";
 import { toSatang } from "./money";
+import { formatPartnerDisplayName } from "./partnerDisplay";
 
 /** ดึงรายการภาษีที่บัญชีคีย์เองในสมุดรายวัน (หน้าใบสำคัญ) เข้ามาแสดงในรายงานภาษีด้วย
  *
@@ -43,7 +44,7 @@ interface EntryWithLines {
     debit: Prisma.Decimal;
     credit: Prisma.Decimal;
     account: { vatRole: string | null; type: string };
-    partner: { name: string; taxId: string | null } | null;
+    partner: { name: string; taxId: string | null; branchTag: string | null } | null;
   }[];
 }
 
@@ -69,7 +70,7 @@ async function fetchEntriesTouching(start: Date, end: Date, roles: ("OUTPUT" | "
           debit: true,
           credit: true,
           account: { select: { vatRole: true, type: true } },
-          partner: { select: { name: true, taxId: true } },
+          partner: { select: { name: true, taxId: true, branchTag: true } },
         },
       },
     },
@@ -121,7 +122,7 @@ export async function journalOutputVatRows(start: Date, end: Date): Promise<Jour
       docNo: vatLine?.docNo ?? null,
       date: e.date,
       description: e.description,
-      partnerName: p?.name ?? null,
+      partnerName: p ? formatPartnerDisplayName(p.name, p.branchTag) : null,
       partnerTaxId: p?.taxId ?? null,
       base,
       vat,
@@ -205,7 +206,7 @@ export async function journalInputVatRows(start: Date, end: Date): Promise<Journ
         docNo: line.docNo?.trim() || null,
         date: e.date,
         description: e.description,
-        partnerName: p?.name ?? null,
+        partnerName: p ? formatPartnerDisplayName(p.name, p.branchTag) : null,
         partnerTaxId: p?.taxId ?? null,
         base: lineBase,
         vat,
@@ -266,7 +267,7 @@ export async function journalWhtRows(start: Date, end: Date): Promise<JournalWht
       docNo: whtLine?.docNo ?? null,
       date: e.date,
       description: e.description,
-      partnerName: p?.name ?? null,
+      partnerName: p ? formatPartnerDisplayName(p.name, p.branchTag) : null,
       partnerTaxId: p?.taxId ?? null,
       base,
       vat: wht,

@@ -8,6 +8,7 @@ import TaxInvoiceForm from "@/components/accounting/TaxInvoiceForm";
 import TaxInvoiceActions from "@/components/accounting/TaxInvoiceActions";
 import { CHANNEL_LABELS } from "@/lib/accounting/channels";
 import { fmtSatang, toSatang } from "@/lib/accounting/money";
+import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +96,7 @@ export default async function TaxInvoicesPage({ searchParams }: { searchParams: 
                   <td className="py-2 px-3 font-mono text-xs text-gray-500">{inv.issueDate.toISOString().slice(0, 10)}</td>
                   <td className="py-2 px-3 font-mono text-xs text-gray-500">{inv.saleDate.toISOString().slice(0, 10)}</td>
                   <td className="py-2 px-3 text-gray-800">
-                    {inv.customerName}
+                    {formatPartnerDisplayName(inv.customerName, inv.branchTag)}
                     {inv.receiptNo && <span className="ml-1.5 text-xs text-gray-400">บิล {inv.receiptNo}</span>}
                     {inv.branch && <span className="ml-1.5 text-xs text-gray-400">· {inv.branch.name}</span>}
                   </td>

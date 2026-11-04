@@ -13,6 +13,7 @@ import EditPurchaseInvoiceButton from "@/components/accounting/EditPurchaseInvoi
 import { FileSpreadsheet, Printer } from "lucide-react";
 import { buildInputVatReport } from "@/lib/accounting/taxReports";
 import { fmtSatang } from "@/lib/accounting/money";
+import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 
 export const dynamic = "force-dynamic";
 
@@ -160,8 +161,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
                     )}
                   </td>
                   <td className="py-1.5 px-2 text-gray-800">
-                    {r.vendorName}
-                    {r.branchTag && <span className="ml-1.5 text-xs text-gray-400">({r.branchTag})</span>}
+                    {formatPartnerDisplayName(r.vendorName, r.branchTag)}
                     {!r.isClaimable && (
                       <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700">ต้องห้าม</span>
                     )}

@@ -8,6 +8,7 @@ import StatementShell from "@/components/accounting/StatementShell";
 import LedgerFilterBar from "@/components/accounting/LedgerFilterBar";
 import { fmtSatang, toSatang } from "@/lib/accounting/money";
 import { getLedgerAccounts } from "@/lib/accounting/refData";
+import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 import { naturalAmount } from "@/lib/accounting/reports";
 import type { AccountType } from "@lamunn/db-finance";
 
@@ -181,7 +182,7 @@ async function LedgerDetail({
         memo: true,
         entry: { select: { id: true, entryNo: true, description: true, journalType: true } },
         branch: { select: { name: true } },
-        partner: { select: { name: true } },
+        partner: { select: { name: true, branchTag: true } },
       },
     }),
   ]);
@@ -255,7 +256,7 @@ async function LedgerDetail({
                   <td className="py-1.5 px-3 text-gray-700">
                     {r.line.entry.description}
                     {r.line.memo && <span className="ml-1.5 text-xs text-gray-400">{r.line.memo}</span>}
-                    {r.line.partner && <span className="ml-1.5 text-xs text-gray-400">· {r.line.partner.name}</span>}
+                    {r.line.partner && <span className="ml-1.5 text-xs text-gray-400">· {formatPartnerDisplayName(r.line.partner.name, r.line.partner.branchTag)}</span>}
                     {r.line.branch && <span className="ml-1.5 text-xs text-gray-400">· {r.line.branch.name}</span>}
                   </td>
                   <td className="py-1.5 px-3 text-right">{fmtSatang(r.debit)}</td>

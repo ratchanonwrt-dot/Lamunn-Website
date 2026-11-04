@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { prisma, type AccountType } from "@lamunn/db-finance";
 import { toSatang } from "./money";
 import { naturalAmount } from "./reports";
+import { formatPartnerDisplayName } from "./partnerDisplay";
 
 export interface LedgerExportLine {
   date: Date;
@@ -61,7 +62,7 @@ export async function loadLedgerExportData({
         memo: true,
         entry: { select: { entryNo: true, description: true } },
         branch: { select: { name: true } },
-        partner: { select: { name: true } },
+        partner: { select: { name: true, branchTag: true } },
       },
     }),
   ]);
@@ -93,7 +94,7 @@ export async function loadLedgerExportData({
         description: line.entry.description,
         memo: line.memo,
         branchName: line.branch?.name ?? null,
-        partnerName: line.partner?.name ?? null,
+        partnerName: line.partner ? formatPartnerDisplayName(line.partner.name, line.partner.branchTag) : null,
         debit,
         credit,
         running,
