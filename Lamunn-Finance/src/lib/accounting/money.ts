@@ -66,11 +66,14 @@ export function addVatExclusive(
   const magnitude = BigInt(Math.abs(Math.trunc(baseSatang)));
   const product = magnitude * rateNumerator;
   const nearestSatang = (product + denominator / 2n) / denominator;
-  const rounded = rounding === "UP"
-    ? nearestSatang + 1n
-    : rounding === "DOWN"
-      ? nearestSatang > 0n ? nearestSatang - 1n : 0n
-      : nearestSatang;
-  const vat = Number(rounded) * (baseSatang < 0 ? -1 : 1);
+  const vat = adjustVatSatang(Number(nearestSatang) * (baseSatang < 0 ? -1 : 1), rounding);
   return { base: baseSatang, vat };
+}
+
+/** ปรับภาษีรวมครั้งละหนึ่งสตางค์ — ใช้หลังรวม VAT หลายบรรทัดเพื่อไม่ให้แต่ละบรรทัดถูกปรับซ้ำ */
+export function adjustVatSatang(vatSatang: number, rounding: VatRounding): number {
+  if (vatSatang === 0 || rounding === "NEAREST") return vatSatang;
+  const sign = vatSatang < 0 ? -1 : 1;
+  const magnitude = Math.abs(Math.trunc(vatSatang));
+  return (rounding === "UP" ? magnitude + 1 : Math.max(0, magnitude - 1)) * sign;
 }

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useServerRefresh } from "./useServerRefresh";
-import { Plus, Trash2 } from "lucide-react";
+import { EllipsisVertical, Plus, Trash2, X } from "lucide-react";
 import PartnerCombobox from "./PartnerCombobox";
 import AccountCombobox from "./AccountCombobox";
 import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
@@ -10,6 +10,11 @@ import { addVatExclusive, fmtSatang, signedInputToSatang, toSatang, type VatRoun
 import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
 import PurchaseTaxClaimPeriodSelect from "./PurchaseTaxClaimPeriodSelect";
 import { partnerBranchChoices, resolvePartnerBranchChoice } from "@/lib/accounting/partnerBranchSelection";
+import {
+  summarizePurchaseTaxLineItems,
+  type PurchaseTaxItemCategory,
+  type PurchaseTaxPriceCondition,
+} from "@/lib/accounting/purchaseTaxLineItems";
 
 interface PartnerOption {
   id: string;
@@ -31,6 +36,34 @@ interface AccountOption {
   nameTh: string;
 }
 
+interface PurchaseLineFormValue {
+  key: string;
+  category: PurchaseTaxItemCategory;
+  description: string;
+  quantity: string;
+  unitPrice: string;
+  priceCondition: PurchaseTaxPriceCondition;
+  vatRatePercent: string;
+}
+
+const ITEM_CATEGORIES: Array<{ value: PurchaseTaxItemCategory; label: string }> = [
+  { value: "RAW_MATERIAL", label: "วัตถุดิบ" },
+  { value: "PACKAGING", label: "บรรจุภัณฑ์" },
+  { value: "OTHER", label: "อื่น ๆ" },
+];
+
+function emptyPurchaseLine(key: string, category: PurchaseTaxItemCategory, vatRate: number): PurchaseLineFormValue {
+  return {
+    key,
+    category,
+    description: "",
+    quantity: "1",
+    unitPrice: "",
+    priceCondition: "VAT",
+    vatRatePercent: String(vatRate * 100),
+  };
+}
+
 export default function PurchaseTaxInvoiceForm({
   partners,
   expenseAccounts,
@@ -50,6 +83,8 @@ export default function PurchaseTaxInvoiceForm({
   const busy = submitting || refreshing;
   const [error, setError] = useState<string | null>(null);
   const nextExpenseLineKey = useRef(2);
+  const nextPurchaseLineKey = useRef(2);
+  const [priceConditionLineKey, setPriceConditionLineKey] = useState<string | null>(null);
   const defaultPaymentAccountId = paymentAccounts.find((account) => account.code === "11111")?.id ?? "";
   const [form, setForm] = useState({
     invoiceNo: "",
@@ -64,6 +99,8 @@ export default function PurchaseTaxInvoiceForm({
     description: "ค่าสินค้า/บริการ",
     baseAmount: "",
     vatRounding: "NEAREST" as VatRounding,
+    itemCategory: "RAW_MATERIAL" as PurchaseTaxItemCategory,
+    lineItems: [emptyPurchaseLine("purchase-line-1", "RAW_MATERIAL", vatRate)],
     isClaimable: true,
     note: "",
     expenseLines: [{ key: "expense-1", accountId: "", amount: "" }],
@@ -94,13 +131,19 @@ export default function PurchaseTaxInvoiceForm({
     e.preventDefault();
     setSubmitting(true);
     setError(null);
+    const lineSummary = summarizePurchaseTaxLineItems(form.lineItems, vatRate, form.vatRounding);
+    if (lineSummary.errors.length > 0) {
+      setSubmitting(false);
+      setError(lineSummary.errors[0]);
+      return;
+    }
     const res = await fetch("/api/accounting/purchase-tax-invoices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...form,
         // API ยังรับรูปแบบเดิมสำหรับงานนำเข้าเก่า แต่หน้าจอใหม่นี้ยึดยอดก่อนภาษีเป็นต้นทางเสมอ
-        amount: form.baseAmount,
+        amount: lineSummary.hasItems ? (lineSummary.baseSatang / 100).toFixed(2) : form.baseAmount,
         amountIncludesVat: false,
       }),
     });
@@ -118,6 +161,7 @@ export default function PurchaseTaxInvoiceForm({
       whtIncomeType: "",
       whtRatePercent: "",
       whtBaseAmount: "",
+      lineItems: [emptyPurchaseLine(`purchase-line-${nextPurchaseLineKey.current++}`, form.itemCategory, vatRate)],
       expenseLines: form.expenseLines.map((line) => ({ ...line, amount: "" })),
     });
     setOpen(false);
@@ -138,9 +182,12 @@ export default function PurchaseTaxInvoiceForm({
 
   const field = "mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900";
   const label = "text-xs text-gray-500";
+  const lineSummary = summarizePurchaseTaxLineItems(form.lineItems, vatRate, form.vatRounding);
   const enteredBase = signedInputToSatang(form.baseAmount);
-  const isCreditNote = enteredBase < 0;
-  const { base, vat } = addVatExclusive(enteredBase, vatRate, form.vatRounding);
+  const manualAmounts = addVatExclusive(enteredBase, vatRate, form.vatRounding);
+  const base = lineSummary.hasItems ? lineSummary.baseSatang : manualAmounts.base;
+  const vat = lineSummary.hasItems ? lineSummary.vatSatang : manualAmounts.vat;
+  const isCreditNote = base < 0;
   const vatRateLabel = (vatRate * 100).toLocaleString("th-TH", { maximumFractionDigits: 2 });
   const whtEnabled = Boolean(form.whtIncomeType);
   const whtBase = form.whtBaseAmount.trim() ? toSatang(form.whtBaseAmount) : base;
@@ -154,6 +201,7 @@ export default function PurchaseTaxInvoiceForm({
     ? allocationTarget
     : activeExpenseLines.reduce((sum, line) => sum + Math.max(0, signedInputToSatang(line.amount)), 0);
   const allocationDifference = allocationTarget - allocationTotal;
+  const selectedPriceLine = form.lineItems.find((line) => line.key === priceConditionLineKey) ?? null;
   return (
     <form onSubmit={submit} className="w-full rounded-xl border border-gray-200 bg-white p-5">
       <p className="mb-4 text-sm font-semibold text-gray-800">{isCreditNote ? "บันทึกใบลดหนี้" : "บันทึกใบกำกับภาษีซื้อ"}</p>
@@ -252,9 +300,10 @@ export default function PurchaseTaxInvoiceForm({
         <label className={label}>
           ยอดก่อนภาษี
           <input
-            required
+            required={!lineSummary.hasItems}
+            readOnly={lineSummary.hasItems}
             inputMode="decimal"
-            value={form.baseAmount}
+            value={lineSummary.hasItems ? fmtSatang(base, { zeroDash: false }) : form.baseAmount}
             onChange={(e) => {
               const baseAmount = e.target.value;
               setForm({
@@ -264,9 +313,11 @@ export default function PurchaseTaxInvoiceForm({
               });
             }}
             placeholder="เช่น 1000 หรือ (1000)"
-            className={field}
+            className={`${field} ${lineSummary.hasItems ? "bg-gray-50" : ""}`}
           />
-          <span className="mt-1 block text-[11px] text-gray-500">กรอกยอดนี้ แล้วระบบคำนวณภาษี {vatRateLabel}% ให้อัตโนมัติ</span>
+          {lineSummary.hasItems
+            ? <span className="mt-1 block text-[11px] text-emerald-700">คำนวณจากรายละเอียดสินค้าด้านล่าง</span>
+            : <span className="mt-1 block text-[11px] text-gray-500">กรอกยอดนี้ แล้วระบบคำนวณภาษี {vatRateLabel}% ให้อัตโนมัติ</span>}
         </label>
         <label className={label}>
           ภาษี {vatRateLabel}%
@@ -303,6 +354,187 @@ export default function PurchaseTaxInvoiceForm({
           <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} className={field} />
         </label>
       </div>
+
+      <section className="mt-5 rounded-xl border border-sky-200 bg-sky-50/40 p-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800">วัตถุดิบ / บรรจุภัณฑ์ / อื่น ๆ</h3>
+            <p className="mt-0.5 text-xs text-gray-500">กรอกรายละเอียดสินค้า/บริการแยกบรรทัดเพื่อให้ระบบรวมยอดและภาษีให้อัตโนมัติ</p>
+          </div>
+          <label className="text-xs text-gray-500">
+            หมวดรายการ
+            <select
+              value={form.itemCategory}
+              onChange={(event) => {
+                const itemCategory = event.target.value as PurchaseTaxItemCategory;
+                setForm((current) => ({
+                  ...current,
+                  itemCategory,
+                  lineItems: current.lineItems.map((line) => ({ ...line, category: itemCategory })),
+                }));
+              }}
+              className="ml-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+            >
+              {ITEM_CATEGORIES.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <div className="min-w-[760px]">
+            <div className="grid grid-cols-[36px_minmax(220px,1fr)_110px_150px_150px_44px] gap-2 px-1 text-xs font-medium text-gray-500">
+              <span>ลำดับ</span><span>รายการ</span><span>จำนวน</span><span>ราคาต่อหน่วย</span><span className="text-right">ราคารวม</span><span />
+            </div>
+            <div className="mt-2 space-y-2">
+              {form.lineItems.map((line, index) => {
+                const preview = summarizePurchaseTaxLineItems(
+                  [{ ...line, description: line.description || "รายการ" }],
+                  vatRate,
+                  "NEAREST"
+                );
+                const calculatedLine = preview.items[0];
+                const conditionText = line.priceCondition === "FREE"
+                  ? "ของแถม"
+                  : line.priceCondition === "VAT_EXEMPT"
+                    ? "ยกเว้น VAT"
+                    : `VAT ${line.vatRatePercent || vatRate * 100}%`;
+                return (
+                  <div key={line.key} className="rounded-lg border border-gray-200 bg-white p-2">
+                    <div className="grid grid-cols-[36px_minmax(220px,1fr)_110px_150px_150px_44px] items-center gap-2">
+                      <span className="text-center text-sm text-gray-500">{index + 1}</span>
+                      <input
+                        value={line.description}
+                        onChange={(event) => setForm((current) => ({
+                          ...current,
+                          lineItems: current.lineItems.map((item) => item.key === line.key ? { ...item, description: event.target.value } : item),
+                        }))}
+                        placeholder="ชื่อสินค้า/บริการ"
+                        className={field}
+                      />
+                      <input
+                        inputMode="decimal"
+                        value={line.quantity}
+                        onChange={(event) => setForm((current) => ({
+                          ...current,
+                          lineItems: current.lineItems.map((item) => item.key === line.key ? { ...item, quantity: event.target.value } : item),
+                        }))}
+                        className={field}
+                      />
+                      <input
+                        inputMode="decimal"
+                        value={line.unitPrice}
+                        disabled={line.priceCondition === "FREE"}
+                        onChange={(event) => setForm((current) => ({
+                          ...current,
+                          lineItems: current.lineItems.map((item) => item.key === line.key ? { ...item, unitPrice: event.target.value } : item),
+                        }))}
+                        placeholder="0.00"
+                        className={`${field} disabled:bg-gray-100`}
+                      />
+                      <div className="text-right">
+                        <span className="block text-sm font-medium tabular-nums text-gray-800">
+                          {fmtSatang(calculatedLine?.baseSatang ?? 0, { zeroDash: false })}
+                        </span>
+                        <span className="text-[11px] text-gray-500">{conditionText}</span>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={`เงื่อนไขราคาบรรทัดที่ ${index + 1}`}
+                        onClick={() => setPriceConditionLineKey(line.key)}
+                        className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                      >
+                        <EllipsisVertical size={18} />
+                      </button>
+                    </div>
+                    {form.lineItems.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setForm((current) => ({ ...current, lineItems: current.lineItems.filter((item) => item.key !== line.key) }))}
+                        className="mt-1 inline-flex items-center gap-1 text-[11px] text-rose-600 hover:text-rose-700"
+                      >
+                        <Trash2 size={12} /> ลบบรรทัด
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setForm((current) => ({
+            ...current,
+            lineItems: [
+              ...current.lineItems,
+              emptyPurchaseLine(`purchase-line-${nextPurchaseLineKey.current++}`, current.itemCategory, vatRate),
+            ],
+          }))}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50"
+        >
+          <Plus size={15} /> เพิ่มบรรทัด
+        </button>
+
+        <div className="mt-4 ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-8 gap-y-2 border-t border-sky-200 pt-4 text-sm">
+          <span className="font-medium text-gray-700">ยอดรวม</span><strong className="text-right tabular-nums">{fmtSatang(base, { zeroDash: false })}</strong>
+          <span className="font-medium text-gray-700">ภาษี 7%</span><strong className="text-right tabular-nums">{fmtSatang(vat, { zeroDash: false })}</strong>
+          <span className="font-semibold text-gray-900">ยอดเงินสุทธิ</span><strong className="text-right text-base tabular-nums text-gray-900">{fmtSatang(total, { zeroDash: false })}</strong>
+        </div>
+      </section>
+
+      {selectedPriceLine && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" aria-label="เงื่อนไขราคา">
+          <div className="w-full max-w-xl rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <h3 className="text-lg font-semibold text-gray-900">เงื่อนไขราคา</h3>
+              <button type="button" onClick={() => setPriceConditionLineKey(null)} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100" aria-label="ปิด">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-3 p-5">
+              {([
+                ["FREE", "สินค้านี้เป็นของแถม"],
+                ["VAT_EXEMPT", "ได้รับยกเว้นภาษีมูลค่าเพิ่ม"],
+                ["VAT", "มีภาษีมูลค่าเพิ่มหรือกำหนดเอง"],
+              ] as Array<[PurchaseTaxPriceCondition, string]>).map(([value, text]) => (
+                <label key={value} className="flex items-center gap-3 text-sm text-gray-800">
+                  <input
+                    type="radio"
+                    name={`price-condition-${selectedPriceLine.key}`}
+                    checked={selectedPriceLine.priceCondition === value}
+                    onChange={() => setForm((current) => ({
+                      ...current,
+                      lineItems: current.lineItems.map((item) => item.key === selectedPriceLine.key ? { ...item, priceCondition: value } : item),
+                    }))}
+                  />
+                  {text}
+                </label>
+              ))}
+              {selectedPriceLine.priceCondition === "VAT" && (
+                <label className="ml-7 block max-w-xs text-xs text-gray-500">
+                  อัตราภาษีมูลค่าเพิ่ม
+                  <div className="mt-1 flex items-center gap-2">
+                    <input
+                      inputMode="decimal"
+                      value={selectedPriceLine.vatRatePercent}
+                      onChange={(event) => setForm((current) => ({
+                        ...current,
+                        lineItems: current.lineItems.map((item) => item.key === selectedPriceLine.key ? { ...item, vatRatePercent: event.target.value } : item),
+                      }))}
+                      className={field}
+                    />
+                    <span className="text-sm text-gray-700">%</span>
+                  </div>
+                </label>
+              )}
+            </div>
+            <div className="flex justify-end border-t border-gray-200 px-5 py-4">
+              <button type="button" onClick={() => setPriceConditionLineKey(null)} className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700">บันทึก</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <label className="mt-4 flex items-start gap-2.5 rounded-lg bg-gray-50 p-3">
         <input
