@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@lamunn/db-finance";
+import { prisma, Prisma } from "@lamunn/db-finance";
 import { requireSectionApi } from "@/lib/permissions";
 import { parseDateOnly } from "@/lib/dates";
 import { getAllSettings } from "@/lib/settings";
@@ -15,6 +15,7 @@ import {
   resolvePurchaseTaxAccountAllocations,
 } from "@/lib/accounting/purchaseTaxAccountAllocation";
 import { buildPurchasePaymentJournalLines, purchasePaymentEntryDescriptionFor } from "@/lib/accounting/purchaseWhtJournals";
+import { summarizePurchaseTaxLineItems } from "@/lib/accounting/purchaseTaxLineItems";
 
 /** บันทึกใบกำกับภาษีซื้อ (ใบที่ผู้ขายออกให้เรา) — ตัวป้อนข้อมูลของรายงานภาษีซื้อและ ภ.พ.30
  * เลขที่ใบกำกับมาจากผู้ขาย ไม่ได้รันเอง จึงรับค่าจากผู้กรอกโดยตรง */
@@ -45,22 +46,32 @@ export async function POST(req: NextRequest) {
     whtIncomeType,
     whtRatePercent,
     whtBaseAmount,
+    lineItems,
   } = body;
 
-  if (!invoiceNo || !invoiceDate || !vendorName || !amount) {
-    return NextResponse.json({ error: "กรอกเลขที่ใบกำกับ วันที่ ชื่อผู้ขาย และยอดเงินให้ครบ" }, { status: 400 });
+  if (!invoiceNo || !invoiceDate || !vendorName) {
+    return NextResponse.json({ error: "กรอกเลขที่ใบกำกับ วันที่ และชื่อผู้ขายให้ครบ" }, { status: 400 });
   }
-
-  const amountSatang = signedInputToSatang(amount);
-  if (amountSatang === 0) return NextResponse.json({ error: "ยอดเงินต้องไม่เป็น 0" }, { status: 400 });
-  const isCreditNote = amountSatang < 0;
 
   const settings = await getAllSettings();
   const vatRate = Number(settings.vatRate);
   const rounding = vatRounding === "UP" || vatRounding === "DOWN" ? vatRounding : "NEAREST";
-  const { base, vat } = amountIncludesVat === false
-    ? addVatExclusive(amountSatang, vatRate, rounding)
-    : splitVatInclusive(amountSatang, vatRate);
+  const itemSummary = summarizePurchaseTaxLineItems(lineItems, vatRate, rounding);
+  if (itemSummary.errors.length > 0) {
+    return NextResponse.json({ error: itemSummary.errors[0] }, { status: 400 });
+  }
+  if (!itemSummary.hasItems && !amount) {
+    return NextResponse.json({ error: "กรอกยอดเงินหรือรายละเอียดสินค้าอย่างน้อย 1 บรรทัด" }, { status: 400 });
+  }
+  const amountSatang = itemSummary.hasItems ? itemSummary.baseSatang : signedInputToSatang(amount);
+  if (amountSatang === 0) return NextResponse.json({ error: "ยอดเงินต้องไม่เป็น 0" }, { status: 400 });
+  const isCreditNote = amountSatang < 0;
+  const calculated = itemSummary.hasItems
+    ? { base: itemSummary.baseSatang, vat: itemSummary.vatSatang }
+    : amountIncludesVat === false
+      ? addVatExclusive(amountSatang, vatRate, rounding)
+      : splitVatInclusive(amountSatang, vatRate);
+  const { base, vat } = calculated;
   const invoiceDateValue = parseDateOnly(invoiceDate);
   const paymentDateValue = paymentDate ? parseDateOnly(paymentDate) : invoiceDateValue;
   let claimPeriodValue: Date;
@@ -221,6 +232,7 @@ export async function POST(req: NextRequest) {
         vendorTaxId: vendorTaxId || null,
         vendorBranchTag: vendorBranchTag || null,
         description: description || "ค่าสินค้า/บริการ",
+        lineItems: itemSummary.hasItems ? itemSummary.items as unknown as Prisma.InputJsonValue : undefined,
         baseAmount: toBaht(base),
         vatAmount: toBaht(vat),
         totalAmount: toBaht(base + vat),
