@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 
 interface PartnerOption {
   id: string;
@@ -16,7 +17,7 @@ export default function PartnerCombobox({
   partners,
   value,
   onChange,
-  showBranch = false,
+  showBranch = true,
 }: {
   partners: PartnerOption[];
   value: string;
@@ -33,10 +34,7 @@ export default function PartnerCombobox({
   const listRef = useRef<HTMLDivElement>(null);
 
   const partnerLabel = (partner: PartnerOption) => {
-    const branch = String(partner.branchTag ?? "").trim();
-    if (!showBranch || !branch) return partner.name;
-    const branchLabel = branch === "สำนักงานใหญ่" || branch.startsWith("สาขา") ? branch : `สาขา ${branch}`;
-    return `${partner.name} (${branchLabel})`;
+    return showBranch ? formatPartnerDisplayName(partner.name, partner.branchTag) : partner.name;
   };
   const q = query.trim().toLowerCase();
   const filtered = q

@@ -9,6 +9,7 @@ import JournalFilterBar from "@/components/accounting/JournalFilterBar";
 import { fmtSatang, toSatang } from "@/lib/accounting/money";
 import { isJournalType, JOURNAL_TYPE_LABELS } from "@/lib/accounting/journalTypes";
 import { getPartnerOptions } from "@/lib/accounting/refData";
+import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,7 @@ export default async function JournalPage({
       include: {
         lines: {
           orderBy: { sortOrder: "asc" },
-          include: { account: { select: { code: true, nameTh: true } }, partner: { select: { name: true } } },
+          include: { account: { select: { code: true, nameTh: true } }, partner: { select: { name: true, branchTag: true } } },
         },
       },
     }),
@@ -206,7 +207,7 @@ export default async function JournalPage({
                         <td className="py-1.5 text-gray-700">
                           {l.account.nameTh}
                           {l.memo && <span className="ml-2 text-xs text-gray-400">{l.memo}</span>}
-                          {l.partner && <span className="ml-2 text-xs text-gray-400">· {l.partner.name}</span>}
+                          {l.partner && <span className="ml-2 text-xs text-gray-400">· {formatPartnerDisplayName(l.partner.name, l.partner.branchTag)}</span>}
                         </td>
                         <td className="w-32 py-1.5 text-right tabular-nums text-gray-800">{fmtSatang(toSatang(l.debit))}</td>
                         <td className="w-32 py-1.5 pr-4 text-right tabular-nums text-gray-800">{fmtSatang(toSatang(l.credit))}</td>

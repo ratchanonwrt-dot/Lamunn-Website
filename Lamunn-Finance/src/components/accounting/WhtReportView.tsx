@@ -12,6 +12,7 @@ import { buildWhtReport } from "@/lib/accounting/taxReports";
 import { WHT_FORM_LABELS, WHT_FORM_SHORT } from "@/lib/accounting/whtTypes";
 import Link from "next/link";
 import { fmtSatang } from "@/lib/accounting/money";
+import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 
 /** หน้ารายงาน ภ.ง.ด.3 และ ภ.ง.ด.53 ใช้โครงเดียวกันทั้งหมด ต่างแค่แบบที่กรอง
  * แยกเป็นคอมโพเนนต์กลางเพื่อไม่ให้ต้องดูแลโค้ดซ้ำสองชุด */
@@ -148,8 +149,7 @@ export default async function WhtReportView({
                     </Link>
                   </td>
                   <td className="py-1.5 px-2 text-gray-800">
-                    {r.payeeName}
-                    {r.payeeBranchTag && <span className="ml-1.5 text-xs text-gray-400">({r.payeeBranchTag})</span>}
+                    {formatPartnerDisplayName(r.payeeName, r.payeeBranchTag)}
                   </td>
                   <td className="py-1.5 px-2 font-mono text-xs text-gray-500">{r.payeeTaxId ?? "-"}</td>
                   <td className="py-1.5 px-2 text-xs text-gray-600">{r.incomeType}</td>

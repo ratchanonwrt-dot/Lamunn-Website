@@ -1,4 +1,5 @@
 import type { InputVatRow } from "./taxReports";
+import { formatPartnerDisplayName } from "./partnerDisplay";
 
 export const INPUT_VAT_PRINT_HEADERS = [
   "ลำดับ",
@@ -34,7 +35,7 @@ export function buildInputVatPrintRows(rows: InputVatRow[]): InputVatPrintRow[] 
     order: index + 1,
     date: formatDate(row.date),
     invoiceNo: row.invoiceNo || "-",
-    vendorName: row.branchTag ? `${row.vendorName} (${row.branchTag})` : row.vendorName,
+    vendorName: formatPartnerDisplayName(row.vendorName, row.branchTag),
     taxId: row.taxId ?? "-",
     base: row.base,
     vat: row.vat,
