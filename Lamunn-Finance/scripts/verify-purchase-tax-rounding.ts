@@ -21,6 +21,9 @@ async function main() {
     if (upward.vat !== 70_036 || downward.vat !== 70_034) {
       throw new Error(`ผลปัดภาษีไม่ถูกต้อง: ขึ้น=${upward.vat} ลง=${downward.vat}`);
     }
+    if (upward.base + upward.vat !== 1_070_536 || downward.base + downward.vat !== 1_070_534) {
+      throw new Error(`ยอดรวมไม่ถูกต้อง: ขึ้น=${upward.base + upward.vat} ลง=${downward.base + downward.vat}`);
+    }
 
     const exactUpward = addVatExclusive(10_000, 0.07, "UP");
     const exactDownward = addVatExclusive(10_000, 0.07, "DOWN");
