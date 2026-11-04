@@ -42,6 +42,7 @@ import {
   FileText,
   Calculator,
   PackageSearch,
+  Boxes,
 } from "lucide-react";
 import type { PermissionMap, PermissionSection } from "@/lib/permissions";
 
@@ -157,6 +158,7 @@ const taxReportLinks: NavLink[] = [
 
 const accountingReportItems: NavMenuItem[] = [
   { href: "/accounting/journal", label: "บันทึกบัญชี", icon: ListTree, color: "bg-indigo-100 text-indigo-600", section: "ACCOUNTING" },
+  { href: "/accounting/purchase-items", label: "วัตถุดิบ / บรรจุภัณฑ์ / อื่น ๆ", icon: Boxes, color: "bg-lime-100 text-lime-700", section: "ACCOUNTING" },
   { href: "/accounting/fixed-assets", label: "ทะเบียนทรัพย์สิน", icon: PackageSearch, color: "bg-emerald-100 text-emerald-600", section: "ACCOUNTING" },
   { href: "/accounting/ledger", label: "บัญชีแยกประเภท", icon: BookOpen, color: "bg-purple-100 text-purple-600", section: "ACCOUNTING" },
   { href: "/accounting/bank-reconciliation", label: "กระทบยอดเงินฝากธนาคาร", icon: Landmark, color: "bg-cyan-100 text-cyan-600", section: "ACCOUNTING" },
