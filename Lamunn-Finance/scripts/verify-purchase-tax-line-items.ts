@@ -12,7 +12,34 @@ loadEnvConfig(process.cwd());
 
 const YEAR = 2098;
 
+function checkFourDecimalUnitPrice() {
+  const summary = summarizePurchaseTaxLineItems([
+    { category: "RAW_MATERIAL", description: "[test] ราคาละเอียด", quantity: "3.5", unitPrice: "12.3456", priceCondition: "VAT", vatRatePercent: "7" },
+  ], 0.07);
+  const item = summary.items[0];
+  if (summary.errors.length > 0) throw new Error(summary.errors.join(", "));
+  if (!item || item.unitPriceSubSatang !== 123_456 || item.unitPriceSatang !== 1_235) {
+    throw new Error("ราคาต่อหน่วย 4 ตำแหน่งไม่ได้เก็บเป็นจำนวนเต็มอย่างถูกต้อง");
+  }
+  if (item.baseSatang !== 4_321 || item.vatSatang !== 302 || item.totalSatang !== 4_623) {
+    throw new Error(`ยอดจากราคา 4 ตำแหน่งผิด: base=${item.baseSatang} vat=${item.vatSatang} total=${item.totalSatang}`);
+  }
+
+  const invalid = summarizePurchaseTaxLineItems([
+    { category: "OTHER", description: "[test] ทศนิยมเกิน", quantity: "1", unitPrice: "12.34567", priceCondition: "VAT" },
+  ], 0.07);
+  if (!invalid.errors.some((error) => error.includes("ทศนิยมไม่เกิน 4 ตำแหน่ง"))) {
+    throw new Error("ระบบต้องปฏิเสธราคาต่อหน่วยที่เกิน 4 ตำแหน่ง");
+  }
+}
+
 async function main() {
+  checkFourDecimalUnitPrice();
+  if (process.argv.includes("--pure")) {
+    console.log("✅ ราคาต่อหน่วย 4 ตำแหน่งและการคำนวณเป็นจำนวนเต็มถูกต้อง");
+    return;
+  }
+
   const { prisma } = await import("@lamunn/db-finance");
   const suffix = randomUUID().slice(0, 8);
   let invoiceId: string | null = null;
@@ -52,7 +79,7 @@ async function main() {
       throw new Error("ยอดในฐานข้อมูลไม่ตรงกับรายละเอียดสินค้า");
     }
 
-    console.log("✅ รายละเอียดสินค้า เงื่อนไข VAT ยอดรวม และ snapshot ถูกต้อง");
+    console.log("✅ รายละเอียดสินค้า ราคา 4 ตำแหน่ง เงื่อนไข VAT ยอดรวม และ snapshot ถูกต้อง");
   } finally {
     if (invoiceId) await prisma.accPurchaseTaxInvoice.delete({ where: { id: invoiceId } }).catch(() => undefined);
     await prisma.$disconnect();

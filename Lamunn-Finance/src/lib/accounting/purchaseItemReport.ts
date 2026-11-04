@@ -10,6 +10,7 @@ export interface PurchaseItemReportRow {
   category: PurchaseTaxItemCategory;
   description: string;
   quantity: string;
+  unitPriceSubSatang: number;
   unitPriceSatang: number;
   priceCondition: PurchaseTaxPriceCondition;
 }
@@ -118,6 +119,11 @@ export function flattenPurchaseItemInvoices(invoices: Array<{
       const quantity = String(item.quantity ?? "").trim();
       const unitPriceSatang = Number(item.unitPriceSatang);
       if (!description || !quantity || !Number.isSafeInteger(unitPriceSatang)) continue;
+      const storedSubSatang = Number(item.unitPriceSubSatang);
+      // ใบเก่าเก็บถึงสตางค์เท่านั้น จึงขยายกลับเป็นหน่วย 0.0001 บาทเพื่ออ่านร่วมกับใบใหม่ได้
+      const unitPriceSubSatang = Number.isSafeInteger(storedSubSatang)
+        ? storedSubSatang
+        : unitPriceSatang * 100;
 
       rows.push({
         invoiceId: invoice.id,
@@ -128,6 +134,7 @@ export function flattenPurchaseItemInvoices(invoices: Array<{
         category,
         description,
         quantity,
+        unitPriceSubSatang,
         unitPriceSatang,
         priceCondition,
       });

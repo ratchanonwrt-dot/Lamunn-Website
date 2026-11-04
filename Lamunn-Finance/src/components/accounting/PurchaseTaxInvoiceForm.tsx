@@ -412,6 +412,8 @@ export default function PurchaseTaxInvoiceForm({
                         className={field}
                       />
                       <input
+                        type="number"
+                        step="0.0001"
                         inputMode="decimal"
                         value={line.quantity}
                         onChange={(event) => setForm((current) => ({
@@ -428,7 +430,8 @@ export default function PurchaseTaxInvoiceForm({
                           ...current,
                           lineItems: current.lineItems.map((item) => item.key === line.key ? { ...item, unitPrice: event.target.value } : item),
                         }))}
-                        placeholder="0.00"
+                        placeholder="0.0000"
+                        aria-label={`ราคาต่อหน่วยบรรทัดที่ ${index + 1} (ทศนิยมไม่เกิน 4 ตำแหน่ง)`}
                         className={`${field} disabled:bg-gray-100`}
                       />
                       <div className="text-right">

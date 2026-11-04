@@ -14,7 +14,7 @@ import {
   PurchaseTaxAccountAllocationError,
   resolvePurchaseTaxAccountAllocations,
 } from "@/lib/accounting/purchaseTaxAccountAllocation";
-import { buildPurchasePaymentJournalLines, purchasePaymentEntryDescriptionFor } from "@/lib/accounting/purchaseWhtJournals";
+import { buildPurchasePaymentJournalLines, purchaseJournalMemo, purchasePaymentEntryDescriptionFor } from "@/lib/accounting/purchaseWhtJournals";
 import { summarizePurchaseTaxLineItems } from "@/lib/accounting/purchaseTaxLineItems";
 
 /** บันทึกใบกำกับภาษีซื้อ (ใบที่ผู้ขายออกให้เรา) — ตัวป้อนข้อมูลของรายงานภาษีซื้อและ ภ.พ.30
@@ -82,6 +82,7 @@ export async function POST(req: NextRequest) {
     throw e;
   }
   const whtEnabled = Boolean(String(whtIncomeType ?? "").trim());
+  const journalNote = String(note ?? "").trim() || null;
   const allowedIncomeType = WHT_INCOME_TYPES.some(
     (item) => item.label === String(whtIncomeType ?? "").trim() && item.common !== "PND3"
   );
@@ -169,6 +170,7 @@ export async function POST(req: NextRequest) {
             whtSatang: whtEnabled ? wht.amount : 0,
             partnerId: partnerId || null,
             description,
+            note: journalNote,
             invoiceNo: String(invoiceNo).trim(),
           })
         : null;
@@ -178,20 +180,20 @@ export async function POST(req: NextRequest) {
         description: `${isCreditNote ? "ใบลดหนี้" : "ซื้อ"} ${String(vendorName).trim()} ใบกำกับ ${String(invoiceNo).trim()}`,
         userId: staff.staffId,
         lines: paymentDrafts ? paymentDrafts.purchaseLines : isCreditNote ? [
-          ...accountAllocations.map((line) => ({
+          ...accountAllocations.map((line, index) => ({
             accountId: line.accountId,
             credit: toBaht(line.amountSatang),
             partnerId: partnerId || null,
-            memo: description || undefined,
+            memo: index === 0 ? purchaseJournalMemo(description, journalNote) : description || undefined,
           })),
           { accountId: inputVatAccount.id, credit: toBaht(absoluteVat), memo: "ลดภาษีซื้อ", docNo: String(invoiceNo).trim() },
-          { accountId: paymentAccountId, debit: toBaht(absoluteTotal), partnerId: partnerId || null, memo: "ลดเจ้าหนี้/เงินรับคืน" },
+          { accountId: paymentAccountId, debit: toBaht(absoluteTotal), partnerId: partnerId || null, memo: purchaseJournalMemo("ลดเจ้าหนี้/เงินรับคืน", journalNote) },
         ] : [
-          ...accountAllocations.map((line) => ({
+          ...accountAllocations.map((line, index) => ({
             accountId: line.accountId,
             debit: toBaht(line.amountSatang),
             partnerId: partnerId || null,
-            memo: description || undefined,
+            memo: index === 0 ? purchaseJournalMemo(description, journalNote) : description || undefined,
           })),
           { accountId: inputVatAccount.id, debit: toBaht(vat), memo: "ภาษีซื้อ", docNo: String(invoiceNo).trim() },
           { accountId: paymentAccountId, credit: toBaht(base + vat), partnerId: partnerId || null },

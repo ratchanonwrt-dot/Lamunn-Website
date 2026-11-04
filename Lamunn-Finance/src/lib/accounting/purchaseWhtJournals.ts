@@ -4,6 +4,13 @@ import { toBaht } from "./money";
 export const purchasePaymentEntryDescriptionFor = (vendorName: string, invoiceNo: string) =>
   `จ่าย ${vendorName} ใบกำกับ ${invoiceNo}`;
 
+export function purchaseJournalMemo(base: string | null | undefined, note: string | null | undefined): string | undefined {
+  const baseText = String(base ?? "").trim();
+  const noteText = String(note ?? "").trim();
+  if (!noteText) return baseText || undefined;
+  return `${baseText ? `${baseText} · ` : ""}หมายเหตุ: ${noteText}`;
+}
+
 export function buildPurchasePaymentJournalLines(input: {
   allocations: { accountId: string; amountSatang: number }[];
   inputVatAccountId: string;
@@ -15,6 +22,7 @@ export function buildPurchasePaymentJournalLines(input: {
   whtSatang?: number;
   partnerId?: string | null;
   description?: string | null;
+  note?: string | null;
   invoiceNo: string;
 }): { purchaseLines: DraftLine[]; paymentLines: DraftLine[] } {
   const whtSatang = input.whtSatang ?? 0;
@@ -29,11 +37,12 @@ export function buildPurchasePaymentJournalLines(input: {
 
   return {
     purchaseLines: [
-      ...input.allocations.map((line) => ({
+      ...input.allocations.map((line, index) => ({
         accountId: line.accountId,
         debit: toBaht(line.amountSatang),
         partnerId: input.partnerId ?? null,
-        memo: input.description || undefined,
+        // แสดงหมายเหตุครั้งเดียวในใบซื้อ แม้ผู้ใช้แบ่งค่าใช้จ่ายหลายบัญชี
+        memo: index === 0 ? purchaseJournalMemo(input.description, input.note) : input.description || undefined,
       })),
       { accountId: input.inputVatAccountId, debit: toBaht(input.vatSatang), memo: "ภาษีซื้อ", docNo: input.invoiceNo },
       {
@@ -54,7 +63,11 @@ export function buildPurchasePaymentJournalLines(input: {
         accountId: input.paymentAccountId,
         credit: toBaht(netPaymentSatang),
         partnerId: input.partnerId ?? null,
-        memo: whtSatang > 0 ? "จ่ายสุทธิหลังหักภาษี ณ ที่จ่าย" : "จ่ายชำระเจ้าหนี้",
+        // ใบจ่ายต้องค้นหมายเหตุจากหน้าใบกำกับได้โดยไม่ทำให้ข้อความตัดเจ้าหนี้สูญหาย
+        memo: purchaseJournalMemo(
+          whtSatang > 0 ? "จ่ายสุทธิหลังหักภาษี ณ ที่จ่าย" : "จ่ายชำระเจ้าหนี้",
+          input.note,
+        ),
       },
       ...(whtSatang > 0 && input.whtPayableAccountId
         ? [{
