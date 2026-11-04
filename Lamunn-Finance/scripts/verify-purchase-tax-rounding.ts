@@ -18,8 +18,12 @@ async function main() {
   try {
     const upward = addVatExclusive(1_000_500, 0.07, "UP");
     const downward = addVatExclusive(1_000_500, 0.07, "DOWN");
+    const normal = addVatExclusive(1_000_500, 0.07, "NEAREST");
     if (upward.vat !== 70_036 || downward.vat !== 70_034) {
       throw new Error(`ผลปัดภาษีไม่ถูกต้อง: ขึ้น=${upward.vat} ลง=${downward.vat}`);
+    }
+    if (normal.vat !== 70_035 || normal.base + normal.vat !== 1_070_535) {
+      throw new Error(`ผลปัดภาษีปกติไม่ถูกต้อง: ภาษี=${normal.vat} รวม=${normal.base + normal.vat}`);
     }
     if (upward.base + upward.vat !== 1_070_536 || downward.base + downward.vat !== 1_070_534) {
       throw new Error(`ยอดรวมไม่ถูกต้อง: ขึ้น=${upward.base + upward.vat} ลง=${downward.base + downward.vat}`);
