@@ -141,6 +141,7 @@ export default function PurchaseTaxInvoiceForm({
   const enteredBase = signedInputToSatang(form.baseAmount);
   const isCreditNote = enteredBase < 0;
   const { base, vat } = addVatExclusive(enteredBase, vatRate, form.vatRounding);
+  const vatRateLabel = (vatRate * 100).toLocaleString("th-TH", { maximumFractionDigits: 2 });
   const whtEnabled = Boolean(form.whtIncomeType);
   const whtBase = form.whtBaseAmount.trim() ? toSatang(form.whtBaseAmount) : base;
   const wht = withholdingFromPercent(whtBase, form.whtRatePercent);
@@ -265,12 +266,14 @@ export default function PurchaseTaxInvoiceForm({
             placeholder="เช่น 1000 หรือ (1000)"
             className={field}
           />
+          <span className="mt-1 block text-[11px] text-gray-500">กรอกยอดนี้ แล้วระบบคำนวณภาษี {vatRateLabel}% ให้อัตโนมัติ</span>
         </label>
         <label className={label}>
-          ภาษี
+          ภาษี {vatRateLabel}%
           <input
             readOnly
             value={fmtSatang(vat, { zeroDash: false })}
+            aria-live="polite"
             className={`${field} bg-gray-50 tabular-nums`}
           />
         </label>
@@ -281,8 +284,8 @@ export default function PurchaseTaxInvoiceForm({
             onChange={(e) => setForm({ ...form, vatRounding: e.target.value as VatRounding })}
             className={field}
           >
-            <option value="UP">เพิ่ม 0.01 บาท</option>
-            <option value="DOWN">ลด 0.01 บาท</option>
+            <option value="UP">ปัดขึ้น 0.01 บาท</option>
+            <option value="DOWN">ปัดลง 0.01 บาท</option>
           </select>
         </label>
         <label className={label}>
@@ -290,6 +293,7 @@ export default function PurchaseTaxInvoiceForm({
           <input
             readOnly
             value={fmtSatang(total, { zeroDash: false })}
+            aria-live="polite"
             className={`${field} bg-gray-50 font-medium tabular-nums`}
           />
         </label>
