@@ -63,7 +63,7 @@ export default function PurchaseTaxInvoiceForm({
     vendorBranchTag: "สำนักงานใหญ่",
     description: "ค่าสินค้า/บริการ",
     baseAmount: "",
-    vatRounding: "UP" as VatRounding,
+    vatRounding: "NEAREST" as VatRounding,
     isClaimable: true,
     note: "",
     expenseLines: [{ key: "expense-1", accountId: "", amount: "" }],
@@ -278,12 +278,13 @@ export default function PurchaseTaxInvoiceForm({
           />
         </label>
         <label className={label}>
-          การปัดเศษภาษี
+          ปัดทศนิยมของภาษี {vatRateLabel}%
           <select
             value={form.vatRounding}
             onChange={(e) => setForm({ ...form, vatRounding: e.target.value as VatRounding })}
             className={field}
           >
+            <option value="NEAREST">ปกติ</option>
             <option value="UP">ปัดขึ้น 0.01 บาท</option>
             <option value="DOWN">ปัดลง 0.01 บาท</option>
           </select>
