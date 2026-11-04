@@ -1227,6 +1227,8 @@ model AccPurchaseTaxInvoice {
   vendorBranchTag String? // "สำนักงานใหญ่" หรือเลขที่สาขา 5 หลัก
 
   description String  @default("ค่าสินค้า/บริการ")
+  // รายการสินค้า/บริการแยกบรรทัด เก็บ snapshot เพื่อให้ตรวจย้อนหลังได้แม้ข้อมูลสินค้าเปลี่ยนภายหลัง
+  lineItems   Json?   @map("line_items")
   baseAmount  Decimal @db.Decimal(15, 2) // มูลค่าสินค้า/บริการ (ก่อน VAT)
   vatAmount   Decimal @db.Decimal(15, 2) // ภาษีซื้อ
   totalAmount Decimal @db.Decimal(15, 2)
