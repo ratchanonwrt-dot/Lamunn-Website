@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@lamunn/db-finance";
 import { requireSectionPage } from "@/lib/permissions";
 import { monthRange } from "@/lib/dates";
-import { formatThaiDate, thaiMonthLabel } from "@/lib/format";
+import { thaiMonthLabel } from "@/lib/format";
 import { getAllSettings } from "@/lib/settings";
 import StatementShell from "@/components/accounting/StatementShell";
 import LedgerFilterBar from "@/components/accounting/LedgerFilterBar";
@@ -10,6 +10,7 @@ import { fmtSatang, toSatang } from "@/lib/accounting/money";
 import { getLedgerAccounts } from "@/lib/accounting/refData";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 import { naturalAmount } from "@/lib/accounting/reports";
+import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 import type { AccountType } from "@lamunn/db-finance";
 
 export const dynamic = "force-dynamic";
@@ -243,7 +244,7 @@ async function LedgerDetail({
               </tr>
               {rows.map((r) => (
                 <tr key={r.line.id} className="border-b border-gray-50 hover:bg-gray-50/60">
-                  <td className="py-1.5 pr-3 font-mono text-xs text-gray-500">{formatThaiDate(r.line.date)}</td>
+                  <td className="py-1.5 pr-3 font-mono text-xs text-gray-500">{formatAccountingDate(r.line.date)}</td>
                   <td className="py-1.5 px-3">
                     <Link
                       href={`/accounting/journal?year=${year}&month=${month}`}

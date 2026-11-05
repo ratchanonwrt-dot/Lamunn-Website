@@ -6,16 +6,21 @@ import clsx from "clsx";
 import { Copy, Download } from "lucide-react";
 import type { LivePayout } from "@/lib/accounting/livePayouts";
 import { formatBaht } from "@/lib/format";
+import AccountingDateInput from "./AccountingDateInput";
+import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 
 const inputCls = "rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const thaiDays = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์"];
 
 function fmtDate(iso: string): string {
   const d = new Date(iso + "T00:00:00Z");
-  return `${thaiDays[d.getUTCDay()]} ${d.toLocaleDateString("th-TH", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" })}`;
+  return `${thaiDays[d.getUTCDay()]} ${formatAccountingDate(iso)}`;
 }
 function fmtDT(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" }) : "";
+  if (!iso) return "";
+  const bangkok = new Date(new Date(iso).getTime() + 7 * 60 * 60 * 1_000);
+  const time = `${String(bangkok.getUTCHours()).padStart(2, "0")}:${String(bangkok.getUTCMinutes()).padStart(2, "0")}`;
+  return `${formatAccountingDate(bangkok)} ${time}`;
 }
 
 export default function LivePayoutsPanel({ rows, error, from, to, status, canEdit }: { rows: LivePayout[]; error: string | null; from: string; to: string; status: string; canEdit: boolean }) {
@@ -76,11 +81,11 @@ export default function LivePayoutsPanel({ rows, error, from, to, status, canEdi
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500">ตั้งแต่</label>
-          <input type="date" lang="en-GB" value={f} onChange={(e) => setF(e.target.value)} className={inputCls} />
+          <AccountingDateInput value={f} onChange={setF} className={inputCls} />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500">ถึง</label>
-          <input type="date" lang="en-GB" value={t} onChange={(e) => setT(e.target.value)} className={inputCls} />
+          <AccountingDateInput value={t} onChange={setT} className={inputCls} />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500">สถานะ</label>

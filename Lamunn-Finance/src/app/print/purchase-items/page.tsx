@@ -15,7 +15,7 @@ export default async function PurchaseItemsPrintPage({ searchParams }: { searchP
   const report = await loadPurchaseItemReport(filters.start, filters.end, filters.category);
   const settings = await getAllSettings();
   const query = new URLSearchParams({ from: filters.from, to: filters.to, ...(filters.category ? { category: filters.category } : {}) }).toString();
-  const periodLabel = `${filters.from.split("-").reverse().join("/")} – ${filters.to.split("-").reverse().join("/")}`;
+  const periodLabel = `${formatAccountingDate(filters.from)} – ${formatAccountingDate(filters.to)}`;
 
   return (
     <div>

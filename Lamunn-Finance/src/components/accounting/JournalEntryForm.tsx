@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import AccountCombobox from "@/components/accounting/AccountCombobox";
+import AccountingDateInput from "@/components/accounting/AccountingDateInput";
 import PartnerCombobox from "@/components/accounting/PartnerCombobox";
 import { useServerRefresh } from "@/components/accounting/useServerRefresh";
 import { signedInputToSatang } from "@/lib/accounting/money";
@@ -199,11 +200,9 @@ export default function JournalEntryForm({
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <label className="text-xs text-gray-500">
           วันที่
-          <input
-            type="date"
-            lang="en-GB"
+          <AccountingDateInput
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={setDate}
             className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900"
           />
         </label>

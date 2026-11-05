@@ -6,6 +6,7 @@ import { Loader2, Search, X } from "lucide-react";
 import PartnerCombobox from "./PartnerCombobox";
 import { thaiMonthLabel } from "@/lib/format";
 import { JOURNAL_TYPE_OPTIONS } from "@/lib/accounting/journalTypes";
+import AccountingDateInput from "./AccountingDateInput";
 
 interface PartnerOption {
   id: string;
@@ -194,31 +195,5 @@ export default function JournalFilterBar({
  * ตรงนี้จะส่งค่าออกเมื่อปีดูเป็นปีจริงแล้ว (เลือกจากปฏิทินก็เข้าเงื่อนไขนี้ทันที)
  * ส่วนการล้างค่าเป็นช่องว่างจะรอจนออกจากช่องหรือกด Enter เพราะระหว่างพิมพ์เบราว์เซอร์ก็ส่ง "" มาเหมือนกัน */
 function DateField({ value, onCommit, className }: { value: string; onCommit: (v: string) => void; className: string }) {
-  const [local, setLocal] = useState(value);
-
-  useEffect(() => {
-    setLocal(value);
-  }, [value]);
-
-  const commit = (v: string) => {
-    if (v !== value) onCommit(v);
-  };
-
-  return (
-    <input
-      type="date"
-      lang="en-GB"
-      value={local}
-      onChange={(e) => {
-        const v = e.target.value;
-        setLocal(v);
-        if (v && Number(v.slice(0, 4)) >= 1900) commit(v);
-      }}
-      onBlur={() => commit(local)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") commit(local);
-      }}
-      className={className}
-    />
-  );
+  return <AccountingDateInput value={value} onChange={onCommit} className={className} />;
 }

@@ -16,6 +16,7 @@ import {
 } from "@/lib/accounting/purchaseTaxAccountAllocation";
 import { buildPurchasePaymentJournalLines, purchaseEntryDescriptionFor, purchaseJournalMemo, purchasePaymentEntryDescriptionFor } from "@/lib/accounting/purchaseWhtJournals";
 import { summarizePurchaseTaxLineItems } from "@/lib/accounting/purchaseTaxLineItems";
+import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 
 /** บันทึกใบกำกับภาษีซื้อ (ใบที่ผู้ขายออกให้เรา) — ตัวป้อนข้อมูลของรายงานภาษีซื้อและ ภ.พ.30
  * เลขที่ใบกำกับมาจากผู้ขาย ไม่ได้รันเอง จึงรับค่าจากผู้กรอกโดยตรง */
@@ -129,7 +130,7 @@ export async function POST(req: NextRequest) {
   });
   if (duplicate) {
     return NextResponse.json(
-      { error: `ใบกำกับเลขที่ ${invoiceNo} ของผู้ขายรายนี้ถูกบันทึกไว้แล้ว (วันที่ ${duplicate.invoiceDate.toISOString().slice(0, 10)})` },
+      { error: `ใบกำกับเลขที่ ${invoiceNo} ของผู้ขายรายนี้ถูกบันทึกไว้แล้ว (วันที่ ${formatAccountingDate(duplicate.invoiceDate)})` },
       { status: 400 }
     );
   }

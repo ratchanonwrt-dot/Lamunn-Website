@@ -2,12 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@lamunn/db-finance";
 import { requireSectionPage } from "@/lib/permissions";
-import { formatThaiDate } from "@/lib/format";
 import { getAllSettings } from "@/lib/settings";
 import { fmtSatang, toSatang } from "@/lib/accounting/money";
 import { bahtTextFromSatang } from "@/lib/accounting/bahtText";
 import PrintButton from "@/components/accounting/PrintButton";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
+import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +90,7 @@ export default async function JournalPrintPage({ params }: { params: { id: strin
         {/* ข้อมูลหัวใบ */}
         <div className="mt-4 grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
           <Field label="เลขที่" value={entry.entryNo} mono />
-          <Field label="วันที่" value={formatThaiDate(entry.date)} />
+          <Field label="วันที่" value={formatAccountingDate(entry.date)} />
           <Field label={entry.journalType === "RECEIPT" ? "รับจาก" : "จ่ายให้"} value={partner ? formatPartnerDisplayName(partner.name, partner.branchTag) : "-"} />
           <Field label="เลขประจำตัวผู้เสียภาษี" value={partner?.taxId ?? "-"} mono />
           <div className="sm:col-span-2">

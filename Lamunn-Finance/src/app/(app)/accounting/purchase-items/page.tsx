@@ -6,7 +6,8 @@ import { loadPurchaseItemReport, purchaseItemReportFilters, PURCHASE_ITEM_CATEGO
 import { fmtUnitPriceSubSatang } from "@/lib/accounting/purchaseTaxLineItems";
 import StatementShell from "@/components/accounting/StatementShell";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
-import { ACCOUNTING_DATE_INPUT_LANG, formatAccountingDate } from "@/lib/accounting/dateFormat";
+import { formatAccountingDate } from "@/lib/accounting/dateFormat";
+import AccountingDateInput from "@/components/accounting/AccountingDateInput";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export default async function PurchaseItemsPage({ searchParams }: { searchParams
   const filters = purchaseItemReportFilters(searchParams);
   const [settings, report] = await Promise.all([getAllSettings(), loadPurchaseItemReport(filters.start, filters.end, filters.category)]);
   const query = queryString(filters);
-  const periodLabel = `${filters.from.split("-").reverse().join("/")} – ${filters.to.split("-").reverse().join("/")}`;
+  const periodLabel = `${formatAccountingDate(filters.from)} – ${formatAccountingDate(filters.to)}`;
 
   return (
     <div>
@@ -34,8 +35,8 @@ export default async function PurchaseItemsPage({ searchParams }: { searchParams
 
       <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <form method="get" className="grid items-end gap-3 md:grid-cols-[1fr_1fr_1.3fr_auto]">
-          <label className="text-sm text-gray-600">วันที่เริ่มต้น<input type="date" lang={ACCOUNTING_DATE_INPUT_LANG} name="from" defaultValue={filters.from} className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900" /></label>
-          <label className="text-sm text-gray-600">วันที่สิ้นสุด<input type="date" lang={ACCOUNTING_DATE_INPUT_LANG} name="to" defaultValue={filters.to} className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900" /></label>
+          <label className="text-sm text-gray-600">วันที่เริ่มต้น<AccountingDateInput name="from" defaultValue={filters.from} className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900" /></label>
+          <label className="text-sm text-gray-600">วันที่สิ้นสุด<AccountingDateInput name="to" defaultValue={filters.to} className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900" /></label>
           <label className="text-sm text-gray-600">หมวด (พิมพ์เพื่อกรอง)<input name="category" list="purchase-item-categories" defaultValue={filters.category} placeholder="ทุกหมวด" className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900" /><datalist id="purchase-item-categories">{Object.values(PURCHASE_ITEM_CATEGORY_LABELS).map((label) => <option key={label} value={label} />)}</datalist></label>
           <button className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">แสดงรายงาน</button>
         </form>
