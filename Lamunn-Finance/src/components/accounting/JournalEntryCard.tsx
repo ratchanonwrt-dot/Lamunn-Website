@@ -56,7 +56,7 @@ export default function JournalEntryCard({
             <span className="font-mono text-sm font-semibold text-gray-900">{entry.entryNo}</span>
             <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_STYLE[status]}`}>{STATUS_LABEL[status]}</span>
             <span className="text-xs font-bold text-black">{entry.typeLabel}</span>
-            <span className="text-xs text-gray-400">{entry.dateLabel}</span>
+            <span className="text-xs font-bold text-black">{entry.dateLabel}</span>
           </div>
           <p className="mt-0.5 text-sm font-bold text-gray-600">{entry.description}</p>
         </div>
