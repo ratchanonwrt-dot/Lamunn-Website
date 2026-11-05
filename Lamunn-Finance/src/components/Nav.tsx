@@ -228,14 +228,17 @@ function NavLinkRow({
   pathname,
   colorful = false,
   neutral = false,
+  colorfulTextOnly = false,
 }: {
   link: NavLink;
   pathname: string;
   colorful?: boolean;
   neutral?: boolean;
+  colorfulTextOnly?: boolean;
 }) {
   const Icon = link.icon;
   const active = isNavLinkActive(pathname, link);
+  const textColor = link.color.split(" ").find((className) => className.startsWith("text-"));
   return (
     <Link
       href={link.href}
@@ -243,10 +246,17 @@ function NavLinkRow({
       // ไม่ปิด prefetch — Next.js จะโหลด loading.tsx ของหน้าปลายทางไว้ล่วงหน้าตอนลิงก์อยู่ในจอ
       // พอกดจึงขึ้น skeleton ทันทีแทนที่จะค้างรอเซิร์ฟเวอร์ตอบก่อน (นี่คือความต่างจากเว็บ HRM ที่กดแล้ววิ่งเลย)
       // ใช้ได้คุ้มเพราะเมนูยุบเป็นหมวดอยู่แล้ว มีแค่ลิงก์ของหมวดที่กางอยู่เท่านั้นที่ถูก prefetch
-      // กลุ่มที่ยังใช้สีประจำรายการคงรูปแบบเดิม ส่วนรีพอร์ตใช้โทนกลางและกรอบระบุหน้าที่เปิดอยู่
+      // รีพอร์ตใช้เฉพาะสีตัวอักษร เพื่อแยกรายการให้อ่านง่ายโดยไม่ทำให้เมนูกลับเป็นป้ายสีทั้งแถว
       className={clsx(
         "group flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13.5px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
-        neutral
+        colorfulTextOnly
+          ? [
+              textColor,
+              active
+                ? "bg-gray-100 font-semibold ring-1 ring-inset ring-gray-200"
+                : "font-medium hover:bg-gray-100 hover:brightness-90",
+            ]
+          : neutral
           ? active
             ? "bg-gray-100 font-semibold text-gray-900 ring-1 ring-inset ring-gray-200"
             : "font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
@@ -260,7 +270,9 @@ function NavLinkRow({
         strokeWidth={2}
         className={clsx(
           "shrink-0",
-          neutral
+          colorfulTextOnly
+            ? "text-current"
+            : neutral
             ? active
               ? "text-gray-700"
               : "text-gray-400 group-hover:text-gray-600"
@@ -321,6 +333,18 @@ function NavGroup({ title, tone, links, pathname, colorful = false }: { title: s
 function NavSubGroup({ group, pathname, depth = 0 }: { group: NavMenuGroup; pathname: string; depth?: number }) {
   const hasActive = group.items.some((item) => menuItemHasActive(pathname, item));
   const [open, setOpen] = useState(hasActive);
+  const groupTextColor =
+    group.label === "งบการเงิน"
+      ? "text-emerald-700"
+      : group.label === "บัญชี"
+        ? "text-brand-700"
+        : "text-violet-700";
+  const groupDotColor =
+    group.label === "งบการเงิน"
+      ? "bg-emerald-500"
+      : group.label === "บัญชี"
+        ? "bg-brand-500"
+        : "bg-violet-500";
 
   useEffect(() => {
     if (hasActive) setOpen(true);
@@ -333,23 +357,24 @@ function NavSubGroup({ group, pathname, depth = 0 }: { group: NavMenuGroup; path
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         className={clsx(
-          "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-gray-700 hover:bg-gray-100",
+          "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-gray-100",
+          groupTextColor,
           depth === 0 ? "text-[13px] font-semibold" : "text-[12.5px] font-medium"
         )}
       >
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-gray-400" />
+        <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", groupDotColor)} />
         <span className="flex-1 truncate">{group.label}</span>
-        {hasActive && !open && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-gray-500" />}
+        {hasActive && !open && <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", groupDotColor)} />}
         <ChevronDown
           size={12}
-          className={clsx("shrink-0 text-gray-400 transition-transform", open ? "rotate-0" : "-rotate-90")}
+          className={clsx("shrink-0 text-current opacity-60 transition-transform", open ? "rotate-0" : "-rotate-90")}
         />
       </button>
       {open && (
         <div className="ml-2 mt-0.5 flex flex-col gap-1 border-l border-gray-200 pl-2">
           {group.items.map((item) =>
             isNavLink(item) ? (
-              <NavLinkRow key={item.href} link={item} pathname={pathname} neutral />
+              <NavLinkRow key={item.href} link={item} pathname={pathname} colorfulTextOnly />
             ) : (
               <NavSubGroup key={item.label} group={item} pathname={pathname} depth={depth + 1} />
             )
@@ -369,7 +394,7 @@ function ReportNavGroup({ groups, pathname }: { groups: NavMenuGroup[]; pathname
   }, [hasActive]);
 
   if (groups.length === 0) return null;
-  // รีพอร์ตมีรายการจำนวนมาก จึงใช้สีเทากลางทั้งหมดเพื่อให้ชื่อเมนูอ่านง่ายและไม่แย่งสายตากัน
+  // หัวข้อรีพอร์ตยังใช้โทนกลาง ส่วนหมวดย่อยและรายการใช้สีเพื่อช่วยกวาดสายตา
   const tone = TONES.slate;
 
   return (
