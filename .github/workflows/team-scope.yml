@@ -1,0 +1,63 @@
+# ด่านล็อกขอบเขตตามบัญชี GitHub: บัญชีที่ไม่อยู่ใน FULL_ACCESS แก้ได้เฉพาะส่วน Catering ของ Lamunn-Finance
+#
+# ปฏิเสธเป็นค่าเริ่มต้น เพื่อให้พนักงานคนใหม่ถูกจำกัดทันทีโดยไม่ต้องจำมาเพิ่มชื่อทีหลัง
+# ใช้ pull_request_target เพราะ GitHub รันไฟล์นี้จาก master ไม่ใช่จาก PR — PR จึงแก้ด่านเพื่อหลบไม่ได้
+# ห้ามเพิ่มขั้นตอน checkout/รันโค้ดของ PR ในไฟล์นี้ เพราะโหมดนี้รันด้วยสิทธิ์ของ repo หลัก
+#
+# ต้องตั้ง team-scope เป็น required status check ใน ruleset ของ master ถึงจะบล็อกการ merge ได้จริง
+name: team-scope
+
+on:
+  pull_request_target:
+    branches: [master]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  scope:
+    name: team-scope
+    runs-on: ubuntu-latest
+    steps:
+      - name: ตรวจไฟล์ใน PR ตามสิทธิ์ของบัญชี
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          SENDER: ${{ github.event.sender.login }}
+        run: |
+          set -euo pipefail
+
+          # เจ้าของ repo และทีมบัญชี — ทีมบัญชียังถูกคุมต่อด้วยด่าน accounting-scope
+          FULL_ACCESS=' ratchanonwrt-dot sutineesuw-hue '
+
+          # รายการเดียวกับคำสั่งที่ให้ Codex ของพนักงาน Catering — แก้ที่หนึ่งต้องแก้อีกที่ให้ตรงกัน
+          ALLOWED='^Lamunn-Finance/('\
+          'src/app/\(app\)/catering/'\
+          '|src/app/api/catering/'\
+          '|src/components/catering/'\
+          '|src/lib/catering[^/]*\.ts$'\
+          '|src/lib/pickupOrderItemsTotal\.ts$'\
+          '|scripts/verify-catering-[^/]*\.ts$'\
+          ')'
+
+          # ตรวจคน push ล่าสุดด้วย ไม่งั้นพนักงานจะ push ลง branch ของ PR ที่คนสิทธิ์เต็มเปิดไว้เพื่อหลบด่านได้
+          if [[ "$FULL_ACCESS" == *" $AUTHOR "* && "$FULL_ACCESS" == *" $SENDER "* ]]; then
+            echo "ผ่าน: $AUTHOR / $SENDER มีสิทธิ์เต็ม"
+            exit 0
+          fi
+
+          # รวมชื่อเดิมของไฟล์ที่ถูกย้าย เพราะการย้ายไฟล์ออกจากส่วนต้องห้ามก็คือการแก้ส่วนนั้น
+          gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)' > changed.txt
+          echo "ไฟล์ที่เปลี่ยน:"; cat changed.txt
+
+          if grep -vE "$ALLOWED" changed.txt > outside.txt; then
+            echo "::error::$AUTHOR / $SENDER แก้ได้เฉพาะส่วน Catering — ไฟล์เหล่านี้อยู่นอกขอบเขต ต้องให้เจ้าของ repo ทำเอง:"
+            cat outside.txt
+            exit 1
+          fi
+          echo "ผ่าน: ทุกไฟล์อยู่ในส่วน Catering"
