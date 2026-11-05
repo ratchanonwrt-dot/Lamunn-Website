@@ -394,7 +394,7 @@ function ReportNavGroup({ groups, pathname }: { groups: NavMenuGroup[]; pathname
   }, [hasActive]);
 
   if (groups.length === 0) return null;
-  // หัวข้อรีพอร์ตยังใช้โทนกลาง ส่วนหมวดย่อยและรายการใช้สีเพื่อช่วยกวาดสายตา
+  // ให้ชื่อรีพอร์ตเด่นจากหมวดหลักอื่น แต่คงเส้นนำสายตาเป็นโทนกลางเพื่อไม่แย่งสีกับรายการย่อย
   const tone = TONES.slate;
 
   return (
@@ -406,7 +406,7 @@ function ReportNavGroup({ groups, pathname }: { groups: NavMenuGroup[]; pathname
         className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-gray-100"
       >
         <span className={clsx("h-3.5 w-1 shrink-0 rounded-full", tone.bar)} />
-        <p className={clsx("flex-1 text-[11px] font-semibold uppercase tracking-[0.12em]", tone.title)}>รีพอร์ต</p>
+        <p className="flex-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-pink-700">รีพอร์ต</p>
         {hasActive && !open && <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", tone.bar)} />}
         <ChevronDown
           size={13}
