@@ -9,6 +9,7 @@ import { resolveWhtPayeeAddress } from "@/lib/accounting/withholding";
 import { formatWhtOtherIncomeType } from "@/lib/accounting/whtCertificatePrint";
 import PrintButton from "@/components/accounting/PrintButton";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
+import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ const WHT_PAYER_ADDRESS = "457/2 ถนนประชาราษฎร์ 2 �
 const WHT_PAYER_TAX_ID = "0105568147638";
 
 function dateSlash(date: Date) {
-  return `${String(date.getUTCDate()).padStart(2, "0")}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${date.getUTCFullYear()}`;
+  return formatAccountingDate(date);
 }
 
 function incomeRow(incomeType: string): "2" | "4a" | "4b" | "6" {

@@ -5,6 +5,7 @@ import { useServerRefresh } from "./useServerRefresh";
 import { EllipsisVertical, Plus, Trash2, X } from "lucide-react";
 import PartnerCombobox from "./PartnerCombobox";
 import AccountCombobox from "./AccountCombobox";
+import AccountingDateInput from "./AccountingDateInput";
 import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
 import { addVatExclusive, fmtSatang, signedInputToSatang, toSatang, type VatRounding } from "@/lib/accounting/money";
 import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
@@ -219,13 +220,10 @@ export default function PurchaseTaxInvoiceForm({
         </label>
         <label className={label}>
           วันที่บนใบกำกับ
-          <input
-            type="date"
-            lang="en-GB"
+          <AccountingDateInput
             required
             value={form.invoiceDate}
-            onChange={(e) => {
-              const invoiceDate = e.target.value;
+            onChange={(invoiceDate) => {
               const oldInvoiceMonth = form.invoiceDate.slice(0, 7);
               const newInvoiceMonth = invoiceDate.slice(0, 7);
               const paymentDate = form.paymentDate === form.invoiceDate ? invoiceDate : form.paymentDate;
@@ -712,11 +710,9 @@ export default function PurchaseTaxInvoiceForm({
           <div className="grid gap-3 sm:grid-cols-2">
             <label className={label}>
               วันที่จ่าย
-              <input
-                type="date"
-                lang="en-GB"
+              <AccountingDateInput
                 value={form.paymentDate}
-                onChange={(event) => setForm({ ...form, paymentDate: event.target.value })}
+                onChange={(paymentDate) => setForm({ ...form, paymentDate })}
                 className={field}
               />
             </label>

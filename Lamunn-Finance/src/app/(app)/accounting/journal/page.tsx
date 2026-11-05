@@ -3,13 +3,14 @@ import { prisma } from "@lamunn/db-finance";
 import type { Prisma } from "@lamunn/db-finance";
 import { requireSectionPage } from "@/lib/permissions";
 import { monthRange, parseDateOnly } from "@/lib/dates";
-import { formatThaiDate, thaiMonthLabel } from "@/lib/format";
+import { thaiMonthLabel } from "@/lib/format";
 import JournalEntryCard from "@/components/accounting/JournalEntryCard";
 import JournalFilterBar from "@/components/accounting/JournalFilterBar";
 import { fmtSatang, toSatang } from "@/lib/accounting/money";
 import { isJournalType, JOURNAL_TYPE_LABELS } from "@/lib/accounting/journalTypes";
 import { getPartnerOptions } from "@/lib/accounting/refData";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
+import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 
 export const dynamic = "force-dynamic";
 
@@ -194,7 +195,7 @@ export default async function JournalPage({
                   entryNo: e.entryNo,
                   status: e.status,
                   typeLabel: JOURNAL_TYPE_LABELS[e.journalType],
-                  dateLabel: formatThaiDate(e.date),
+                  dateLabel: formatAccountingDate(e.date),
                   description: e.description,
                   totalLabel: fmtSatang(debit),
                 }}

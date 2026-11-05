@@ -7,6 +7,7 @@ import PartnerCombobox from "./PartnerCombobox";
 import AccountCombobox from "./AccountCombobox";
 import { WHT_INCOME_TYPES, WHT_FORM_LABELS } from "@/lib/accounting/whtTypes";
 import { partnerBranchChoices, resolvePartnerBranchChoice } from "@/lib/accounting/partnerBranchSelection";
+import AccountingDateInput from "./AccountingDateInput";
 
 interface PartnerOption {
   id: string;
@@ -130,7 +131,7 @@ export default function WhtCertificateForm({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className={label}>
           วันที่จ่ายเงิน
-          <input type="date" lang="en-GB" required value={form.payDate} onChange={(e) => setForm({ ...form, payDate: e.target.value })} className={field} />
+          <AccountingDateInput required value={form.payDate} onChange={(payDate) => setForm({ ...form, payDate })} className={field} />
         </label>
         <label className={label}>
           แบบที่ต้องยื่น

@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { PURCHASE_ITEM_CATEGORY_LABELS, type PurchaseItemReport } from "./purchaseItemReport";
 import { formatPartnerDisplayName } from "./partnerDisplay";
+import { formatAccountingDate } from "./dateFormat";
 
 interface PurchaseItemExcelOptions {
   companyName: string;
@@ -10,8 +11,6 @@ interface PurchaseItemExcelOptions {
 }
 
 const HEADERS = ["ลำดับ", "วันที่", "ซัพพลายเออร์", "หมวด", "รายการ", "จำนวน", "ราคาต่อหน่วย"];
-const formatDate = (date: Date) => `${String(date.getUTCDate()).padStart(2, "0")}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${date.getUTCFullYear()}`;
-
 export function buildPurchaseItemWorkbook(report: PurchaseItemReport, options: PurchaseItemExcelOptions): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("PurchaseItems");
@@ -22,7 +21,7 @@ export function buildPurchaseItemWorkbook(report: PurchaseItemReport, options: P
   sheet.mergeCells(2, 1, 2, HEADERS.length);
   sheet.getCell(2, 1).value = "รายงานวัตถุดิบ / บรรจุภัณฑ์ / อื่น ๆ";
   sheet.mergeCells(3, 1, 3, HEADERS.length);
-  sheet.getCell(3, 1).value = `ช่วงวันที่ ${options.from.split("-").reverse().join("/")} – ${options.to.split("-").reverse().join("/")}${options.category ? ` · หมวด ${options.category}` : " · ทุกหมวด"}`;
+  sheet.getCell(3, 1).value = `ช่วงวันที่ ${formatAccountingDate(options.from)} – ${formatAccountingDate(options.to)}${options.category ? ` · หมวด ${options.category}` : " · ทุกหมวด"}`;
   [1, 2, 3].forEach((rowNumber) => {
     const cell = sheet.getCell(rowNumber, 1);
     cell.font = { bold: true, size: rowNumber === 2 ? 14 : 11 };
@@ -43,7 +42,7 @@ export function buildPurchaseItemWorkbook(report: PurchaseItemReport, options: P
     const row = sheet.getRow(index + 6);
     row.values = [
       index + 1,
-      formatDate(item.invoiceDate),
+      formatAccountingDate(item.invoiceDate),
       formatPartnerDisplayName(item.vendorName, item.vendorBranchTag),
       PURCHASE_ITEM_CATEGORY_LABELS[item.category],
       item.description,

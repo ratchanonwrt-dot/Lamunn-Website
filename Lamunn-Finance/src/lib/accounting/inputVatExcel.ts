@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import type { InputVatReport } from "./taxReports";
 import { formatPartnerDisplayName } from "./partnerDisplay";
+import { formatAccountingDate } from "./dateFormat";
 
 /** สร้างไฟล์ Excel รายงานภาษีซื้อ ตามแบบฟอร์มที่ฝ่ายบัญชีใช้ยื่น (ไฟล์ตัวอย่าง "รายงานภาษีซื้อ.xlsx")
  *
@@ -20,8 +21,6 @@ const THAI_MONTHS = ["มกราคม", "กุมภาพันธ์", "�
 
 const HEADERS = ["ลำดับที่", "วัน/เดือน/ปี", "เลขที่ใบกำกับ", "ชื่อผู้จำหน่าย", "เลขผู้เสียภาษี", "สำนักงานใหญ่/สาขา", "มูลค่า", "ภาษีมูลค่าเพิ่ม"];
 const WIDTHS = [8.9, 13.1, 23.3, 58.7, 17.6, 18.6, 13.9, 27.0];
-
-const fmtDate = (d: Date) => `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
 
 export function buildInputVatWorkbook(report: InputVatReport, opts: InputVatExcelOptions): ExcelJS.Workbook {
   const wb = new ExcelJS.Workbook();
@@ -56,7 +55,7 @@ export function buildInputVatWorkbook(report: InputVatReport, opts: InputVatExce
   report.rows.forEach((r, i) => {
     const row = ws.getRow(firstDataRow + i);
     row.getCell(1).value = i + 1;
-    row.getCell(2).value = fmtDate(r.date);
+    row.getCell(2).value = formatAccountingDate(r.date);
     row.getCell(3).value = r.invoiceNo; // ใช้เลขจากเอกสารหรือบรรทัด AI เท่านั้น ห้ามเอาเลขที่ใบสำคัญมาแทน
     row.getCell(4).value = formatPartnerDisplayName(r.vendorName, r.branchTag);
     row.getCell(5).value = r.taxId ?? "";

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useServerRefresh } from "./useServerRefresh";
 import { Plus } from "lucide-react";
 import { CHANNEL_LABELS } from "@/lib/accounting/channels";
+import AccountingDateInput from "./AccountingDateInput";
 
 const CHANNEL_OPTIONS = Object.entries(CHANNEL_LABELS);
 
@@ -78,11 +79,11 @@ export default function TaxInvoiceForm({ branches }: { branches: { id: string; n
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className={label}>
           วันที่ออกใบกำกับ
-          <input type="date" lang="en-GB" required value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} className={field} />
+          <AccountingDateInput required value={form.issueDate} onChange={(issueDate) => setForm({ ...form, issueDate })} className={field} />
         </label>
         <label className={label}>
           วันที่ขายจริง (ตามบิล)
-          <input type="date" lang="en-GB" required value={form.saleDate} onChange={(e) => setForm({ ...form, saleDate: e.target.value })} className={field} />
+          <AccountingDateInput required value={form.saleDate} onChange={(saleDate) => setForm({ ...form, saleDate })} className={field} />
         </label>
         <label className={label}>
           สาขาที่ขาย

@@ -12,6 +12,7 @@ import type { VatRounding } from "./money";
 import { PurchaseTaxAccountAllocationError, resolvePurchaseTaxAccountAllocations, type PurchaseTaxAccountAllocationInput } from "./purchaseTaxAccountAllocation";
 import { WHT_INCOME_TYPES } from "./whtTypes";
 import { nextWhtDocNo } from "./withholding";
+import { formatAccountingDate } from "./dateFormat";
 
 /** แก้ไขใบกำกับภาษีซื้อที่บันทึกไปแล้ว — ใช้กรณีคีย์เลขที่ใบกำกับ/ชื่อ/ยอดผิด
  *
@@ -147,7 +148,7 @@ export async function updatePurchaseInvoice(
     });
     if (duplicate) {
       throw new AccountingError(
-        `ใบกำกับเลขที่ ${invoiceNo} ของผู้ขายรายนี้มีอยู่แล้ว (วันที่ ${duplicate.invoiceDate.toISOString().slice(0, 10)})`
+        `ใบกำกับเลขที่ ${invoiceNo} ของผู้ขายรายนี้มีอยู่แล้ว (วันที่ ${formatAccountingDate(duplicate.invoiceDate)})`
       );
     }
   }

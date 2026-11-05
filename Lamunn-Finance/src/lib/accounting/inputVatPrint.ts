@@ -1,5 +1,6 @@
 import type { InputVatRow } from "./taxReports";
 import { formatPartnerDisplayName } from "./partnerDisplay";
+import { formatAccountingDate } from "./dateFormat";
 
 export const INPUT_VAT_PRINT_HEADERS = [
   "ลำดับ",
@@ -21,19 +22,11 @@ export interface InputVatPrintRow {
   vat: number;
 }
 
-function formatDate(date: Date): string {
-  return [
-    String(date.getUTCDate()).padStart(2, "0"),
-    String(date.getUTCMonth() + 1).padStart(2, "0"),
-    String(date.getUTCFullYear()),
-  ].join("/");
-}
-
 /** แยกการเตรียมแถวออกจากหน้า JSX เพื่อให้พิสูจน์ได้ว่ารายงานพิมพ์ใช้เลขที่ใบกำกับและเงินหน่วยสตางค์โดยไม่แปลงเป็น float */
 export function buildInputVatPrintRows(rows: InputVatRow[]): InputVatPrintRow[] {
   return rows.map((row, index) => ({
     order: index + 1,
-    date: formatDate(row.date),
+    date: formatAccountingDate(row.date),
     invoiceNo: row.invoiceNo || "-",
     vendorName: formatPartnerDisplayName(row.vendorName, row.branchTag),
     taxId: row.taxId ?? "-",
