@@ -10,7 +10,8 @@
 # ลำดับเวลา: migration เสร็จในราว 35 วินาทีหลัง merge ส่วน Vercel build ราว 1 นาที ปกติฐานข้อมูลจึงพร้อมก่อน
 # โค้ดใหม่ขึ้นเว็บ — แต่ไม่ได้รับประกัน ถ้า PR ไหนเพิ่มคอลัมน์ที่โค้ดใหม่ต้องใช้ทันที ให้แยก PR migration ไป merge ก่อน
 #
-# Secrets ที่ต้องตั้งใน GitHub → Settings → Secrets and variables → Actions:
+# Secrets อยู่ใน GitHub → Settings → Environments → db-migrate ซึ่งจำกัดให้ใช้ได้เฉพาะ master — ห้ามเก็บเป็น repository
+# secret เพราะคนที่มีสิทธิ์ Write จะ push workflow ลง branch ตัวเองเพื่ออ่านค่าฐานข้อมูล production ได้
 #   DATABASE_URL   / DIRECT_URL   ค่าเดียวกับใน Lamunn-Finance/.env ของเครื่อง production
 # (VERCEL_TOKEN ไม่ได้ใช้แล้ว ลบทิ้งได้)
 name: deploy-finance
@@ -30,6 +31,7 @@ concurrency:
 jobs:
   migrate:
     runs-on: ubuntu-latest
+    environment: db-migrate
     steps:
       - uses: actions/checkout@v4
 
