@@ -130,7 +130,7 @@ export default function WhtCertificateForm({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className={label}>
           วันที่จ่ายเงิน
-          <input type="date" required value={form.payDate} onChange={(e) => setForm({ ...form, payDate: e.target.value })} className={field} />
+          <input type="date" lang="en-GB" required value={form.payDate} onChange={(e) => setForm({ ...form, payDate: e.target.value })} className={field} />
         </label>
         <label className={label}>
           แบบที่ต้องยื่น

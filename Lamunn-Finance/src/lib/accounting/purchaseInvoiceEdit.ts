@@ -1,12 +1,17 @@
-import { prisma } from "@lamunn/db-finance";
+import { prisma, Prisma } from "@lamunn/db-finance";
 import { parseDateOnly } from "@/lib/dates";
 import { getAllSettings } from "@/lib/settings";
 import { splitVatInclusive, addVatExclusive, signedInputToSatang, toBaht, toSatang } from "./money";
-import { AccountingError, postEntry, unpostEntry, updateEntry } from "./post";
+import { AccountingError, createEntry, postEntry, unpostEntry, updateEntry, voidEntry } from "./post";
 import { SYSTEM_ACCOUNTS } from "./chartOfAccounts";
 import { withholdingFromPercent } from "./withholdingMath";
 import { parsePurchaseTaxClaimPeriod } from "./purchaseTaxClaimPeriod";
-import { purchaseEntryDescriptionFor, purchasePaymentEntryDescriptionFor } from "./purchaseWhtJournals";
+import { buildPurchasePaymentJournalLines, purchaseEntryDescriptionFor, purchaseJournalMemo, purchasePaymentEntryDescriptionFor } from "./purchaseWhtJournals";
+import { summarizePurchaseTaxLineItems } from "./purchaseTaxLineItems";
+import type { VatRounding } from "./money";
+import { PurchaseTaxAccountAllocationError, resolvePurchaseTaxAccountAllocations, type PurchaseTaxAccountAllocationInput } from "./purchaseTaxAccountAllocation";
+import { WHT_INCOME_TYPES } from "./whtTypes";
+import { nextWhtDocNo } from "./withholding";
 
 /** แก้ไขใบกำกับภาษีซื้อที่บันทึกไปแล้ว — ใช้กรณีคีย์เลขที่ใบกำกับ/ชื่อ/ยอดผิด
  *
@@ -25,12 +30,22 @@ export interface PurchaseInvoicePatch {
   vendorName?: string;
   vendorTaxId?: string | null;
   vendorBranchTag?: string | null;
+  vendorAddress?: string | null;
+  partnerId?: string | null;
   description?: string;
   note?: string | null;
   isClaimable?: boolean;
   /** ส่งมาเฉพาะตอนต้องการเปลี่ยนยอด — ระบบจะแยก ฐาน/VAT ใหม่ตามอัตราในตั้งค่า */
   amount?: string | number;
   amountIncludesVat?: boolean;
+  vatRounding?: VatRounding;
+  lineItems?: unknown;
+  expenseLines?: PurchaseTaxAccountAllocationInput[];
+  paymentDate?: string;
+  paymentAccountId?: string;
+  whtIncomeType?: string;
+  whtRatePercent?: string | number;
+  whtBaseAmount?: string | number;
 }
 
 export const entryDescriptionFor = (vendorName: string, invoiceNo: string, isCreditNote = false, note?: string | null) =>
@@ -55,6 +70,10 @@ export async function updatePurchaseInvoice(
   const vendorName = patch.vendorName !== undefined ? str(patch.vendorName) : current.vendorName;
   const vendorTaxId = patch.vendorTaxId !== undefined ? str(patch.vendorTaxId) || null : current.vendorTaxId;
   const vendorBranchTag = patch.vendorBranchTag !== undefined ? str(patch.vendorBranchTag) || null : current.vendorBranchTag;
+  const vendorAddress = patch.vendorAddress !== undefined
+    ? str(patch.vendorAddress) || null
+    : current.whtCertificate?.payeeAddress ?? null;
+  const partnerId = patch.partnerId !== undefined ? str(patch.partnerId) || null : current.partnerId;
   const description = patch.description !== undefined ? str(patch.description) || "ค่าสินค้า/บริการ" : current.description;
   const note = patch.note !== undefined ? str(patch.note) || null : current.note;
   const isClaimable = patch.isClaimable !== undefined ? patch.isClaimable !== false : current.isClaimable;
@@ -67,16 +86,37 @@ export async function updatePurchaseInvoice(
 
   let base = toSatang(current.baseAmount);
   let vat = toSatang(current.vatAmount);
-  if (patch.amount !== undefined && str(patch.amount) !== "") {
+  let normalizedLineItems: Prisma.InputJsonValue | typeof Prisma.JsonNull | undefined;
+  const vatRate = opts.vatRate ?? Number((await getAllSettings()).vatRate);
+  if (patch.lineItems !== undefined) {
+    const rounding = patch.vatRounding === "UP" || patch.vatRounding === "DOWN" ? patch.vatRounding : "NEAREST";
+    const summary = summarizePurchaseTaxLineItems(patch.lineItems, vatRate, rounding);
+    if (summary.errors.length > 0) throw new AccountingError(summary.errors[0]);
+    if (summary.hasItems) {
+      base = summary.baseSatang;
+      vat = summary.vatSatang;
+      normalizedLineItems = summary.items as unknown as Prisma.InputJsonValue;
+    } else {
+      normalizedLineItems = Prisma.JsonNull;
+    }
+  }
+  if (normalizedLineItems === undefined || normalizedLineItems === Prisma.JsonNull) {
+    if (patch.amount !== undefined && str(patch.amount) !== "") {
     const amountSatang = signedInputToSatang(patch.amount);
     if (amountSatang === 0) throw new AccountingError("ยอดเงินต้องไม่เป็น 0");
-    const vatRate = opts.vatRate ?? Number((await getAllSettings()).vatRate);
-    ({ base, vat } = patch.amountIncludesVat === false ? addVatExclusive(amountSatang, vatRate) : splitVatInclusive(amountSatang, vatRate));
+      const rounding = patch.vatRounding === "UP" || patch.vatRounding === "DOWN" ? patch.vatRounding : "NEAREST";
+      ({ base, vat } = patch.amountIncludesVat === false ? addVatExclusive(amountSatang, vatRate, rounding) : splitVatInclusive(amountSatang, vatRate));
+    }
   }
 
   const amountChanged = base !== toSatang(current.baseAmount) || vat !== toSatang(current.vatAmount);
   const dateChanged = invoiceDate.getTime() !== current.invoiceDate.getTime();
-  const identityChanged = invoiceNo !== current.invoiceNo || vendorName !== current.vendorName || vendorTaxId !== current.vendorTaxId;
+  const identityChanged = invoiceNo !== current.invoiceNo
+    || vendorName !== current.vendorName
+    || vendorTaxId !== current.vendorTaxId
+    || vendorBranchTag !== current.vendorBranchTag
+    || partnerId !== current.partnerId
+    || note !== current.note;
   const linkedWht = current.whtCertificate;
   const oldBase = toSatang(current.baseAmount);
   const isCreditNote = base < 0;
@@ -134,6 +174,102 @@ export async function updatePurchaseInvoice(
         })
       : null
   );
+  const hasFullAccountingPatch = patch.expenseLines !== undefined;
+  let finalEntryId = current.entryId;
+
+  if (hasFullAccountingPatch) {
+    const postedEntry = [entry, paymentEntry].find((item) => item?.status === "POSTED");
+    if (postedEntry) {
+      throw new AccountingError(`ใบสำคัญ ${postedEntry.entryNo} ผ่านรายการแล้ว — ไปกด "ยกเลิกผ่านรายการ" ก่อน จึงจะแก้ส่วนลงบัญชีได้`);
+    }
+    let allocations: ReturnType<typeof resolvePurchaseTaxAccountAllocations>;
+    try {
+      allocations = resolvePurchaseTaxAccountAllocations(patch.expenseLines, base);
+    } catch (error) {
+      if (error instanceof PurchaseTaxAccountAllocationError) throw new AccountingError(error.message);
+      throw error;
+    }
+    const paymentAccountId = str(patch.paymentAccountId);
+    const paymentDate = patch.paymentDate ? parseDateOnly(patch.paymentDate) : invoiceDate;
+    const whtIncomeType = str(patch.whtIncomeType);
+    const whtEnabled = Boolean(whtIncomeType);
+    const allowedIncomeType = WHT_INCOME_TYPES.some((item) => item.label === whtIncomeType && item.common !== "PND3");
+    const editedWhtBase = str(patch.whtBaseAmount) ? toSatang(patch.whtBaseAmount) : base;
+    const editedWht = withholdingFromPercent(editedWhtBase, patch.whtRatePercent ?? 0);
+
+    if (allocations.length > 0 && (!paymentAccountId || !patch.paymentDate)) {
+      throw new AccountingError("กรุณาเลือกวันที่จ่ายและบัญชีที่ใช้จ่ายให้ครบ");
+    }
+    if (whtEnabled) {
+      if (isCreditNote) throw new AccountingError("ใบลดหนี้ไม่สร้างภาษีหัก ณ ที่จ่าย");
+      if (allocations.length === 0) throw new AccountingError("กรุณาเลือกบัญชีค่าใช้จ่ายก่อนสร้างภาษีหัก ณ ที่จ่าย");
+      if (!allowedIncomeType) throw new AccountingError("ประเภทเงินได้หัก ณ ที่จ่ายไม่ถูกต้อง");
+      if (!vendorTaxId || !/^\d{13}$/.test(vendorTaxId.replace(/\D/g, ""))) throw new AccountingError("กรุณากรอกเลขประจำตัวผู้เสียภาษีผู้ขาย 13 หลัก");
+      if (!vendorAddress) throw new AccountingError("กรุณากรอกที่อยู่ผู้ถูกหักภาษี");
+      if (editedWhtBase <= 0 || editedWhtBase > base || editedWht.amount <= 0 || editedWht.amount >= base + vat) throw new AccountingError("ฐานหรืออัตราภาษีหัก ณ ที่จ่ายไม่ถูกต้อง");
+    }
+
+    if (allocations.length === 0) {
+      if (paymentEntry && paymentEntry.status !== "VOID") await voidEntry(paymentEntry.id, opts.userId);
+      if (entry && entry.status !== "VOID") await voidEntry(entry.id, opts.userId);
+      if (linkedWht) await prisma.accWhtCertificate.delete({ where: { id: linkedWht.id } });
+      finalEntryId = null;
+    } else {
+      const [inputVatAccount, tradePayableAccount, whtPayableAccount] = await Promise.all([
+        prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.INPUT_VAT }, select: { id: true } }),
+        prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.TRADE_PAYABLE }, select: { id: true } }),
+        whtEnabled ? prisma.accAccount.findUnique({ where: { code: SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE }, select: { id: true } }) : Promise.resolve(null),
+      ]);
+      if (!inputVatAccount) throw new AccountingError(`ไม่พบบัญชีภาษีซื้อรหัส ${SYSTEM_ACCOUNTS.INPUT_VAT}`);
+      if (!isCreditNote && !tradePayableAccount) throw new AccountingError(`ไม่พบบัญชีเจ้าหนี้การค้ารหัส ${SYSTEM_ACCOUNTS.TRADE_PAYABLE}`);
+      if (whtEnabled && !whtPayableAccount) throw new AccountingError(`ไม่พบบัญชีภาษีหัก ณ ที่จ่ายรหัส ${SYSTEM_ACCOUNTS.WHT_PND53_PAYABLE}`);
+
+      let savedPurchaseEntryId: string;
+      let savedPaymentEntryId: string | null = null;
+      if (isCreditNote) {
+        const absoluteVat = Math.abs(vat);
+        const absoluteTotal = Math.abs(base + vat);
+        const lines = [
+          ...allocations.map((line, index) => ({ accountId: line.accountId, credit: toBaht(line.amountSatang), partnerId, memo: index === 0 ? purchaseJournalMemo(description, note) : description })),
+          { accountId: inputVatAccount.id, credit: toBaht(absoluteVat), memo: "ลดภาษีซื้อ", docNo: invoiceNo },
+          { accountId: paymentAccountId, debit: toBaht(absoluteTotal), partnerId, memo: purchaseJournalMemo("ลดเจ้าหนี้/เงินรับคืน", note) },
+        ];
+        const saved = entry && entry.status !== "VOID"
+          ? await updateEntry(entry.id, { date: invoiceDate, journalType: "PURCHASE", description: entryDescriptionFor(vendorName, invoiceNo, true, note), lines })
+          : await createEntry({ date: invoiceDate, journalType: "PURCHASE", description: entryDescriptionFor(vendorName, invoiceNo, true, note), userId: opts.userId, lines });
+        savedPurchaseEntryId = saved.id;
+        if (paymentEntry && paymentEntry.status !== "VOID") await voidEntry(paymentEntry.id, opts.userId);
+      } else {
+        const drafts = buildPurchasePaymentJournalLines({
+          allocations, inputVatAccountId: inputVatAccount.id, tradePayableAccountId: tradePayableAccount!.id,
+          paymentAccountId, whtPayableAccountId: whtPayableAccount?.id, baseSatang: base, vatSatang: vat,
+          whtSatang: whtEnabled ? editedWht.amount : 0, partnerId, description, note, invoiceNo,
+        });
+        const savedPurchase = entry && entry.status !== "VOID"
+          ? await updateEntry(entry.id, { date: invoiceDate, journalType: "PURCHASE", description: entryDescriptionFor(vendorName, invoiceNo, false, note), lines: drafts.purchaseLines })
+          : await createEntry({ date: invoiceDate, journalType: "PURCHASE", description: entryDescriptionFor(vendorName, invoiceNo, false, note), userId: opts.userId, lines: drafts.purchaseLines });
+        savedPurchaseEntryId = savedPurchase.id;
+        const savedPayment = paymentEntry && paymentEntry.status !== "VOID"
+          ? await updateEntry(paymentEntry.id, { date: paymentDate, journalType: "PAYMENT", description: purchasePaymentEntryDescriptionFor(vendorName, invoiceNo, note), lines: drafts.paymentLines })
+          : await createEntry({ date: paymentDate, journalType: "PAYMENT", description: purchasePaymentEntryDescriptionFor(vendorName, invoiceNo, note), sourceType: "PURCHASE_TAX_PAYMENT", sourceKey: savedPurchase.id, userId: opts.userId, lines: drafts.paymentLines });
+        savedPaymentEntryId = savedPayment.id;
+      }
+      finalEntryId = savedPurchaseEntryId;
+
+      if (whtEnabled) {
+        const certificateData = {
+          payDate: paymentDate, partnerId, payeeName: vendorName, payeeTaxId: vendorTaxId?.replace(/\D/g, "") ?? null,
+          payeeAddress: vendorAddress, payeeBranchTag: vendorBranchTag, incomeType: whtIncomeType,
+          baseAmount: toBaht(editedWhtBase), whtRate: editedWht.rate, whtAmount: toBaht(editedWht.amount),
+          entryId: savedPaymentEntryId ?? savedPurchaseEntryId, note,
+        };
+        if (linkedWht) await prisma.accWhtCertificate.update({ where: { id: linkedWht.id }, data: certificateData });
+        else await prisma.accWhtCertificate.create({ data: { ...certificateData, docNo: await nextWhtDocNo(paymentDate), formType: "PND53", purchaseInvoiceId: id, createdBy: opts.userId } });
+      } else if (linkedWht) {
+        await prisma.accWhtCertificate.delete({ where: { id: linkedWht.id } });
+      }
+    }
+  } else
 
   if (entry && paymentEntry && entry.status !== "VOID" && paymentEntry.status !== "VOID") {
     const purchaseVatLine = entry.lines.find((line) => line.account.vatRole === "INPUT");
@@ -334,7 +470,7 @@ export async function updatePurchaseInvoice(
     }
   }
 
-  if (linkedWht && linkedWhtCalc) {
+  if (!hasFullAccountingPatch && linkedWht && linkedWhtCalc) {
     await prisma.accWhtCertificate.update({
       where: { id: linkedWht.id },
       data: {
@@ -342,6 +478,8 @@ export async function updatePurchaseInvoice(
         payeeName: vendorName,
         payeeTaxId: vendorTaxId,
         payeeBranchTag: vendorBranchTag,
+        payeeAddress: vendorAddress,
+        partnerId,
         baseAmount: toBaht(linkedWhtBase),
         whtAmount: toBaht(linkedWhtCalc.amount),
         note,
@@ -358,9 +496,12 @@ export async function updatePurchaseInvoice(
       vendorName,
       vendorTaxId,
       vendorBranchTag,
+      partnerId,
       description,
       note,
       isClaimable,
+      entryId: finalEntryId,
+      ...(normalizedLineItems !== undefined ? { lineItems: normalizedLineItems } : {}),
       baseAmount: toBaht(base),
       vatAmount: toBaht(vat),
       totalAmount: toBaht(base + vat),

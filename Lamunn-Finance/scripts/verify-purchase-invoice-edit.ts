@@ -7,6 +7,8 @@ import { prisma } from "@lamunn/db-finance";
 import { createEntry, postEntry, unpostEntry } from "../src/lib/accounting/post";
 import { updatePurchaseInvoice as _update, entryDescriptionFor } from "../src/lib/accounting/purchaseInvoiceEdit";
 import { SYSTEM_ACCOUNTS } from "../src/lib/accounting/chartOfAccounts";
+import { summarizePurchaseTaxLineItems } from "../src/lib/accounting/purchaseTaxLineItems";
+import { resolvePurchaseTaxAccountAllocations } from "../src/lib/accounting/purchaseTaxAccountAllocation";
 
 const P = "ZZPINV";
 const updatePurchaseInvoice = (id: string, patch: Parameters<typeof _update>[1]) => _update(id, patch, { vatRate: 0.07 });
@@ -29,6 +31,27 @@ async function expectError(label: string, fn: () => Promise<unknown>, contains: 
 }
 
 async function main() {
+  if (process.argv.includes("--pure")) {
+    console.log("\n=== พิสูจน์การคำนวณรายละเอียดสินค้าสำหรับฟอร์มแก้ไข ===");
+    const summary = summarizePurchaseTaxLineItems([{
+      category: "RAW_MATERIAL",
+      description: "[test] วัตถุดิบ",
+      quantity: "2",
+      unitPrice: "100.0050",
+      priceCondition: "VAT",
+      vatRatePercent: "7",
+    }], 0.07, "NEAREST");
+    check("ราคาต่อหน่วย 4 ตำแหน่งคำนวณฐานถูกต้อง", summary.baseSatang, 20001);
+    check("คำนวณ VAT และยอดรวมถูกต้อง", [summary.vatSatang, summary.totalSatang], [1400, 21401]);
+    check("ข้อมูลที่บันทึกกลับยังมีหมวดและรายละเอียด", [summary.items[0]?.category, summary.items[0]?.description], ["RAW_MATERIAL", "[test] วัตถุดิบ"]);
+    const allocations = resolvePurchaseTaxAccountAllocations([
+      { accountId: "[test]-expense-1", amount: "120.01" },
+      { accountId: "[test]-expense-2", amount: "80.00" },
+    ], summary.baseSatang);
+    check("ส่วนลงบัญชีแบบแก้ไขแบ่งยอดได้ครบฐานก่อน VAT", allocations.map((item) => item.amountSatang), [12001, 8000]);
+    console.log(fails === 0 ? "\n✅ ผ่านทั้งหมด\n" : `\n❌ ไม่ผ่าน ${fails} ข้อ\n`);
+    process.exit(fails === 0 ? 0 : 1);
+  }
   const entryIds: string[] = [];
   const invoiceIds: string[] = [];
   const accountIds: string[] = [];
@@ -90,6 +113,31 @@ async function main() {
     await unpostEntry(entry.id);
     await updatePurchaseInvoice(inv.id, { amount: "535" });
     check("ยกเลิกผ่านรายการแล้วแก้ยอดได้อีก", Number((await prisma.accPurchaseTaxInvoice.findUniqueOrThrow({ where: { id: inv.id } })).vatAmount), 35);
+
+    console.log("\n=== แก้รายละเอียดสินค้าแบบเดียวกับหน้าสร้าง ===");
+    await updatePurchaseInvoice(inv.id, {
+      amount: "200.01",
+      amountIncludesVat: false,
+      vatRounding: "NEAREST",
+      lineItems: [{
+        category: "RAW_MATERIAL",
+        description: "[test] วัตถุดิบ",
+        quantity: "2",
+        unitPrice: "100.0050",
+        priceCondition: "VAT",
+        vatRatePercent: "7",
+      }],
+      expenseLines: [{ accountId: expense.id, amount: "200.01" }],
+      paymentDate: `${YEAR}-03-20`,
+      paymentAccountId: cash.id,
+      whtIncomeType: "",
+    });
+    const itemEdited = await prisma.accPurchaseTaxInvoice.findUniqueOrThrow({ where: { id: inv.id } });
+    check("รายละเอียดสินค้าถูกเก็บพร้อมยอดคำนวณใหม่", [Number(itemEdited.baseAmount), Number(itemEdited.vatAmount), Array.isArray(itemEdited.lineItems)], [200.01, 14, true]);
+    check("ใบสำคัญปรับตามยอดจากรายละเอียดสินค้า", (await prisma.accJournalLine.aggregate({ where: { entryId: entry.id }, _sum: { debit: true } }))._sum.debit?.toNumber(), 214.01);
+    const paymentEntry = await prisma.accJournalEntry.findUnique({ where: { sourceType_sourceKey: { sourceType: "PURCHASE_TAX_PAYMENT", sourceKey: entry.id } } });
+    check("ฟอร์มแก้ไขสร้างสมุดรายวันจ่ายตามบัญชีที่เลือก", [paymentEntry?.journalType, paymentEntry?.date.toISOString().slice(0, 10)], ["PAYMENT", `${YEAR}-03-20`]);
+    if (paymentEntry) entryIds.push(paymentEntry.id);
 
     console.log("\n=== คำอธิบายที่บัญชีแก้เองต้องไม่ถูกทับ ===");
     await prisma.accJournalEntry.update({ where: { id: entry.id }, data: { description: "[test] คำอธิบายที่บัญชีแก้เอง" } });

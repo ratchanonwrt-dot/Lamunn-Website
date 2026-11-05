@@ -6,6 +6,7 @@ import { loadPurchaseItemReport, purchaseItemReportFilters, PURCHASE_ITEM_CATEGO
 import { fmtUnitPriceSubSatang } from "@/lib/accounting/purchaseTaxLineItems";
 import StatementShell from "@/components/accounting/StatementShell";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
+import { ACCOUNTING_DATE_INPUT_LANG, formatAccountingDate } from "@/lib/accounting/dateFormat";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +34,8 @@ export default async function PurchaseItemsPage({ searchParams }: { searchParams
 
       <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <form method="get" className="grid items-end gap-3 md:grid-cols-[1fr_1fr_1.3fr_auto]">
-          <label className="text-sm text-gray-600">วันที่เริ่มต้น<input type="date" name="from" defaultValue={filters.from} className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900" /></label>
-          <label className="text-sm text-gray-600">วันที่สิ้นสุด<input type="date" name="to" defaultValue={filters.to} className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900" /></label>
+          <label className="text-sm text-gray-600">วันที่เริ่มต้น<input type="date" lang={ACCOUNTING_DATE_INPUT_LANG} name="from" defaultValue={filters.from} className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900" /></label>
+          <label className="text-sm text-gray-600">วันที่สิ้นสุด<input type="date" lang={ACCOUNTING_DATE_INPUT_LANG} name="to" defaultValue={filters.to} className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900" /></label>
           <label className="text-sm text-gray-600">หมวด (พิมพ์เพื่อกรอง)<input name="category" list="purchase-item-categories" defaultValue={filters.category} placeholder="ทุกหมวด" className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-gray-900" /><datalist id="purchase-item-categories">{Object.values(PURCHASE_ITEM_CATEGORY_LABELS).map((label) => <option key={label} value={label} />)}</datalist></label>
           <button className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">แสดงรายงาน</button>
         </form>
@@ -67,7 +68,7 @@ export default async function PurchaseItemsPage({ searchParams }: { searchParams
               {report.rows.map((row, index) => (
                 <tr key={`${row.invoiceId}-${index}`} className="border-b border-gray-50">
                   <td className="py-2 pr-2 text-right text-xs text-gray-400">{index + 1}</td>
-                  <td className="px-2 py-2 whitespace-nowrap font-mono text-xs text-gray-500">{row.invoiceDate.toISOString().slice(0, 10)}</td>
+                  <td className="px-2 py-2 whitespace-nowrap font-mono text-xs text-gray-500">{formatAccountingDate(row.invoiceDate)}</td>
                   <td className="px-2 py-2 text-gray-800">{formatPartnerDisplayName(row.vendorName, row.vendorBranchTag)}</td>
                   <td className="px-2 py-2"><span className="rounded bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">{PURCHASE_ITEM_CATEGORY_LABELS[row.category]}</span></td>
                   <td className="px-2 py-2 text-gray-800">{row.description}</td>

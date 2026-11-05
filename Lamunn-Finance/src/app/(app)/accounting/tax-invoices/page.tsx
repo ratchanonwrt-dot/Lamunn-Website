@@ -9,6 +9,7 @@ import TaxInvoiceActions from "@/components/accounting/TaxInvoiceActions";
 import { CHANNEL_LABELS } from "@/lib/accounting/channels";
 import { fmtSatang, toSatang } from "@/lib/accounting/money";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
+import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 
 export const dynamic = "force-dynamic";
 
@@ -93,8 +94,8 @@ export default async function TaxInvoicesPage({ searchParams }: { searchParams: 
               {invoices.map((inv) => (
                 <tr key={inv.id} className={`border-b border-gray-50 ${inv.voided ? "opacity-40" : ""}`}>
                   <td className="py-2 pl-4 pr-3 font-mono text-xs text-gray-700">{inv.docNo}</td>
-                  <td className="py-2 px-3 font-mono text-xs text-gray-500">{inv.issueDate.toISOString().slice(0, 10)}</td>
-                  <td className="py-2 px-3 font-mono text-xs text-gray-500">{inv.saleDate.toISOString().slice(0, 10)}</td>
+                  <td className="py-2 px-3 font-mono text-xs text-gray-500">{formatAccountingDate(inv.issueDate)}</td>
+                  <td className="py-2 px-3 font-mono text-xs text-gray-500">{formatAccountingDate(inv.saleDate)}</td>
                   <td className="py-2 px-3 text-gray-800">
                     {formatPartnerDisplayName(inv.customerName, inv.branchTag)}
                     {inv.receiptNo && <span className="ml-1.5 text-xs text-gray-400">บิล {inv.receiptNo}</span>}

@@ -13,6 +13,7 @@ import { WHT_FORM_LABELS, WHT_FORM_SHORT } from "@/lib/accounting/whtTypes";
 import Link from "next/link";
 import { fmtSatang } from "@/lib/accounting/money";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
+import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 
 /** หน้ารายงาน ภ.ง.ด.3 และ ภ.ง.ด.53 ใช้โครงเดียวกันทั้งหมด ต่างแค่แบบที่กรอง
  * แยกเป็นคอมโพเนนต์กลางเพื่อไม่ให้ต้องดูแลโค้ดซ้ำสองชุด */
@@ -136,7 +137,7 @@ export default async function WhtReportView({
               {report.rows.map((r, i) => (
                 <tr key={r.id} className="border-b border-gray-50">
                   <td className="py-1.5 pr-2 text-right text-xs text-gray-400">{i + 1}</td>
-                  <td className="py-1.5 px-2 font-mono text-xs text-gray-500">{r.payDate.toISOString().slice(0, 10)}</td>
+                  <td className="py-1.5 px-2 font-mono text-xs text-gray-500">{formatAccountingDate(r.payDate)}</td>
                   <td className="py-1.5 px-2 font-mono text-xs">
                     <Link
                       href={`/print/wht/${r.id}`}
@@ -209,7 +210,7 @@ export default async function WhtReportView({
               <tbody className="tabular-nums">
                 {report.journalRows.map((r) => (
                   <tr key={r.entryId} className="border-b border-gray-50">
-                    <td className="py-2 pl-4 pr-3 font-mono text-xs text-gray-500">{r.date.toISOString().slice(0, 10)}</td>
+                    <td className="py-2 pl-4 pr-3 font-mono text-xs text-gray-500">{formatAccountingDate(r.date)}</td>
                     <td className="py-2 px-3">
                       <Link
                         href={`/accounting/journal?year=${year}&month=${month}`}

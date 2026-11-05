@@ -221,6 +221,7 @@ export default function PurchaseTaxInvoiceForm({
           วันที่บนใบกำกับ
           <input
             type="date"
+            lang="en-GB"
             required
             value={form.invoiceDate}
             onChange={(e) => {
@@ -713,6 +714,7 @@ export default function PurchaseTaxInvoiceForm({
               วันที่จ่าย
               <input
                 type="date"
+                lang="en-GB"
                 value={form.paymentDate}
                 onChange={(event) => setForm({ ...form, paymentDate: event.target.value })}
                 className={field}

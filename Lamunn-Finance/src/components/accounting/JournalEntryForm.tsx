@@ -201,6 +201,7 @@ export default function JournalEntryForm({
           วันที่
           <input
             type="date"
+            lang="en-GB"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900"
