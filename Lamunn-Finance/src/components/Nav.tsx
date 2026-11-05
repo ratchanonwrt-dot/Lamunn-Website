@@ -127,12 +127,12 @@ const accountingLinks: NavLink[] = [
 
 // แยกงบการเงินออกจากงานบัญชี เพื่อให้หมวดรีพอร์ตไม่กางรายการยาวจนหาเมนูยาก
 const financialStatementLinks: NavLink[] = [
-  { href: "/accounting", label: "ภาพรวมบัญชี", icon: BookOpen, color: "bg-emerald-100 text-emerald-600", section: "ACCOUNTING", exact: true },
-  { href: "/accounting/trial-balance", label: "งบทดลอง", icon: Scale, color: "bg-teal-100 text-teal-600", section: "ACCOUNTING" },
-  { href: "/accounting/income-statement", label: "งบกำไรขาดทุน", icon: BarChart3, color: "bg-green-100 text-green-600", section: "ACCOUNTING" },
-  { href: "/accounting/balance-sheet", label: "งบแสดงฐานะการเงิน", icon: FileSpreadsheet, color: "bg-sky-100 text-sky-600", section: "ACCOUNTING" },
-  { href: "/accounting/projection", label: "ประมาณการ", icon: Calculator, color: "bg-indigo-100 text-indigo-600", section: "ACCOUNTING" },
-  { href: "/accounting/document-cover", label: "ปกเอกสาร", icon: FileText, color: "bg-amber-100 text-amber-700", section: "ACCOUNTING" },
+  { href: "/accounting", label: "ภาพรวมบัญชี", icon: BookOpen, color: "bg-emerald-100 text-emerald-500", section: "ACCOUNTING", exact: true },
+  { href: "/accounting/trial-balance", label: "งบทดลอง", icon: Scale, color: "bg-teal-100 text-teal-500", section: "ACCOUNTING" },
+  { href: "/accounting/income-statement", label: "งบกำไรขาดทุน", icon: BarChart3, color: "bg-green-100 text-green-500", section: "ACCOUNTING" },
+  { href: "/accounting/balance-sheet", label: "งบแสดงฐานะการเงิน", icon: FileSpreadsheet, color: "bg-sky-100 text-sky-500", section: "ACCOUNTING" },
+  { href: "/accounting/projection", label: "ประมาณการ", icon: Calculator, color: "bg-indigo-100 text-indigo-500", section: "ACCOUNTING" },
+  { href: "/accounting/document-cover", label: "ปกเอกสาร", icon: FileText, color: "bg-amber-100 text-amber-600", section: "ACCOUNTING" },
 ];
 
 const taxReportLinks: NavLink[] = [
@@ -140,7 +140,7 @@ const taxReportLinks: NavLink[] = [
     href: "/accounting/tax-reports",
     label: "ภ.พ.30",
     icon: ReceiptText,
-    color: "bg-violet-100 text-violet-600",
+    color: "bg-violet-100 text-violet-500",
     section: "ACCOUNTING",
     exact: true,
     activePrefixes: ["/accounting/tax-reports/input-vat", "/accounting/tax-reports/output-vat"],
@@ -149,7 +149,7 @@ const taxReportLinks: NavLink[] = [
     href: "/accounting/tax-reports/pnd3",
     label: "ภ.ง.ด.",
     icon: Landmark,
-    color: "bg-fuchsia-100 text-fuchsia-600",
+    color: "bg-fuchsia-100 text-fuchsia-500",
     section: "ACCOUNTING",
     exact: true,
     activePrefixes: ["/accounting/tax-reports/pnd3", "/accounting/tax-reports/pnd53"],
@@ -157,15 +157,15 @@ const taxReportLinks: NavLink[] = [
 ];
 
 const accountingReportItems: NavMenuItem[] = [
-  { href: "/accounting/journal", label: "บันทึกบัญชี", icon: ListTree, color: "bg-indigo-100 text-indigo-600", section: "ACCOUNTING" },
-  { href: "/accounting/purchase-items", label: "วัตถุดิบ / บรรจุภัณฑ์ / อื่น ๆ", icon: Boxes, color: "bg-lime-100 text-lime-700", section: "ACCOUNTING" },
-  { href: "/accounting/fixed-assets", label: "ทะเบียนทรัพย์สิน", icon: PackageSearch, color: "bg-emerald-100 text-emerald-600", section: "ACCOUNTING" },
-  { href: "/accounting/ledger", label: "บัญชีแยกประเภท", icon: BookOpen, color: "bg-purple-100 text-purple-600", section: "ACCOUNTING" },
+  { href: "/accounting/journal", label: "บันทึกบัญชี", icon: ListTree, color: "bg-indigo-100 text-indigo-500", section: "ACCOUNTING" },
+  { href: "/accounting/purchase-items", label: "วัตถุดิบ / บรรจุภัณฑ์ / อื่น ๆ", icon: Boxes, color: "bg-lime-100 text-lime-600", section: "ACCOUNTING" },
+  { href: "/accounting/fixed-assets", label: "ทะเบียนทรัพย์สิน", icon: PackageSearch, color: "bg-emerald-100 text-emerald-500", section: "ACCOUNTING" },
+  { href: "/accounting/ledger", label: "บัญชีแยกประเภท", icon: BookOpen, color: "bg-purple-100 text-purple-500", section: "ACCOUNTING" },
   { href: "/accounting/bank-reconciliation", label: "กระทบยอดเงินฝากธนาคาร", icon: Landmark, color: "bg-cyan-100 text-cyan-600", section: "ACCOUNTING" },
-  { href: "/accounting/daily-posting", label: "ลงบัญชียอดขายรายวัน", icon: CalendarDays, color: "bg-blue-100 text-blue-600", section: "ACCOUNTING" },
-  { href: "/accounting/tax-invoices", label: "ใบกำกับภาษีเต็มรูป", icon: ReceiptText, color: "bg-rose-100 text-rose-600", section: "ACCOUNTING" },
+  { href: "/accounting/daily-posting", label: "ลงบัญชียอดขายรายวัน", icon: CalendarDays, color: "bg-blue-100 text-blue-500", section: "ACCOUNTING" },
+  { href: "/accounting/tax-invoices", label: "ใบกำกับภาษีเต็มรูป", icon: ReceiptText, color: "bg-rose-100 text-rose-500", section: "ACCOUNTING" },
   { label: "รายงานภาษี", items: taxReportLinks },
-  { href: "/accounting/accounts", label: "ผังบัญชี", icon: ListTree, color: "bg-slate-100 text-slate-600", section: "ACCOUNTING" },
+  { href: "/accounting/accounts", label: "ผังบัญชี", icon: ListTree, color: "bg-slate-100 text-slate-500", section: "ACCOUNTING" },
   { href: "/accounting/partners", label: "คู่ค้า (ลูกหนี้/เจ้าหนี้)", icon: Handshake, color: "bg-amber-100 text-amber-600", section: "ACCOUNTING" },
 ];
 
@@ -335,16 +335,16 @@ function NavSubGroup({ group, pathname, depth = 0 }: { group: NavMenuGroup; path
   const [open, setOpen] = useState(hasActive);
   const groupTextColor =
     group.label === "งบการเงิน"
-      ? "text-emerald-700"
+      ? "text-emerald-500"
       : group.label === "บัญชี"
-        ? "text-brand-700"
-        : "text-violet-700";
+        ? "text-sky-500"
+        : "text-violet-500";
   const groupDotColor =
     group.label === "งบการเงิน"
-      ? "bg-emerald-500"
+      ? "bg-emerald-300"
       : group.label === "บัญชี"
-        ? "bg-brand-500"
-        : "bg-violet-500";
+        ? "bg-sky-300"
+        : "bg-violet-300";
 
   useEffect(() => {
     if (hasActive) setOpen(true);
@@ -406,7 +406,7 @@ function ReportNavGroup({ groups, pathname }: { groups: NavMenuGroup[]; pathname
         className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-gray-100"
       >
         <span className={clsx("h-3.5 w-1 shrink-0 rounded-full", tone.bar)} />
-        <p className="flex-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-pink-700">รีพอร์ต</p>
+        <p className="flex-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-500">รีพอร์ต</p>
         {hasActive && !open && <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", tone.bar)} />}
         <ChevronDown
           size={13}
