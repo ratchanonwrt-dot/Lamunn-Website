@@ -15,11 +15,13 @@ export default function AccountCombobox({
   value,
   onChange,
   placeholder = "— เลือกบัญชี —",
+  disabled = false,
 }: {
   accounts: AccountOption[];
   value: string;
   onChange: (accountId: string) => void;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   const selected = accounts.find((a) => a.id === value) ?? null;
   const [open, setOpen] = useState(false);
@@ -100,6 +102,7 @@ export default function AccountCombobox({
     <>
       <input
         ref={inputRef}
+        disabled={disabled}
         value={open ? query : selected ? label(selected) : ""}
         placeholder={selected ? label(selected) : placeholder}
         onFocus={openList}
@@ -114,7 +117,7 @@ export default function AccountCombobox({
           setOpen(false);
           setQuery("");
         }}
-        className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400"
+        className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-400"
       />
       {open && rect && (
         <div

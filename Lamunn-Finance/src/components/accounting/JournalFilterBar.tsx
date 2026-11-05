@@ -207,6 +207,7 @@ function DateField({ value, onCommit, className }: { value: string; onCommit: (v
   return (
     <input
       type="date"
+      lang="en-GB"
       value={local}
       onChange={(e) => {
         const v = e.target.value;

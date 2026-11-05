@@ -76,11 +76,11 @@ export default function LivePayoutsPanel({ rows, error, from, to, status, canEdi
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500">ตั้งแต่</label>
-          <input type="date" value={f} onChange={(e) => setF(e.target.value)} className={inputCls} />
+          <input type="date" lang="en-GB" value={f} onChange={(e) => setF(e.target.value)} className={inputCls} />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500">ถึง</label>
-          <input type="date" value={t} onChange={(e) => setT(e.target.value)} className={inputCls} />
+          <input type="date" lang="en-GB" value={t} onChange={(e) => setT(e.target.value)} className={inputCls} />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500">สถานะ</label>

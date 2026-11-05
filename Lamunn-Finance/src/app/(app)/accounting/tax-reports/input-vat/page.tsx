@@ -14,6 +14,7 @@ import { FileSpreadsheet, Printer } from "lucide-react";
 import { buildInputVatReport } from "@/lib/accounting/taxReports";
 import { fmtSatang } from "@/lib/accounting/money";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
+import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 
 export const dynamic = "force-dynamic";
 
@@ -146,7 +147,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
               {report.rows.map((r, i) => (
                 <tr key={r.id} className="border-b border-gray-50">
                   <td className="py-1.5 pr-2 text-right text-xs text-gray-400">{i + 1}</td>
-                  <td className="py-1.5 px-2 font-mono text-xs text-gray-500">{r.date.toISOString().slice(0, 10)}</td>
+                  <td className="py-1.5 px-2 font-mono text-xs text-gray-500">{formatAccountingDate(r.date)}</td>
                   <td className="py-1.5 px-2 font-mono text-xs text-gray-700">
                     {/* แถว AI โชว์เลขใบกำกับที่ตรวจแล้วเท่านั้น เพื่อไม่ให้คนเข้าใจว่าใบสำคัญคีย์เองถูกนำเข้ารายงาน */}
                     {r.invoiceNo ? (
@@ -175,7 +176,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
                       {/* แถว AI ไม่มีทะเบียนภาษีให้แก้ตรงนี้ ต้องย้อนกลับไปตรวจรายการที่ AI สร้าง */}
                       {r.kind === "DOC" ? (
                         <span className="inline-flex gap-1.5">
-                          <EditPurchaseInvoiceButton id={r.id} />
+                          <EditPurchaseInvoiceButton id={r.id} vatRate={Number(settings.vatRate)} />
                           <VoidDocButton endpoint="/api/accounting/purchase-tax-invoices" id={r.id} />
                         </span>
                       ) : (

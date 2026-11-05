@@ -5,6 +5,7 @@ import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 import { loadPurchaseItemReport, purchaseItemReportFilters, PURCHASE_ITEM_CATEGORY_LABELS } from "@/lib/accounting/purchaseItemReport";
 import { fmtUnitPriceSubSatang } from "@/lib/accounting/purchaseTaxLineItems";
 import PrintButton from "@/components/accounting/PrintButton";
+import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export default async function PurchaseItemsPrintPage({ searchParams }: { searchP
             {report.rows.length === 0 ? <tr><td colSpan={7} className="border border-black px-3 py-8 text-center text-gray-500">ไม่มีรายการในเดือนนี้</td></tr> : report.rows.map((row, index) => (
               <tr key={`${row.invoiceId}-${index}`}>
                 <td className="border border-black px-2 py-1.5 text-right">{index + 1}</td>
-                <td className="border border-black px-2 py-1.5 whitespace-nowrap">{row.invoiceDate.toISOString().slice(0, 10)}</td>
+                <td className="border border-black px-2 py-1.5 whitespace-nowrap">{formatAccountingDate(row.invoiceDate)}</td>
                 <td className="border border-black px-2 py-1.5 break-words">{formatPartnerDisplayName(row.vendorName, row.vendorBranchTag)}</td>
                 <td className="border border-black px-2 py-1.5">{PURCHASE_ITEM_CATEGORY_LABELS[row.category]}</td>
                 <td className="border border-black px-2 py-1.5 break-words">{row.description}</td>

@@ -78,11 +78,11 @@ export default function TaxInvoiceForm({ branches }: { branches: { id: string; n
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className={label}>
           วันที่ออกใบกำกับ
-          <input type="date" required value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} className={field} />
+          <input type="date" lang="en-GB" required value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} className={field} />
         </label>
         <label className={label}>
           วันที่ขายจริง (ตามบิล)
-          <input type="date" required value={form.saleDate} onChange={(e) => setForm({ ...form, saleDate: e.target.value })} className={field} />
+          <input type="date" lang="en-GB" required value={form.saleDate} onChange={(e) => setForm({ ...form, saleDate: e.target.value })} className={field} />
         </label>
         <label className={label}>
           สาขาที่ขาย

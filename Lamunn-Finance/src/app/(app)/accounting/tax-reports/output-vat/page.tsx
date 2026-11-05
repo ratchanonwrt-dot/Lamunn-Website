@@ -8,6 +8,7 @@ import StatementShell from "@/components/accounting/StatementShell";
 import { buildOutputVatReport } from "@/lib/accounting/taxReports";
 import { fmtSatang } from "@/lib/accounting/money";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
+import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +65,7 @@ export default async function OutputVatPage({ searchParams }: { searchParams: { 
               {report.rows.map((r, i) => (
                 <tr key={`${r.kind}-${r.docNo}-${i}`} className="border-b border-gray-50">
                   <td className="py-1.5 pr-2 text-right text-xs text-gray-400">{i + 1}</td>
-                  <td className="py-1.5 px-2 font-mono text-xs text-gray-500">{r.date.toISOString().slice(0, 10)}</td>
+                  <td className="py-1.5 px-2 font-mono text-xs text-gray-500">{formatAccountingDate(r.date)}</td>
                   <td className="py-1.5 px-2 text-gray-700">
                     {r.kind === "DAILY" ? (
                       <span className="text-xs text-gray-500">{r.docNo}</span>
