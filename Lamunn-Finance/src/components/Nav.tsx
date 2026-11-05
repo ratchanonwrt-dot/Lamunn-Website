@@ -223,7 +223,17 @@ function filterMenuItems(items: NavMenuItem[], canView: (link: NavLink) => boole
   return visibleItems;
 }
 
-function NavLinkRow({ link, pathname, colorful = false }: { link: NavLink; pathname: string; colorful?: boolean }) {
+function NavLinkRow({
+  link,
+  pathname,
+  colorful = false,
+  neutral = false,
+}: {
+  link: NavLink;
+  pathname: string;
+  colorful?: boolean;
+  neutral?: boolean;
+}) {
   const Icon = link.icon;
   const active = isNavLinkActive(pathname, link);
   return (
@@ -233,15 +243,34 @@ function NavLinkRow({ link, pathname, colorful = false }: { link: NavLink; pathn
       // ไม่ปิด prefetch — Next.js จะโหลด loading.tsx ของหน้าปลายทางไว้ล่วงหน้าตอนลิงก์อยู่ในจอ
       // พอกดจึงขึ้น skeleton ทันทีแทนที่จะค้างรอเซิร์ฟเวอร์ตอบก่อน (นี่คือความต่างจากเว็บ HRM ที่กดแล้ววิ่งเลย)
       // ใช้ได้คุ้มเพราะเมนูยุบเป็นหมวดอยู่แล้ว มีแค่ลิงก์ของหมวดที่กางอยู่เท่านั้นที่ถูก prefetch
-      // สีประจำรายงานช่วยแยกเมนูงบการเงิน ส่วนกรอบและตัวหนาช่วยระบุหน้าที่เปิดอยู่
+      // กลุ่มที่ยังใช้สีประจำรายการคงรูปแบบเดิม ส่วนรีพอร์ตใช้โทนกลางและกรอบระบุหน้าที่เปิดอยู่
       className={clsx(
         "group flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13.5px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
-        colorful
+        neutral
+          ? active
+            ? "bg-gray-100 font-semibold text-gray-900 ring-1 ring-inset ring-gray-200"
+            : "font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+          : colorful
           ? [link.color, active ? "font-semibold ring-1 ring-inset ring-current" : "font-medium hover:brightness-95"]
           : active ? "bg-brand-50 font-semibold text-brand-700" : "font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
       )}
     >
-      <Icon size={16} strokeWidth={2} className={clsx("shrink-0", colorful ? "text-current" : active ? "text-brand-600" : "text-gray-400 group-hover:text-gray-600")} />
+      <Icon
+        size={16}
+        strokeWidth={2}
+        className={clsx(
+          "shrink-0",
+          neutral
+            ? active
+              ? "text-gray-700"
+              : "text-gray-400 group-hover:text-gray-600"
+            : colorful
+              ? "text-current"
+              : active
+                ? "text-brand-600"
+                : "text-gray-400 group-hover:text-gray-600"
+        )}
+      />
       <span className="truncate">{link.label}</span>
     </Link>
   );
@@ -304,23 +333,23 @@ function NavSubGroup({ group, pathname, depth = 0 }: { group: NavMenuGroup; path
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         className={clsx(
-          "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-gray-700 hover:bg-emerald-50",
+          "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-gray-700 hover:bg-gray-100",
           depth === 0 ? "text-[13px] font-semibold" : "text-[12.5px] font-medium"
         )}
       >
-        <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", depth === 0 ? "bg-emerald-500" : "bg-violet-400")} />
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-gray-400" />
         <span className="flex-1 truncate">{group.label}</span>
-        {hasActive && !open && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />}
+        {hasActive && !open && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-gray-500" />}
         <ChevronDown
           size={12}
           className={clsx("shrink-0 text-gray-400 transition-transform", open ? "rotate-0" : "-rotate-90")}
         />
       </button>
       {open && (
-        <div className="ml-2 mt-0.5 flex flex-col gap-1 border-l border-emerald-100 pl-2">
+        <div className="ml-2 mt-0.5 flex flex-col gap-1 border-l border-gray-200 pl-2">
           {group.items.map((item) =>
             isNavLink(item) ? (
-              <NavLinkRow key={item.href} link={item} pathname={pathname} colorful />
+              <NavLinkRow key={item.href} link={item} pathname={pathname} neutral />
             ) : (
               <NavSubGroup key={item.label} group={item} pathname={pathname} depth={depth + 1} />
             )
@@ -340,7 +369,8 @@ function ReportNavGroup({ groups, pathname }: { groups: NavMenuGroup[]; pathname
   }, [hasActive]);
 
   if (groups.length === 0) return null;
-  const tone = TONES.green;
+  // รีพอร์ตมีรายการจำนวนมาก จึงใช้สีเทากลางทั้งหมดเพื่อให้ชื่อเมนูอ่านง่ายและไม่แย่งสายตากัน
+  const tone = TONES.slate;
 
   return (
     <div className="mb-1.5">
