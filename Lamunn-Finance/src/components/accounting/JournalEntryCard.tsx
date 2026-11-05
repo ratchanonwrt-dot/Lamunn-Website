@@ -55,10 +55,10 @@ export default function JournalEntryCard({
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-sm font-semibold text-gray-900">{entry.entryNo}</span>
             <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_STYLE[status]}`}>{STATUS_LABEL[status]}</span>
-            <span className="text-xs font-semibold text-gray-500">{entry.typeLabel}</span>
+            <span className="text-xs font-bold text-black">{entry.typeLabel}</span>
             <span className="text-xs text-gray-400">{entry.dateLabel}</span>
           </div>
-          <p className="mt-0.5 text-sm font-semibold text-gray-700">{entry.description}</p>
+          <p className="mt-0.5 text-sm font-bold text-gray-600">{entry.description}</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <span className="text-sm font-semibold tabular-nums text-gray-800">{entry.totalLabel}</span>
