@@ -12,6 +12,7 @@ import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
 import PurchaseTaxClaimPeriodSelect from "./PurchaseTaxClaimPeriodSelect";
 import { partnerBranchChoices, resolvePartnerBranchChoice } from "@/lib/accounting/partnerBranchSelection";
 import {
+  satangToPlainInput,
   summarizePurchaseTaxLineItems,
   type PurchaseTaxItemCategory,
   type PurchaseTaxPriceCondition,
@@ -43,6 +44,7 @@ interface PurchaseLineFormValue {
   description: string;
   quantity: string;
   unitPrice: string;
+  lineTotal: string | null;
   priceCondition: PurchaseTaxPriceCondition;
   vatRatePercent: string;
 }
@@ -60,6 +62,7 @@ function emptyPurchaseLine(key: string, category: PurchaseTaxItemCategory, vatRa
     description: "",
     quantity: "1",
     unitPrice: "",
+    lineTotal: null,
     priceCondition: "VAT",
     vatRatePercent: String(vatRate * 100),
   };
@@ -417,7 +420,7 @@ export default function PurchaseTaxInvoiceForm({
                         value={line.quantity}
                         onChange={(event) => setForm((current) => ({
                           ...current,
-                          lineItems: current.lineItems.map((item) => item.key === line.key ? { ...item, quantity: event.target.value } : item),
+                          lineItems: current.lineItems.map((item) => item.key === line.key ? { ...item, quantity: event.target.value, lineTotal: null } : item),
                         }))}
                         className={field}
                       />
@@ -427,16 +430,40 @@ export default function PurchaseTaxInvoiceForm({
                         disabled={line.priceCondition === "FREE"}
                         onChange={(event) => setForm((current) => ({
                           ...current,
-                          lineItems: current.lineItems.map((item) => item.key === line.key ? { ...item, unitPrice: event.target.value } : item),
+                          lineItems: current.lineItems.map((item) => item.key === line.key ? { ...item, unitPrice: event.target.value, lineTotal: null } : item),
                         }))}
                         placeholder="0.0000000000"
                         aria-label={`ราคาต่อหน่วยบรรทัดที่ ${index + 1} (ทศนิยมไม่เกิน 10 ตำแหน่ง)`}
                         className={`${field} disabled:bg-gray-100`}
                       />
                       <div className="text-right">
-                        <span className="block text-sm font-medium tabular-nums text-gray-800">
-                          {fmtSatang(calculatedLine?.baseSatang ?? 0, { zeroDash: false })}
-                        </span>
+                        <input
+                          inputMode="decimal"
+                          disabled={line.priceCondition === "FREE"}
+                          value={line.lineTotal ?? fmtSatang(calculatedLine?.baseSatang ?? 0, { zeroDash: false })}
+                          onFocus={() => {
+                            if (line.lineTotal !== null) return;
+                            setForm((current) => ({
+                              ...current,
+                              lineItems: current.lineItems.map((item) => item.key === line.key
+                                ? { ...item, lineTotal: satangToPlainInput(calculatedLine?.baseSatang ?? 0) }
+                                : item),
+                            }));
+                          }}
+                          onChange={(event) => setForm((current) => ({
+                            ...current,
+                            lineItems: current.lineItems.map((item) => item.key === line.key ? { ...item, lineTotal: event.target.value } : item),
+                          }))}
+                          onClick={(event) => event.currentTarget.select()}
+                          onBlur={() => setForm((current) => ({
+                            ...current,
+                            lineItems: current.lineItems.map((item) => item.key === line.key && item.lineTotal?.trim() === ""
+                              ? { ...item, lineTotal: null }
+                              : item),
+                          }))}
+                          aria-label={`ราคารวมบรรทัดที่ ${index + 1}`}
+                          className={`${field} text-right font-medium tabular-nums disabled:bg-gray-100`}
+                        />
                         <span className="text-[11px] text-gray-500">{conditionText}</span>
                       </div>
                       <button
@@ -507,7 +534,9 @@ export default function PurchaseTaxInvoiceForm({
                     checked={selectedPriceLine.priceCondition === value}
                     onChange={() => setForm((current) => ({
                       ...current,
-                      lineItems: current.lineItems.map((item) => item.key === selectedPriceLine.key ? { ...item, priceCondition: value } : item),
+                      lineItems: current.lineItems.map((item) => item.key === selectedPriceLine.key
+                        ? { ...item, priceCondition: value, lineTotal: value === "FREE" ? null : item.lineTotal }
+                        : item),
                     }))}
                   />
                   {text}

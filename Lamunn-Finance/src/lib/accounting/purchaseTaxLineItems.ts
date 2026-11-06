@@ -8,6 +8,7 @@ export interface PurchaseTaxLineItemInput {
   description?: string;
   quantity?: string | number;
   unitPrice?: string | number;
+  lineTotal?: string | number | null;
   priceCondition?: string;
   vatRatePercent?: string | number;
 }
@@ -21,6 +22,8 @@ export interface CalculatedPurchaseTaxLineItem {
   /** ค่าเดิมหน่วย 0.0001 บาท เก็บไว้ให้ snapshot/รายงานรุ่นเก่ายังอ่านร่วมกันได้ */
   unitPriceSubSatang: number;
   unitPriceSatang: number;
+  /** true เมื่อผู้ใช้แก้ราคารวมเอง เพื่อให้หน้าแก้ไขคืนค่าที่ผู้ใช้กำหนดได้ */
+  lineTotalOverridden: boolean;
   priceCondition: PurchaseTaxPriceCondition;
   vatRatePercent: string;
   baseSatang: number;
@@ -69,6 +72,20 @@ function parseUnitPriceDecimal(value: unknown): { scaled: bigint; normalized: st
   const normalizedWhole = BigInt(whole).toString();
   const normalized = `${scaled < 0n ? "-" : ""}${normalizedWhole}${fraction ? `.${fraction}` : ""}`;
   return { scaled, normalized };
+}
+
+function parseLineTotalSatang(value: unknown): number | null {
+  const original = String(value ?? "").trim();
+  const parenthesized = /^\(.*\)$/.test(original);
+  const cleaned = original.replace(/^\((.*)\)$/, "$1").replace(/[,\s฿]/g, "");
+  if (!/^[+-]?\d+(?:\.\d{1,2})?$/.test(cleaned)) return null;
+  const negative = parenthesized || cleaned.startsWith("-");
+  const unsigned = cleaned.replace(/^[+-]/, "");
+  const [whole, fraction = ""] = unsigned.split(".");
+  const magnitude = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0") || "0");
+  const satang = negative ? -magnitude : magnitude;
+  if (satang > BigInt(Number.MAX_SAFE_INTEGER) || satang < BigInt(Number.MIN_SAFE_INTEGER)) return null;
+  return Number(satang);
 }
 
 function roundedBigIntToSafeNumber(value: bigint, divisor: bigint): number | null {
@@ -121,13 +138,29 @@ export function unitPriceDecimalFromSnapshot(value: unknown): string {
     : "";
 }
 
+export function satangToPlainInput(satang: number): string {
+  if (!Number.isSafeInteger(satang)) return "0.00";
+  const sign = satang < 0 ? "-" : "";
+  const magnitude = Math.abs(satang);
+  return `${sign}${Math.trunc(magnitude / 100)}.${String(magnitude % 100).padStart(2, "0")}`;
+}
+
+/** เอกสารเก่าไม่มี flag นี้ จึงปล่อยให้คำนวณราคารวมจากจำนวน × ราคาต่อหน่วยเหมือนเดิม */
+export function lineTotalInputFromSnapshot(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const item = value as Record<string, unknown>;
+  if (item.lineTotalOverridden !== true) return null;
+  const baseSatang = Number(item.baseSatang);
+  return Number.isSafeInteger(baseSatang) ? satangToPlainInput(baseSatang) : null;
+}
+
 export function summarizePurchaseTaxLineItems(
   rawItems: unknown,
   defaultVatRate: number,
   rounding: VatRounding = "NEAREST"
 ): PurchaseTaxLineItemSummary {
   const inputs = Array.isArray(rawItems) ? rawItems as PurchaseTaxLineItemInput[] : [];
-  const active = inputs.filter((item) => String(item?.description ?? "").trim() || String(item?.unitPrice ?? "").trim());
+  const active = inputs.filter((item) => String(item?.description ?? "").trim() || String(item?.unitPrice ?? "").trim() || String(item?.lineTotal ?? "").trim());
   const errors: string[] = [];
   const items: CalculatedPurchaseTaxLineItem[] = [];
 
@@ -143,12 +176,17 @@ export function summarizePurchaseTaxLineItems(
       : "VAT";
     const unitPriceText = String(input.unitPrice ?? "").trim();
     const parsedUnitPrice = unitPriceText ? parseUnitPriceDecimal(unitPriceText) : null;
+    const lineTotalText = String(input.lineTotal ?? "").trim();
+    const parsedLineTotal = lineTotalText ? parseLineTotalSatang(lineTotalText) : null;
 
     if (!description) errors.push(`บรรทัดที่ ${row}: กรุณากรอกรายการ`);
     if (!quantity) errors.push(`บรรทัดที่ ${row}: จำนวนต้องมากกว่า 0 และมีทศนิยมไม่เกิน 4 ตำแหน่ง`);
     if (priceCondition !== "FREE" && !unitPriceText) errors.push(`บรรทัดที่ ${row}: กรุณากรอกราคาต่อหน่วย`);
     if (priceCondition !== "FREE" && unitPriceText && parsedUnitPrice === null) {
       errors.push(`บรรทัดที่ ${row}: ราคาต่อหน่วยต้องเป็นตัวเลขและมีทศนิยมไม่เกิน 10 ตำแหน่ง`);
+    }
+    if (priceCondition !== "FREE" && lineTotalText && parsedLineTotal === null) {
+      errors.push(`บรรทัดที่ ${row}: ราคารวมต้องเป็นตัวเลขและมีทศนิยมไม่เกิน 2 ตำแหน่ง`);
     }
     if (!quantity || !description || (priceCondition !== "FREE" && (!unitPriceText || parsedUnitPrice === null))) return;
 
@@ -163,7 +201,9 @@ export function summarizePurchaseTaxLineItems(
 
     const unitPriceScaled = priceCondition === "FREE" ? 0n : parsedUnitPrice?.scaled ?? 0n;
     // คูณราคา exact กับจำนวนก่อน แล้วจึงปัดผลรวมเป็นสตางค์ เพื่อไม่ทิ้งทศนิยมตำแหน่งที่ 3–10 ก่อนเวลา
-    const baseSatang = priceCondition === "FREE" ? 0 : multiplyUnitPriceToSatang(unitPriceScaled, quantity);
+    const calculatedBaseSatang = priceCondition === "FREE" ? 0 : multiplyUnitPriceToSatang(unitPriceScaled, quantity);
+    const lineTotalOverridden = priceCondition !== "FREE" && parsedLineTotal !== null;
+    const baseSatang = lineTotalOverridden ? parsedLineTotal : calculatedBaseSatang;
     const unitPriceSubSatang = roundedBigIntToSafeNumber(unitPriceScaled, LEGACY_SUB_SATANG_DIVISOR);
     const unitPriceSatang = roundedBigIntToSafeNumber(unitPriceScaled, SATANG_DIVISOR);
     if (baseSatang === null || unitPriceSubSatang === null || unitPriceSatang === null) {
@@ -180,6 +220,7 @@ export function summarizePurchaseTaxLineItems(
       unitPriceDecimal: priceCondition === "FREE" ? "0" : parsedUnitPrice?.normalized ?? "0",
       unitPriceSubSatang,
       unitPriceSatang,
+      lineTotalOverridden,
       priceCondition,
       vatRatePercent: ratePercent.toString(),
       baseSatang,
