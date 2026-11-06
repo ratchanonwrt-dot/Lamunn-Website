@@ -10,7 +10,7 @@ import AccountingDateInput from "./AccountingDateInput";
 import PartnerCombobox from "./PartnerCombobox";
 import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
 import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
-import { summarizePurchaseTaxLineItems, unitPriceDecimalFromSnapshot, type PurchaseTaxItemCategory, type PurchaseTaxPriceCondition } from "@/lib/accounting/purchaseTaxLineItems";
+import { lineTotalInputFromSnapshot, satangToPlainInput, summarizePurchaseTaxLineItems, unitPriceDecimalFromSnapshot, type PurchaseTaxItemCategory, type PurchaseTaxPriceCondition } from "@/lib/accounting/purchaseTaxLineItems";
 
 interface PurchaseLineFormValue {
   key: string;
@@ -18,6 +18,7 @@ interface PurchaseLineFormValue {
   description: string;
   quantity: string;
   unitPrice: string;
+  lineTotal: string | null;
   priceCondition: PurchaseTaxPriceCondition;
   vatRatePercent: string;
 }
@@ -64,7 +65,7 @@ const ITEM_CATEGORIES: Array<{ value: PurchaseTaxItemCategory; label: string }> 
   { value: "OTHER", label: "อื่น ๆ" },
 ];
 function emptyLine(key: string, vatRate: number): PurchaseLineFormValue {
-  return { key, category: "RAW_MATERIAL", description: "", quantity: "1", unitPrice: "", priceCondition: "VAT", vatRatePercent: String(vatRate * 100) };
+  return { key, category: "RAW_MATERIAL", description: "", quantity: "1", unitPrice: "", lineTotal: null, priceCondition: "VAT", vatRatePercent: String(vatRate * 100) };
 }
 function lineItemsFromApi(value: unknown, vatRate: number): PurchaseLineFormValue[] {
   if (!Array.isArray(value) || value.length === 0) return [emptyLine("edit-line-1", vatRate)];
@@ -78,6 +79,7 @@ function lineItemsFromApi(value: unknown, vatRate: number): PurchaseLineFormValu
       description: String(item.description ?? ""),
       quantity: String(item.quantity ?? "1"),
       unitPrice: unitPriceDecimalFromSnapshot(item),
+      lineTotal: lineTotalInputFromSnapshot(item),
       priceCondition: condition,
       vatRatePercent: String(item.vatRatePercent ?? vatRate * 100),
     };
@@ -206,7 +208,33 @@ export default function EditPurchaseInvoiceButton({ id, vatRate = 0.07 }: { id: 
             <div className="mt-4 overflow-x-auto"><div className="min-w-[760px]"><div className="grid grid-cols-[36px_minmax(220px,1fr)_110px_150px_150px_44px] gap-2 px-1 text-xs font-medium text-gray-500"><span>ลำดับ</span><span>รายการ</span><span>จำนวน</span><span>ราคาต่อหน่วย</span><span className="text-right">ราคารวม</span><span /></div><div className="mt-2 space-y-2">{lineItems.map((line, index) => {
               const preview = summarizePurchaseTaxLineItems([{ ...line, description: line.description || "รายการ" }], vatRate, "NEAREST"); const calculated = preview.items[0];
               const condition = line.priceCondition === "FREE" ? "ของแถม" : line.priceCondition === "VAT_EXEMPT" ? "ยกเว้น VAT" : `VAT ${line.vatRatePercent}%`;
-              return <div key={line.key} className="rounded-xl border border-gray-200 bg-white p-3"><div className="grid grid-cols-[36px_minmax(220px,1fr)_110px_150px_150px_44px] items-center gap-2"><span className="text-center text-sm text-gray-500">{index + 1}</span><input disabled={amountLocked} value={line.description} onChange={(e) => setLineItems((items) => items.map((item) => item.key === line.key ? { ...item, description: e.target.value } : item))} placeholder="ชื่อสินค้า/บริการ" className={field} /><input disabled={amountLocked} inputMode="decimal" value={line.quantity} onChange={(e) => setLineItems((items) => items.map((item) => item.key === line.key ? { ...item, quantity: e.target.value } : item))} className={field} /><input disabled={amountLocked || line.priceCondition === "FREE"} inputMode="decimal" value={line.unitPrice} onChange={(e) => setLineItems((items) => items.map((item) => item.key === line.key ? { ...item, unitPrice: e.target.value } : item))} placeholder="0.0000000000" aria-label={`ราคาต่อหน่วยบรรทัดที่ ${index + 1} (ทศนิยมไม่เกิน 10 ตำแหน่ง)`} className={field} /><div className="text-right"><span className="block text-sm font-medium tabular-nums">{fmtSatang(calculated?.baseSatang ?? 0, { zeroDash: false })}</span><span className="text-[11px] text-gray-500">{condition}</span></div><button type="button" disabled={amountLocked} onClick={() => setPriceConditionLineKey(line.key)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-40"><EllipsisVertical size={18} /></button></div>{lineItems.length > 1 && !amountLocked && <button type="button" onClick={() => setLineItems((items) => items.filter((item) => item.key !== line.key))} className="mt-1 inline-flex items-center gap-1 text-[11px] text-rose-600"><Trash2 size={12} /> ลบบรรทัด</button>}</div>;
+              return <div key={line.key} className="rounded-xl border border-gray-200 bg-white p-3">
+                <div className="grid grid-cols-[36px_minmax(220px,1fr)_110px_150px_150px_44px] items-center gap-2">
+                  <span className="text-center text-sm text-gray-500">{index + 1}</span>
+                  <input disabled={amountLocked} value={line.description} onChange={(e) => setLineItems((items) => items.map((item) => item.key === line.key ? { ...item, description: e.target.value } : item))} placeholder="ชื่อสินค้า/บริการ" className={field} />
+                  <input disabled={amountLocked} inputMode="decimal" value={line.quantity} onChange={(e) => setLineItems((items) => items.map((item) => item.key === line.key ? { ...item, quantity: e.target.value, lineTotal: null } : item))} className={field} />
+                  <input disabled={amountLocked || line.priceCondition === "FREE"} inputMode="decimal" value={line.unitPrice} onChange={(e) => setLineItems((items) => items.map((item) => item.key === line.key ? { ...item, unitPrice: e.target.value, lineTotal: null } : item))} placeholder="0.0000000000" aria-label={`ราคาต่อหน่วยบรรทัดที่ ${index + 1} (ทศนิยมไม่เกิน 10 ตำแหน่ง)`} className={field} />
+                  <div className="text-right">
+                    <input
+                      disabled={amountLocked || line.priceCondition === "FREE"}
+                      inputMode="decimal"
+                      value={line.lineTotal ?? fmtSatang(calculated?.baseSatang ?? 0, { zeroDash: false })}
+                      onFocus={() => {
+                        if (line.lineTotal !== null) return;
+                        setLineItems((items) => items.map((item) => item.key === line.key ? { ...item, lineTotal: satangToPlainInput(calculated?.baseSatang ?? 0) } : item));
+                      }}
+                      onChange={(e) => setLineItems((items) => items.map((item) => item.key === line.key ? { ...item, lineTotal: e.target.value } : item))}
+                      onClick={(e) => e.currentTarget.select()}
+                      onBlur={() => setLineItems((items) => items.map((item) => item.key === line.key && item.lineTotal?.trim() === "" ? { ...item, lineTotal: null } : item))}
+                      aria-label={`ราคารวมบรรทัดที่ ${index + 1}`}
+                      className={`${field} text-right font-medium tabular-nums`}
+                    />
+                    <span className="text-[11px] text-gray-500">{condition}</span>
+                  </div>
+                  <button type="button" disabled={amountLocked} onClick={() => setPriceConditionLineKey(line.key)} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-40"><EllipsisVertical size={18} /></button>
+                </div>
+                {lineItems.length > 1 && !amountLocked && <button type="button" onClick={() => setLineItems((items) => items.filter((item) => item.key !== line.key))} className="mt-1 inline-flex items-center gap-1 text-[11px] text-rose-600"><Trash2 size={12} /> ลบบรรทัด</button>}
+              </div>;
             })}</div></div></div>
             <button type="button" disabled={amountLocked} onClick={() => setLineItems((items) => [...items, emptyLine(`edit-line-${nextLineKey.current++}`, vatRate)])} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-medium text-sky-700 disabled:opacity-40"><Plus size={15} /> เพิ่มบรรทัด</button>
             <div className="mt-4 ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-8 gap-y-2 border-t border-sky-200 pt-4 text-sm"><span>ยอดรวม</span><strong className="text-right">{fmtSatang(base, { zeroDash: false })}</strong><span>ภาษี 7%</span><strong className="text-right">{fmtSatang(vat, { zeroDash: false })}</strong><span className="font-semibold">ยอดเงินสุทธิ</span><strong className="text-right text-base">{fmtSatang(total, { zeroDash: false })}</strong></div>
@@ -235,6 +263,6 @@ export default function EditPurchaseInvoiceButton({ id, vatRate = 0.07 }: { id: 
         <div className="mt-5 flex gap-2"><button type="submit" disabled={submitting || loading || !form} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{submitting ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}</button><button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600">ปิด</button></div>
       </form>
     </div>}
-    {selectedPriceLine && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-xl rounded-xl bg-white shadow-xl"><div className="flex items-center justify-between border-b px-5 py-4"><h3 className="text-lg font-semibold">เงื่อนไขราคา</h3><button type="button" onClick={() => setPriceConditionLineKey(null)}><X size={20} /></button></div><div className="space-y-3 p-5">{([['FREE', 'สินค้านี้เป็นของแถม'], ['VAT_EXEMPT', 'ได้รับยกเว้นภาษีมูลค่าเพิ่ม'], ['VAT', 'มีภาษีมูลค่าเพิ่มหรือกำหนดเอง']] as Array<[PurchaseTaxPriceCondition, string]>).map(([value, text]) => <label key={value} className="flex items-center gap-3 text-sm"><input type="radio" checked={selectedPriceLine.priceCondition === value} onChange={() => setLineItems((items) => items.map((item) => item.key === selectedPriceLine.key ? { ...item, priceCondition: value } : item))} />{text}</label>)}{selectedPriceLine.priceCondition === "VAT" && <label className="ml-7 block max-w-xs text-xs text-gray-500">อัตราภาษีมูลค่าเพิ่ม<div className="mt-1 flex items-center gap-2"><input inputMode="decimal" value={selectedPriceLine.vatRatePercent} onChange={(e) => setLineItems((items) => items.map((item) => item.key === selectedPriceLine.key ? { ...item, vatRatePercent: e.target.value } : item))} className={field} /><span>%</span></div></label>}</div><div className="flex justify-end border-t px-5 py-4"><button type="button" onClick={() => setPriceConditionLineKey(null)} className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white">บันทึก</button></div></div></div>}
+    {selectedPriceLine && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-xl rounded-xl bg-white shadow-xl"><div className="flex items-center justify-between border-b px-5 py-4"><h3 className="text-lg font-semibold">เงื่อนไขราคา</h3><button type="button" onClick={() => setPriceConditionLineKey(null)}><X size={20} /></button></div><div className="space-y-3 p-5">{([['FREE', 'สินค้านี้เป็นของแถม'], ['VAT_EXEMPT', 'ได้รับยกเว้นภาษีมูลค่าเพิ่ม'], ['VAT', 'มีภาษีมูลค่าเพิ่มหรือกำหนดเอง']] as Array<[PurchaseTaxPriceCondition, string]>).map(([value, text]) => <label key={value} className="flex items-center gap-3 text-sm"><input type="radio" checked={selectedPriceLine.priceCondition === value} onChange={() => setLineItems((items) => items.map((item) => item.key === selectedPriceLine.key ? { ...item, priceCondition: value, lineTotal: value === "FREE" ? null : item.lineTotal } : item))} />{text}</label>)}{selectedPriceLine.priceCondition === "VAT" && <label className="ml-7 block max-w-xs text-xs text-gray-500">อัตราภาษีมูลค่าเพิ่ม<div className="mt-1 flex items-center gap-2"><input inputMode="decimal" value={selectedPriceLine.vatRatePercent} onChange={(e) => setLineItems((items) => items.map((item) => item.key === selectedPriceLine.key ? { ...item, vatRatePercent: e.target.value } : item))} className={field} /><span>%</span></div></label>}</div><div className="flex justify-end border-t px-5 py-4"><button type="button" onClick={() => setPriceConditionLineKey(null)} className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white">บันทึก</button></div></div></div>}
   </>;
 }

@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
 import { Prisma } from "@lamunn/db-finance";
-import { summarizePurchaseTaxLineItems } from "../src/lib/accounting/purchaseTaxLineItems";
+import { lineTotalInputFromSnapshot, summarizePurchaseTaxLineItems } from "../src/lib/accounting/purchaseTaxLineItems";
 import { toBaht } from "../src/lib/accounting/money";
 
 loadEnvConfig(process.cwd());
@@ -40,10 +40,32 @@ function checkTenDecimalUnitPrice() {
   }
 }
 
+function checkEditableLineTotal() {
+  const summary = summarizePurchaseTaxLineItems([
+    { category: "RAW_MATERIAL", description: "[test] ราคารวมแก้เอง", quantity: "480", unitPrice: "106.5420", lineTotal: "51140.00", priceCondition: "VAT", vatRatePercent: "7" },
+  ], 0.07);
+  const item = summary.items[0];
+  if (summary.errors.length > 0) throw new Error(summary.errors.join(", "));
+  if (!item?.lineTotalOverridden || item.baseSatang !== 5_114_000 || item.vatSatang !== 357_980 || item.totalSatang !== 5_471_980) {
+    throw new Error("ราคารวมที่ผู้ใช้แก้ไม่ได้เป็นยอดหลักของบรรทัดและภาษี");
+  }
+  if (lineTotalInputFromSnapshot(item) !== "51140.00") {
+    throw new Error("หน้าแก้ไขไม่สามารถคืนค่าราคารวมที่ผู้ใช้กำหนดไว้");
+  }
+
+  const invalid = summarizePurchaseTaxLineItems([
+    { category: "OTHER", description: "[test] ราคารวมเกินสตางค์", quantity: "1", unitPrice: "1", lineTotal: "1.001", priceCondition: "VAT" },
+  ], 0.07);
+  if (!invalid.errors.some((error) => error.includes("ทศนิยมไม่เกิน 2 ตำแหน่ง"))) {
+    throw new Error("ระบบต้องปฏิเสธราคารวมที่ละเอียดเกินหนึ่งสตางค์");
+  }
+}
+
 async function main() {
   checkTenDecimalUnitPrice();
+  checkEditableLineTotal();
   if (process.argv.includes("--pure")) {
-    console.log("✅ ราคาต่อหน่วย 10 ตำแหน่งคำนวณแบบ exact และปัดยอดรวมเป็นสตางค์ถูกต้อง");
+    console.log("✅ ราคาต่อหน่วย 10 ตำแหน่งและราคารวมที่แก้เองคำนวณเป็นสตางค์ถูกต้อง");
     return;
   }
 
@@ -53,13 +75,13 @@ async function main() {
 
   try {
     const summary = summarizePurchaseTaxLineItems([
-      { category: "RAW_MATERIAL", description: "[test] แป้ง", quantity: "2", unitPrice: "100.50", priceCondition: "VAT", vatRatePercent: "7" },
+      { category: "RAW_MATERIAL", description: "[test] แป้ง", quantity: "2", unitPrice: "100.50", lineTotal: "200.01", priceCondition: "VAT", vatRatePercent: "7" },
       { category: "PACKAGING", description: "[test] กล่องยกเว้น VAT", quantity: "3", unitPrice: "20", priceCondition: "VAT_EXEMPT" },
       { category: "OTHER", description: "[test] ของแถม", quantity: "1", unitPrice: "", priceCondition: "FREE" },
     ], 0.07, "UP");
 
     if (summary.errors.length > 0) throw new Error(summary.errors.join(", "));
-    if (summary.baseSatang !== 26_100 || summary.vatSatang !== 1_408 || summary.totalSatang !== 27_508) {
+    if (summary.baseSatang !== 26_001 || summary.vatSatang !== 1_401 || summary.totalSatang !== 27_402) {
       throw new Error(`ยอดรวมผิด: base=${summary.baseSatang} vat=${summary.vatSatang} total=${summary.totalSatang}`);
     }
 
@@ -83,10 +105,10 @@ async function main() {
       throw new Error("รายละเอียดสินค้าที่บันทึกไว้ไม่ครบ 3 บรรทัด");
     }
     const firstSavedItem = saved.lineItems[0] as Record<string, unknown>;
-    if (firstSavedItem.unitPriceDecimal !== "100.50") {
-      throw new Error("snapshot ไม่ได้เก็บราคาต่อหน่วยแบบ exact");
+    if (firstSavedItem.unitPriceDecimal !== "100.50" || firstSavedItem.lineTotalOverridden !== true || lineTotalInputFromSnapshot(firstSavedItem) !== "200.01") {
+      throw new Error("snapshot ไม่ได้เก็บราคาต่อหน่วยและราคารวมที่แก้เอง");
     }
-    if (Number(saved.baseAmount) !== 261 || Number(saved.vatAmount) !== 14.08 || Number(saved.totalAmount) !== 275.08) {
+    if (Number(saved.baseAmount) !== 260.01 || Number(saved.vatAmount) !== 14.01 || Number(saved.totalAmount) !== 274.02) {
       throw new Error("ยอดในฐานข้อมูลไม่ตรงกับรายละเอียดสินค้า");
     }
 
