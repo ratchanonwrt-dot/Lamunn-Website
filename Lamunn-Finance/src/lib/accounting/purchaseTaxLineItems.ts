@@ -16,7 +16,9 @@ export interface CalculatedPurchaseTaxLineItem {
   category: PurchaseTaxItemCategory;
   description: string;
   quantity: string;
-  /** 1 หน่วย = 0.0001 บาท — ต้องเก็บละเอียดกว่าสตางค์เพื่อรองรับราคาต่อหน่วย 4 ตำแหน่ง */
+  /** เก็บเป็นข้อความเพื่อรักษาทศนิยมตำแหน่งที่ 1–10 โดยไม่ให้ JavaScript float เปลี่ยนค่า */
+  unitPriceDecimal: string;
+  /** ค่าเดิมหน่วย 0.0001 บาท เก็บไว้ให้ snapshot/รายงานรุ่นเก่ายังอ่านร่วมกันได้ */
   unitPriceSubSatang: number;
   unitPriceSatang: number;
   priceCondition: PurchaseTaxPriceCondition;
@@ -37,6 +39,10 @@ export interface PurchaseTaxLineItemSummary {
 
 const CATEGORIES = new Set<PurchaseTaxItemCategory>(["RAW_MATERIAL", "PACKAGING", "OTHER"]);
 const CONDITIONS = new Set<PurchaseTaxPriceCondition>(["VAT", "VAT_EXEMPT", "FREE"]);
+const UNIT_PRICE_DECIMAL_PLACES = 10;
+const UNIT_PRICE_SCALE = 10n ** BigInt(UNIT_PRICE_DECIMAL_PLACES);
+const SATANG_DIVISOR = UNIT_PRICE_SCALE / 100n;
+const LEGACY_SUB_SATANG_DIVISOR = UNIT_PRICE_SCALE / 10_000n;
 
 function parsePositiveDecimal(value: unknown): { numerator: bigint; denominator: bigint; normalized: string } | null {
   const text = String(value ?? "").trim().replace(/,/g, "");
@@ -48,33 +54,38 @@ function parsePositiveDecimal(value: unknown): { numerator: bigint; denominator:
   return { numerator, denominator, normalized: text };
 }
 
-function parseUnitPriceSubSatang(value: unknown): number | null {
+function parseUnitPriceDecimal(value: unknown): { scaled: bigint; normalized: string } | null {
   const original = String(value ?? "").trim();
   const parenthesized = /^\(.*\)$/.test(original);
   const cleaned = original.replace(/^\((.*)\)$/, "$1").replace(/[,\s฿]/g, "");
-  if (!/^[+-]?\d+(?:\.\d{1,4})?$/.test(cleaned)) return null;
+  if (!new RegExp(`^[+-]?\\d+(?:\\.\\d{1,${UNIT_PRICE_DECIMAL_PLACES}})?$`).test(cleaned)) return null;
 
   const negative = parenthesized || cleaned.startsWith("-");
   const unsigned = cleaned.replace(/^[+-]/, "");
   const [whole, fraction = ""] = unsigned.split(".");
-  const scaled = BigInt(whole) * 10_000n + BigInt(fraction.padEnd(4, "0") || "0");
-  const signed = negative ? -scaled : scaled;
-  if (signed > BigInt(Number.MAX_SAFE_INTEGER) || signed < BigInt(Number.MIN_SAFE_INTEGER)) return null;
-  return Number(signed);
+  const magnitude = BigInt(whole) * UNIT_PRICE_SCALE
+    + BigInt(fraction.padEnd(UNIT_PRICE_DECIMAL_PLACES, "0") || "0");
+  const scaled = negative ? -magnitude : magnitude;
+  const normalizedWhole = BigInt(whole).toString();
+  const normalized = `${scaled < 0n ? "-" : ""}${normalizedWhole}${fraction ? `.${fraction}` : ""}`;
+  return { scaled, normalized };
 }
 
-function roundedSubSatangToSatang(unitPriceSubSatang: number): number {
-  const sign = unitPriceSubSatang < 0 ? -1 : 1;
-  const rounded = (BigInt(Math.abs(unitPriceSubSatang)) + 50n) / 100n;
-  return Number(rounded) * sign;
+function roundedBigIntToSafeNumber(value: bigint, divisor: bigint): number | null {
+  const sign = value < 0n ? -1n : 1n;
+  const rounded = ((value < 0n ? -value : value) + divisor / 2n) / divisor * sign;
+  if (rounded > BigInt(Number.MAX_SAFE_INTEGER) || rounded < BigInt(Number.MIN_SAFE_INTEGER)) return null;
+  return Number(rounded);
 }
 
-function multiplySubSatang(unitPriceSubSatang: number, quantity: { numerator: bigint; denominator: bigint }): number {
-  const sign = unitPriceSubSatang < 0 ? -1 : 1;
-  const denominator = quantity.denominator * 100n;
-  const product = BigInt(Math.abs(unitPriceSubSatang)) * quantity.numerator;
-  const rounded = (product + denominator / 2n) / denominator;
-  return Number(rounded) * sign;
+function multiplyUnitPriceToSatang(
+  unitPriceScaled: bigint,
+  quantity: { numerator: bigint; denominator: bigint },
+): number | null {
+  return roundedBigIntToSafeNumber(
+    unitPriceScaled * quantity.numerator,
+    quantity.denominator * SATANG_DIVISOR,
+  );
 }
 
 export function fmtUnitPriceSubSatang(value: number): string {
@@ -84,6 +95,30 @@ export function fmtUnitPriceSubSatang(value: number): string {
   const whole = Math.trunc(magnitude / 10_000).toLocaleString("th-TH");
   const fraction = String(magnitude % 10_000).padStart(4, "0");
   return `${sign}${whole}.${fraction}`;
+}
+
+export function fmtUnitPriceDecimal(value: string): string {
+  const parsed = parseUnitPriceDecimal(value);
+  if (!parsed) return "0.0000000000";
+  const sign = parsed.scaled < 0n ? "-" : "";
+  const unsigned = parsed.normalized.replace(/^-/, "");
+  const [whole, fraction = ""] = unsigned.split(".");
+  const groupedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${sign}${groupedWhole}.${fraction.padEnd(UNIT_PRICE_DECIMAL_PLACES, "0")}`;
+}
+
+/** อ่านได้ทั้ง snapshot ใหม่แบบ exact และ snapshot เก่าที่เก็บหน่วย 0.0001 บาท */
+export function unitPriceDecimalFromSnapshot(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const item = value as Record<string, unknown>;
+  const exact = parseUnitPriceDecimal(item.unitPriceDecimal);
+  if (exact) return exact.normalized;
+  const legacy = Number(item.unitPriceSubSatang);
+  if (Number.isSafeInteger(legacy)) return fmtUnitPriceSubSatang(legacy).replace(/,/g, "");
+  const oldestSatang = Number(item.unitPriceSatang);
+  return Number.isSafeInteger(oldestSatang)
+    ? fmtUnitPriceSubSatang(oldestSatang * 100).replace(/,/g, "")
+    : "";
 }
 
 export function summarizePurchaseTaxLineItems(
@@ -107,13 +142,13 @@ export function summarizePurchaseTaxLineItems(
       ? input.priceCondition as PurchaseTaxPriceCondition
       : "VAT";
     const unitPriceText = String(input.unitPrice ?? "").trim();
-    const parsedUnitPrice = unitPriceText ? parseUnitPriceSubSatang(unitPriceText) : null;
+    const parsedUnitPrice = unitPriceText ? parseUnitPriceDecimal(unitPriceText) : null;
 
     if (!description) errors.push(`บรรทัดที่ ${row}: กรุณากรอกรายการ`);
     if (!quantity) errors.push(`บรรทัดที่ ${row}: จำนวนต้องมากกว่า 0 และมีทศนิยมไม่เกิน 4 ตำแหน่ง`);
     if (priceCondition !== "FREE" && !unitPriceText) errors.push(`บรรทัดที่ ${row}: กรุณากรอกราคาต่อหน่วย`);
     if (priceCondition !== "FREE" && unitPriceText && parsedUnitPrice === null) {
-      errors.push(`บรรทัดที่ ${row}: ราคาต่อหน่วยต้องเป็นตัวเลขและมีทศนิยมไม่เกิน 4 ตำแหน่ง`);
+      errors.push(`บรรทัดที่ ${row}: ราคาต่อหน่วยต้องเป็นตัวเลขและมีทศนิยมไม่เกิน 10 ตำแหน่ง`);
     }
     if (!quantity || !description || (priceCondition !== "FREE" && (!unitPriceText || parsedUnitPrice === null))) return;
 
@@ -126,9 +161,15 @@ export function summarizePurchaseTaxLineItems(
       return;
     }
 
-    const unitPriceSubSatang = priceCondition === "FREE" ? 0 : parsedUnitPrice ?? 0;
-    // ปัดเป็นสตางค์หลังคูณจำนวนแล้ว เพื่อไม่ทิ้งทศนิยมตำแหน่งที่ 3–4 ของราคาต่อหน่วยก่อนเวลา
-    const baseSatang = priceCondition === "FREE" ? 0 : multiplySubSatang(unitPriceSubSatang, quantity);
+    const unitPriceScaled = priceCondition === "FREE" ? 0n : parsedUnitPrice?.scaled ?? 0n;
+    // คูณราคา exact กับจำนวนก่อน แล้วจึงปัดผลรวมเป็นสตางค์ เพื่อไม่ทิ้งทศนิยมตำแหน่งที่ 3–10 ก่อนเวลา
+    const baseSatang = priceCondition === "FREE" ? 0 : multiplyUnitPriceToSatang(unitPriceScaled, quantity);
+    const unitPriceSubSatang = roundedBigIntToSafeNumber(unitPriceScaled, LEGACY_SUB_SATANG_DIVISOR);
+    const unitPriceSatang = roundedBigIntToSafeNumber(unitPriceScaled, SATANG_DIVISOR);
+    if (baseSatang === null || unitPriceSubSatang === null || unitPriceSatang === null) {
+      errors.push(`บรรทัดที่ ${row}: ราคาหรือยอดรวมสูงเกินกว่าระบบจะคำนวณได้อย่างปลอดภัย`);
+      return;
+    }
     const vatSatang = priceCondition === "VAT"
       ? addVatExclusive(baseSatang, ratePercent / 100, "NEAREST").vat
       : 0;
@@ -136,8 +177,9 @@ export function summarizePurchaseTaxLineItems(
       category,
       description,
       quantity: quantity.normalized,
+      unitPriceDecimal: priceCondition === "FREE" ? "0" : parsedUnitPrice?.normalized ?? "0",
       unitPriceSubSatang,
-      unitPriceSatang: roundedSubSatangToSatang(unitPriceSubSatang),
+      unitPriceSatang,
       priceCondition,
       vatRatePercent: ratePercent.toString(),
       baseSatang,

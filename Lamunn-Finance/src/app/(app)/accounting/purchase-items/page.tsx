@@ -3,7 +3,7 @@ import { FileSpreadsheet, Printer } from "lucide-react";
 import { requireSectionPage } from "@/lib/permissions";
 import { getAllSettings } from "@/lib/settings";
 import { loadPurchaseItemReport, purchaseItemReportFilters, PURCHASE_ITEM_CATEGORY_LABELS } from "@/lib/accounting/purchaseItemReport";
-import { fmtUnitPriceSubSatang } from "@/lib/accounting/purchaseTaxLineItems";
+import { fmtUnitPriceDecimal } from "@/lib/accounting/purchaseTaxLineItems";
 import StatementShell from "@/components/accounting/StatementShell";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 import { formatAccountingDate } from "@/lib/accounting/dateFormat";
@@ -74,7 +74,7 @@ export default async function PurchaseItemsPage({ searchParams }: { searchParams
                   <td className="px-2 py-2"><span className="rounded bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">{PURCHASE_ITEM_CATEGORY_LABELS[row.category]}</span></td>
                   <td className="px-2 py-2 text-gray-800">{row.description}</td>
                   <td className="px-2 py-2 text-right">{row.quantity}</td>
-                  <td className="px-2 py-2 text-right">{fmtUnitPriceSubSatang(row.unitPriceSubSatang)}</td>
+                  <td className="px-2 py-2 text-right">{fmtUnitPriceDecimal(row.unitPriceDecimal)}</td>
                 </tr>
               ))}
             </tbody>

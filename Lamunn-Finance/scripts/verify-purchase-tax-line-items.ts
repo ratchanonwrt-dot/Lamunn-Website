@@ -12,31 +12,38 @@ loadEnvConfig(process.cwd());
 
 const YEAR = 2098;
 
-function checkFourDecimalUnitPrice() {
+function checkTenDecimalUnitPrice() {
   const summary = summarizePurchaseTaxLineItems([
-    { category: "RAW_MATERIAL", description: "[test] ราคาละเอียด", quantity: "3.5", unitPrice: "12.3456", priceCondition: "VAT", vatRatePercent: "7" },
+    { category: "RAW_MATERIAL", description: "[test] ราคาละเอียด", quantity: "3.5", unitPrice: "12.3456789012", priceCondition: "VAT", vatRatePercent: "7" },
   ], 0.07);
   const item = summary.items[0];
   if (summary.errors.length > 0) throw new Error(summary.errors.join(", "));
-  if (!item || item.unitPriceSubSatang !== 123_456 || item.unitPriceSatang !== 1_235) {
-    throw new Error("ราคาต่อหน่วย 4 ตำแหน่งไม่ได้เก็บเป็นจำนวนเต็มอย่างถูกต้อง");
+  if (!item || item.unitPriceDecimal !== "12.3456789012" || item.unitPriceSubSatang !== 123_457 || item.unitPriceSatang !== 1_235) {
+    throw new Error("ราคาต่อหน่วย 10 ตำแหน่งไม่ได้เก็บแบบ exact หรือค่า compatibility ไม่ถูกต้อง");
   }
   if (item.baseSatang !== 4_321 || item.vatSatang !== 302 || item.totalSatang !== 4_623) {
-    throw new Error(`ยอดจากราคา 4 ตำแหน่งผิด: base=${item.baseSatang} vat=${item.vatSatang} total=${item.totalSatang}`);
+    throw new Error(`ยอดจากราคา 10 ตำแหน่งผิด: base=${item.baseSatang} vat=${item.vatSatang} total=${item.totalSatang}`);
   }
 
   const invalid = summarizePurchaseTaxLineItems([
-    { category: "OTHER", description: "[test] ทศนิยมเกิน", quantity: "1", unitPrice: "12.34567", priceCondition: "VAT" },
+    { category: "OTHER", description: "[test] ทศนิยมเกิน", quantity: "1", unitPrice: "12.34567890123", priceCondition: "VAT" },
   ], 0.07);
-  if (!invalid.errors.some((error) => error.includes("ทศนิยมไม่เกิน 4 ตำแหน่ง"))) {
-    throw new Error("ระบบต้องปฏิเสธราคาต่อหน่วยที่เกิน 4 ตำแหน่ง");
+  if (!invalid.errors.some((error) => error.includes("ทศนิยมไม่เกิน 10 ตำแหน่ง"))) {
+    throw new Error("ระบบต้องปฏิเสธราคาต่อหน่วยที่เกิน 10 ตำแหน่ง");
+  }
+
+  const tiny = summarizePurchaseTaxLineItems([
+    { category: "OTHER", description: "[test] ตำแหน่งที่สิบ", quantity: "100000000", unitPrice: "0.0000000001", priceCondition: "VAT_EXEMPT" },
+  ], 0.07);
+  if (tiny.errors.length > 0 || tiny.baseSatang !== 1 || tiny.items[0]?.unitPriceDecimal !== "0.0000000001") {
+    throw new Error("ตำแหน่งทศนิยมที่ 10 ไม่ถูกนำไปคำนวณก่อนปัดเป็นสตางค์");
   }
 }
 
 async function main() {
-  checkFourDecimalUnitPrice();
+  checkTenDecimalUnitPrice();
   if (process.argv.includes("--pure")) {
-    console.log("✅ ราคาต่อหน่วย 4 ตำแหน่งและการคำนวณเป็นจำนวนเต็มถูกต้อง");
+    console.log("✅ ราคาต่อหน่วย 10 ตำแหน่งคำนวณแบบ exact และปัดยอดรวมเป็นสตางค์ถูกต้อง");
     return;
   }
 
@@ -75,11 +82,15 @@ async function main() {
     if (!saved || !Array.isArray(saved.lineItems) || saved.lineItems.length !== 3) {
       throw new Error("รายละเอียดสินค้าที่บันทึกไว้ไม่ครบ 3 บรรทัด");
     }
+    const firstSavedItem = saved.lineItems[0] as Record<string, unknown>;
+    if (firstSavedItem.unitPriceDecimal !== "100.50") {
+      throw new Error("snapshot ไม่ได้เก็บราคาต่อหน่วยแบบ exact");
+    }
     if (Number(saved.baseAmount) !== 261 || Number(saved.vatAmount) !== 14.08 || Number(saved.totalAmount) !== 275.08) {
       throw new Error("ยอดในฐานข้อมูลไม่ตรงกับรายละเอียดสินค้า");
     }
 
-    console.log("✅ รายละเอียดสินค้า ราคา 4 ตำแหน่ง เงื่อนไข VAT ยอดรวม และ snapshot ถูกต้อง");
+    console.log("✅ รายละเอียดสินค้า ราคา 10 ตำแหน่ง เงื่อนไข VAT ยอดรวม และ snapshot ถูกต้อง");
   } finally {
     if (invoiceId) await prisma.accPurchaseTaxInvoice.delete({ where: { id: invoiceId } }).catch(() => undefined);
     await prisma.$disconnect();

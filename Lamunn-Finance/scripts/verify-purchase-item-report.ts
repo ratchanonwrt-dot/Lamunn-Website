@@ -26,15 +26,15 @@ async function main() {
       vendorName: "[test] ซัพพลายเออร์",
       vendorBranchTag: "00014",
       lineItems: [
-        { category: "RAW_MATERIAL", description: "[test] แป้ง", quantity: "2", unitPriceSubSatang: 125506, unitPriceSatang: 12551, priceCondition: "VAT" },
+        { category: "RAW_MATERIAL", description: "[test] แป้ง", quantity: "2", unitPriceDecimal: "12.5506123456", unitPriceSubSatang: 125506, unitPriceSatang: 1255, priceCondition: "VAT" },
         { category: "PACKAGING", description: "[test] กล่อง", quantity: "3.5", unitPriceSatang: 2000, priceCondition: "VAT_EXEMPT" },
       ],
     }]);
     if (report.rows.length !== 2 || report.rows[0].category !== "RAW_MATERIAL" || report.rows[1].quantity !== "3.5") {
       throw new Error("ตัวแปลงข้อมูลรายงานไม่ถูกต้อง");
     }
-    if (report.rows[0].unitPriceSubSatang !== 125506 || report.rows[1].unitPriceSubSatang !== 200000) {
-      throw new Error("รายงานต้องอ่านราคาใหม่ 4 ตำแหน่งและราคาเก่า 2 ตำแหน่งร่วมกันได้");
+    if (report.rows[0].unitPriceDecimal !== "12.5506123456" || report.rows[1].unitPriceDecimal !== "20.0000") {
+      throw new Error("รายงานต้องอ่านราคาใหม่ 10 ตำแหน่งและราคาเก่าร่วมกันได้");
     }
     const filtered = filterPurchaseItemReport(report, "บรรจุ");
     if (filtered.rows.length !== 1 || filtered.rows[0].category !== "PACKAGING") throw new Error("ตัวกรองหมวดแบบพิมพ์ค้นหาไม่ถูกต้อง");
@@ -55,7 +55,7 @@ async function main() {
         vendorBranchTag: "00014",
         description: "[test] รายละเอียดรายงาน",
         lineItems: [
-          { category: "RAW_MATERIAL", description: "[test] แป้ง", quantity: "2", unitPriceSubSatang: 125506, unitPriceSatang: 12551, priceCondition: "VAT", vatRatePercent: "7", baseSatang: 25101, vatSatang: 1757, totalSatang: 26858 },
+          { category: "RAW_MATERIAL", description: "[test] แป้ง", quantity: "2", unitPriceDecimal: "12.5506123456", unitPriceSubSatang: 125506, unitPriceSatang: 1255, priceCondition: "VAT", vatRatePercent: "7", baseSatang: 2510, vatSatang: 176, totalSatang: 2686 },
           { category: "PACKAGING", description: "[test] กล่อง", quantity: "3.5", unitPriceSatang: 2000, priceCondition: "VAT_EXEMPT", vatRatePercent: "0", baseSatang: 7000, vatSatang: 0, totalSatang: 7000 },
         ] as Prisma.InputJsonValue,
         baseAmount: 321.01,
@@ -86,7 +86,7 @@ async function main() {
     if (ownRows.length !== 1) throw new Error(`ควรพบวัตถุดิบ 1 บรรทัด แต่พบ ${ownRows.length}`);
     if (ownRows[0].category !== "RAW_MATERIAL") throw new Error("ตัวกรองหมวดรายการไม่ถูกต้อง");
     if (report.rows.some((row) => row.invoiceId === voided.id)) throw new Error("ใบที่ยกเลิกไม่ควรแสดงในรายงาน");
-    if (ownRows[0].unitPriceSubSatang !== 125506 || ownRows[0].quantity !== "2") throw new Error("จำนวนหรือราคาต่อหน่วยไม่ตรง snapshot");
+    if (ownRows[0].unitPriceDecimal !== "12.5506123456" || ownRows[0].quantity !== "2") throw new Error("จำนวนหรือราคาต่อหน่วย 10 ตำแหน่งไม่ตรง snapshot");
     if (ownRows[0].vendorBranchTag !== "00014") throw new Error("สาขาซัพพลายเออร์ไม่ถูกต้อง");
     console.log("✅ รายงานดึงรายละเอียดตามช่วงวันที่ กรองหมวด และตัดใบยกเลิกถูกต้อง");
   } finally {

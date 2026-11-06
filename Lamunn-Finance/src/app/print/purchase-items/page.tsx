@@ -3,7 +3,7 @@ import { requireSectionPage } from "@/lib/permissions";
 import { getAllSettings } from "@/lib/settings";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 import { loadPurchaseItemReport, purchaseItemReportFilters, PURCHASE_ITEM_CATEGORY_LABELS } from "@/lib/accounting/purchaseItemReport";
-import { fmtUnitPriceSubSatang } from "@/lib/accounting/purchaseTaxLineItems";
+import { fmtUnitPriceDecimal } from "@/lib/accounting/purchaseTaxLineItems";
 import PrintButton from "@/components/accounting/PrintButton";
 import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 
@@ -49,7 +49,7 @@ export default async function PurchaseItemsPrintPage({ searchParams }: { searchP
                 <td className="border border-black px-2 py-1.5">{PURCHASE_ITEM_CATEGORY_LABELS[row.category]}</td>
                 <td className="border border-black px-2 py-1.5 break-words">{row.description}</td>
                 <td className="border border-black px-2 py-1.5 text-right">{row.quantity}</td>
-                <td className="border border-black px-2 py-1.5 text-right">{fmtUnitPriceSubSatang(row.unitPriceSubSatang)}</td>
+                <td className="border border-black px-2 py-1.5 text-right">{fmtUnitPriceDecimal(row.unitPriceDecimal)}</td>
               </tr>
             ))}
           </tbody>

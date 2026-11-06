@@ -47,10 +47,10 @@ export function buildPurchaseItemWorkbook(report: PurchaseItemReport, options: P
       PURCHASE_ITEM_CATEGORY_LABELS[item.category],
       item.description,
       Number(item.quantity),
-      item.unitPriceSubSatang / 10_000,
+      Number(item.unitPriceDecimal),
     ];
     row.getCell(6).numFmt = "#,##0.####";
-    row.getCell(7).numFmt = "#,##0.0000";
+    row.getCell(7).numFmt = "#,##0.0000000000";
     row.alignment = { vertical: "top", wrapText: true };
   });
 
