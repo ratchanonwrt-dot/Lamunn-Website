@@ -63,7 +63,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         })
       : null
   );
-  const [expenseAccounts, paymentAccounts, partners] = await Promise.all([
+  // ลำดับผลลัพธ์ต้องตรงกับ query ด้านล่าง เพราะถ้าคู่ค้ากับบัญชีจ่ายสลับกัน
+  // ช่องเลือกคู่ค้าจะพยายามอ่านชื่อจากข้อมูลบัญชีและทำให้หน้าแก้ไขล้มทั้งหน้า
+  const [expenseAccounts, partners, paymentAccounts] = await Promise.all([
     prisma.accAccount.findMany({
       where: { isActive: true, isPostable: true, type: { in: ["EXPENSE", "ASSET"] }, vatRole: null },
       orderBy: { code: "asc" },
