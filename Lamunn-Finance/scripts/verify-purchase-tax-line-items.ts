@@ -4,8 +4,8 @@
  */
 import { randomUUID } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
-import { Prisma } from "@lamunn/db-finance";
-import { lineTotalInputFromSnapshot, summarizePurchaseTaxLineItems } from "../src/lib/accounting/purchaseTaxLineItems";
+import type { Prisma } from "@lamunn/db-finance";
+import { lineTotalInputFromSnapshot, summarizePurchaseTaxLineItems, totalConditionFromSnapshot } from "../src/lib/accounting/purchaseTaxLineItems";
 import { toBaht } from "../src/lib/accounting/money";
 
 loadEnvConfig(process.cwd());
@@ -61,11 +61,36 @@ function checkEditableLineTotal() {
   }
 }
 
+function checkLineTotalVatConditions() {
+  const vatIncluded = summarizePurchaseTaxLineItems([
+    { category: "RAW_MATERIAL", description: "[test] ยอดรวมภาษี", quantity: "1", unitPrice: "107", lineTotal: "107.00", priceCondition: "VAT", totalCondition: "VAT_INCLUDED", vatRatePercent: "7" },
+  ], 0.07);
+  const includedItem = vatIncluded.items[0];
+  if (vatIncluded.errors.length > 0 || includedItem?.baseSatang !== 10_000 || includedItem.vatSatang !== 700 || includedItem.totalSatang !== 10_700) {
+    throw new Error("ยอดรวมภาษี 7% ไม่ได้ถูกถอดเป็นฐาน 100.00 และภาษี 7.00");
+  }
+  if (totalConditionFromSnapshot(includedItem) !== "VAT_INCLUDED" || lineTotalInputFromSnapshot(includedItem) !== "107.00") {
+    throw new Error("snapshot ยอดรวมภาษีไม่สามารถคืนเงื่อนไขและยอดที่ผู้ใช้กรอก");
+  }
+
+  const vatExcluded = summarizePurchaseTaxLineItems([
+    { category: "RAW_MATERIAL", description: "[test] ยอดก่อนภาษี", quantity: "1", unitPrice: "107", lineTotal: "107.00", priceCondition: "VAT", totalCondition: "VAT_EXCLUDED", vatRatePercent: "7" },
+  ], 0.07);
+  const excludedItem = vatExcluded.items[0];
+  if (vatExcluded.errors.length > 0 || excludedItem?.baseSatang !== 10_700 || excludedItem.vatSatang !== 749 || excludedItem.totalSatang !== 11_449) {
+    throw new Error("ยอดก่อนภาษี 7% ไม่ได้ถูกใช้เป็นฐานแล้วบวกภาษีอย่างถูกต้อง");
+  }
+  if (totalConditionFromSnapshot({}) !== "VAT_EXCLUDED") {
+    throw new Error("เอกสารเก่าต้องใช้เงื่อนไขยอดก่อนภาษีเพื่อไม่เปลี่ยนยอดเดิม");
+  }
+}
+
 async function main() {
   checkTenDecimalUnitPrice();
   checkEditableLineTotal();
+  checkLineTotalVatConditions();
   if (process.argv.includes("--pure")) {
-    console.log("✅ ราคาต่อหน่วย 10 ตำแหน่งและราคารวมที่แก้เองคำนวณเป็นสตางค์ถูกต้อง");
+    console.log("✅ ราคาต่อหน่วย ราคารวม และเงื่อนไขยอดรวม/ก่อน VAT คำนวณเป็นสตางค์ถูกต้อง");
     return;
   }
 
@@ -75,7 +100,7 @@ async function main() {
 
   try {
     const summary = summarizePurchaseTaxLineItems([
-      { category: "RAW_MATERIAL", description: "[test] แป้ง", quantity: "2", unitPrice: "100.50", lineTotal: "200.01", priceCondition: "VAT", vatRatePercent: "7" },
+      { category: "RAW_MATERIAL", description: "[test] แป้ง", quantity: "2", unitPrice: "100.50", lineTotal: "214.01", priceCondition: "VAT", totalCondition: "VAT_INCLUDED", vatRatePercent: "7" },
       { category: "PACKAGING", description: "[test] กล่องยกเว้น VAT", quantity: "3", unitPrice: "20", priceCondition: "VAT_EXEMPT" },
       { category: "OTHER", description: "[test] ของแถม", quantity: "1", unitPrice: "", priceCondition: "FREE" },
     ], 0.07, "UP");
@@ -105,14 +130,14 @@ async function main() {
       throw new Error("รายละเอียดสินค้าที่บันทึกไว้ไม่ครบ 3 บรรทัด");
     }
     const firstSavedItem = saved.lineItems[0] as Record<string, unknown>;
-    if (firstSavedItem.unitPriceDecimal !== "100.50" || firstSavedItem.lineTotalOverridden !== true || lineTotalInputFromSnapshot(firstSavedItem) !== "200.01") {
-      throw new Error("snapshot ไม่ได้เก็บราคาต่อหน่วยและราคารวมที่แก้เอง");
+    if (firstSavedItem.unitPriceDecimal !== "100.50" || firstSavedItem.lineTotalOverridden !== true || totalConditionFromSnapshot(firstSavedItem) !== "VAT_INCLUDED" || lineTotalInputFromSnapshot(firstSavedItem) !== "214.01") {
+      throw new Error("snapshot ไม่ได้เก็บราคาต่อหน่วย เงื่อนไขยอดรวมภาษี และราคารวมที่แก้เอง");
     }
     if (Number(saved.baseAmount) !== 260.01 || Number(saved.vatAmount) !== 14.01 || Number(saved.totalAmount) !== 274.02) {
       throw new Error("ยอดในฐานข้อมูลไม่ตรงกับรายละเอียดสินค้า");
     }
 
-    console.log("✅ รายละเอียดสินค้า ราคา 10 ตำแหน่ง เงื่อนไข VAT ยอดรวม และ snapshot ถูกต้อง");
+    console.log("✅ รายละเอียดสินค้า เงื่อนไขยอดรวม/ก่อน VAT และ snapshot ถูกต้อง");
   } finally {
     if (invoiceId) await prisma.accPurchaseTaxInvoice.delete({ where: { id: invoiceId } }).catch(() => undefined);
     await prisma.$disconnect();
