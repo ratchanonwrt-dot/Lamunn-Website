@@ -1,7 +1,8 @@
-import { addVatExclusive, adjustVatSatang, type VatRounding } from "./money";
+import { addVatExclusive, adjustVatSatang, splitVatInclusive, type VatRounding } from "./money";
 
 export type PurchaseTaxItemCategory = "RAW_MATERIAL" | "PACKAGING" | "OTHER";
 export type PurchaseTaxPriceCondition = "VAT" | "VAT_EXEMPT" | "FREE";
+export type PurchaseTaxTotalCondition = "VAT_INCLUDED" | "VAT_EXCLUDED";
 
 export interface PurchaseTaxLineItemInput {
   category?: string;
@@ -10,6 +11,7 @@ export interface PurchaseTaxLineItemInput {
   unitPrice?: string | number;
   lineTotal?: string | number | null;
   priceCondition?: string;
+  totalCondition?: string;
   vatRatePercent?: string | number;
 }
 
@@ -25,6 +27,8 @@ export interface CalculatedPurchaseTaxLineItem {
   /** true เมื่อผู้ใช้แก้ราคารวมเอง เพื่อให้หน้าแก้ไขคืนค่าที่ผู้ใช้กำหนดได้ */
   lineTotalOverridden: boolean;
   priceCondition: PurchaseTaxPriceCondition;
+  /** ระบุว่ายอดในช่องราคารวมเป็นยอดรวม VAT แล้ว หรือเป็นฐานก่อน VAT */
+  totalCondition: PurchaseTaxTotalCondition;
   vatRatePercent: string;
   baseSatang: number;
   vatSatang: number;
@@ -42,6 +46,7 @@ export interface PurchaseTaxLineItemSummary {
 
 const CATEGORIES = new Set<PurchaseTaxItemCategory>(["RAW_MATERIAL", "PACKAGING", "OTHER"]);
 const CONDITIONS = new Set<PurchaseTaxPriceCondition>(["VAT", "VAT_EXEMPT", "FREE"]);
+const TOTAL_CONDITIONS = new Set<PurchaseTaxTotalCondition>(["VAT_INCLUDED", "VAT_EXCLUDED"]);
 const UNIT_PRICE_DECIMAL_PLACES = 10;
 const UNIT_PRICE_SCALE = 10n ** BigInt(UNIT_PRICE_DECIMAL_PLACES);
 const SATANG_DIVISOR = UNIT_PRICE_SCALE / 100n;
@@ -150,8 +155,18 @@ export function lineTotalInputFromSnapshot(value: unknown): string | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
   if (item.lineTotalOverridden !== true) return null;
-  const baseSatang = Number(item.baseSatang);
-  return Number.isSafeInteger(baseSatang) ? satangToPlainInput(baseSatang) : null;
+  const totalCondition = totalConditionFromSnapshot(item);
+  const satang = Number(totalCondition === "VAT_INCLUDED" ? item.totalSatang : item.baseSatang);
+  return Number.isSafeInteger(satang) ? satangToPlainInput(satang) : null;
+}
+
+/** เอกสารเก่าไม่มีค่านี้ จึงถือว่ายอดรวมเป็นฐานก่อน VAT เพื่อคงผลบัญชีเดิม */
+export function totalConditionFromSnapshot(value: unknown): PurchaseTaxTotalCondition {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "VAT_EXCLUDED";
+  const totalCondition = (value as Record<string, unknown>).totalCondition;
+  return TOTAL_CONDITIONS.has(totalCondition as PurchaseTaxTotalCondition)
+    ? totalCondition as PurchaseTaxTotalCondition
+    : "VAT_EXCLUDED";
 }
 
 export function summarizePurchaseTaxLineItems(
@@ -174,6 +189,9 @@ export function summarizePurchaseTaxLineItems(
     const priceCondition = CONDITIONS.has(input.priceCondition as PurchaseTaxPriceCondition)
       ? input.priceCondition as PurchaseTaxPriceCondition
       : "VAT";
+    const totalCondition = TOTAL_CONDITIONS.has(input.totalCondition as PurchaseTaxTotalCondition)
+      ? input.totalCondition as PurchaseTaxTotalCondition
+      : "VAT_EXCLUDED";
     const unitPriceText = String(input.unitPrice ?? "").trim();
     const parsedUnitPrice = unitPriceText ? parseUnitPriceDecimal(unitPriceText) : null;
     const lineTotalText = String(input.lineTotal ?? "").trim();
@@ -203,16 +221,21 @@ export function summarizePurchaseTaxLineItems(
     // คูณราคา exact กับจำนวนก่อน แล้วจึงปัดผลรวมเป็นสตางค์ เพื่อไม่ทิ้งทศนิยมตำแหน่งที่ 3–10 ก่อนเวลา
     const calculatedBaseSatang = priceCondition === "FREE" ? 0 : multiplyUnitPriceToSatang(unitPriceScaled, quantity);
     const lineTotalOverridden = priceCondition !== "FREE" && parsedLineTotal !== null;
-    const baseSatang = lineTotalOverridden ? parsedLineTotal : calculatedBaseSatang;
+    const enteredTotalSatang = lineTotalOverridden ? parsedLineTotal : calculatedBaseSatang;
     const unitPriceSubSatang = roundedBigIntToSafeNumber(unitPriceScaled, LEGACY_SUB_SATANG_DIVISOR);
     const unitPriceSatang = roundedBigIntToSafeNumber(unitPriceScaled, SATANG_DIVISOR);
-    if (baseSatang === null || unitPriceSubSatang === null || unitPriceSatang === null) {
+    if (enteredTotalSatang === null || unitPriceSubSatang === null || unitPriceSatang === null) {
       errors.push(`บรรทัดที่ ${row}: ราคาหรือยอดรวมสูงเกินกว่าระบบจะคำนวณได้อย่างปลอดภัย`);
       return;
     }
-    const vatSatang = priceCondition === "VAT"
+    // ยอดรวม VAT ต้องถอดฐานจากตัวเลขเดียวกัน เพื่อให้ฐาน + VAT กลับมาเท่ายอดที่ผู้ใช้กรอกทุกสตางค์
+    const inclusive = priceCondition === "VAT" && totalCondition === "VAT_INCLUDED"
+      ? splitVatInclusive(enteredTotalSatang, ratePercent / 100)
+      : null;
+    const baseSatang = inclusive?.base ?? enteredTotalSatang;
+    const vatSatang = inclusive?.vat ?? (priceCondition === "VAT"
       ? addVatExclusive(baseSatang, ratePercent / 100, "NEAREST").vat
-      : 0;
+      : 0);
     items.push({
       category,
       description,
@@ -222,6 +245,7 @@ export function summarizePurchaseTaxLineItems(
       unitPriceSatang,
       lineTotalOverridden,
       priceCondition,
+      totalCondition,
       vatRatePercent: ratePercent.toString(),
       baseSatang,
       vatSatang,
