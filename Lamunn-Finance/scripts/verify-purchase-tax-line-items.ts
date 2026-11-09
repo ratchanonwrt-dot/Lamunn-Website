@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
 import type { Prisma } from "@lamunn/db-finance";
-import { lineTotalInputFromSnapshot, summarizePurchaseTaxLineItems, totalConditionFromSnapshot } from "../src/lib/accounting/purchaseTaxLineItems";
+import { lineTotalInputFromSnapshot, summarizePurchaseTaxLineItems, summarizePurchaseTaxTotal, totalConditionFromSnapshot } from "../src/lib/accounting/purchaseTaxLineItems";
 import { toBaht } from "../src/lib/accounting/money";
 
 loadEnvConfig(process.cwd());
@@ -62,6 +62,15 @@ function checkEditableLineTotal() {
 }
 
 function checkLineTotalVatConditions() {
+  const manualExcluded = summarizePurchaseTaxTotal(2_000_000, 0.07, "VAT_EXCLUDED");
+  if (manualExcluded.baseSatang !== 2_000_000 || manualExcluded.vatSatang !== 140_000 || manualExcluded.totalSatang !== 2_140_000) {
+    throw new Error("ยอดกรอก 20,000 แบบก่อน VAT ต้องได้ภาษี 1,400 และสุทธิ 21,400");
+  }
+  const manualIncluded = summarizePurchaseTaxTotal(2_000_000, 0.07, "VAT_INCLUDED");
+  if (manualIncluded.baseSatang !== 1_869_159 || manualIncluded.vatSatang !== 130_841 || manualIncluded.totalSatang !== 2_000_000) {
+    throw new Error("ยอดกรอก 20,000 แบบรวม VAT ต้องถอดฐาน 18,691.59 ภาษี 1,308.41 และสุทธิเท่าเดิม");
+  }
+
   const vatIncluded = summarizePurchaseTaxLineItems([
     { category: "RAW_MATERIAL", description: "[test] ยอดรวมภาษี", quantity: "1", unitPrice: "107", lineTotal: "107.00", priceCondition: "VAT", totalCondition: "VAT_INCLUDED", vatRatePercent: "7" },
   ], 0.07);
