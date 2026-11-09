@@ -134,6 +134,7 @@ model DividendPayment {
   date      DateTime @db.Date
   amount    Float
   note      String?
+  source    String? // จ่ายจากไหน: "CASH" = เงินสด, "BANK" = บัญชีบริษัท, null = ยังไม่ระบุ
   createdAt DateTime @default(now())
 
   @@map("dividend_payments")
