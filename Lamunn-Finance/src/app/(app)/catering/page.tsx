@@ -22,7 +22,7 @@ function CateringSkeleton() {
     <div className="animate-pulse">
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-24 rounded-2xl bg-white" />
+          <div key={i} className="h-24 rounded-2xl bg-emerald-100/60" />
         ))}
       </div>
       <div className="flex flex-col gap-2">
@@ -43,15 +43,15 @@ export default async function CateringDashboardPage({ searchParams }: { searchPa
   const canEdit = me.role === "SUPER_ADMIN" || me.permissions.CATERING.canEdit;
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-gray-900">Catering</h1>
+    <div className="mx-auto max-w-5xl rounded-3xl bg-emerald-50/50 p-4 sm:p-6">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+        <h1 className="text-xl font-bold text-emerald-950">Catering</h1>
         <div className="flex gap-2">
-          <Link href="/catering/calendar" className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          <Link href="/catering/calendar" className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">
             <CalendarDays className="h-4 w-4" /> ปฏิทินงาน
           </Link>
           {canEdit && (
-            <Link href="/catering/bookings/new" className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+            <Link href="/catering/bookings/new" className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">
               <Plus className="h-4 w-4" /> ลงงานใหม่
             </Link>
           )}
@@ -136,7 +136,7 @@ async function CateringData({ year, monthIndex0 }: { year: number; monthIndex0: 
   return (
     <>
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Tile label={`งาน ${monthLabel}`} value={`${monthBookings.length} งาน`} sub={`${formatBaht(monthTotal)} บาท`} tone="bg-brand-600 text-white" />
+        <Tile label={`งาน ${monthLabel}`} value={`${monthBookings.length} งาน`} sub={`${formatBaht(monthTotal)} บาท`} tone="bg-emerald-700 text-white" />
         <Tile label="รอรับเงิน" value={`${waitingDeposit + waitingBalance} งาน`} sub={`ยังไม่มัดจำ ${waitingDeposit} · รอยอดที่เหลือ ${waitingBalance}`} tone="bg-amber-100 text-amber-900" />
         <Tile label="เลยกำหนดจ่าย" value={`${overdue} งาน`} sub={overdue ? "ตามลูกค้าด่วน" : "ไม่มีงานค้าง"} tone={overdue ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-700"} />
         <Tile label="พนักงานยังไม่ครบ" value={`${shortStaff} งาน`} sub="ทุก 75 เสิร์ฟ = 1 คน" tone={shortStaff ? "bg-orange-100 text-orange-800" : "bg-gray-100 text-gray-700"} />
@@ -144,15 +144,15 @@ async function CateringData({ year, monthIndex0 }: { year: number; monthIndex0: 
 
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1">
-          <Link href={`/catering?month=${monthParam(year, monthIndex0 - 1)}`} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-white" aria-label="เดือนก่อน">
+          <Link href={`/catering?month=${monthParam(year, monthIndex0 - 1)}`} className="flex h-8 w-8 items-center justify-center rounded-lg text-emerald-700 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600" aria-label="เดือนก่อน">
             <ChevronLeft className="h-4 w-4" />
           </Link>
-          <h2 className="min-w-[8rem] text-center text-base font-bold text-gray-800">{monthLabel}</h2>
-          <Link href={`/catering?month=${monthParam(year, monthIndex0 + 1)}`} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-white" aria-label="เดือนถัดไป">
+          <h2 className="min-w-[8rem] text-center text-base font-bold text-emerald-950">{monthLabel}</h2>
+          <Link href={`/catering?month=${monthParam(year, monthIndex0 + 1)}`} className="flex h-8 w-8 items-center justify-center rounded-lg text-emerald-700 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600" aria-label="เดือนถัดไป">
             <ChevronRight className="h-4 w-4" />
           </Link>
           {!isCurrentMonth && (
-            <Link href="/catering" className="ml-1 text-xs font-medium text-brand-600 hover:underline">
+            <Link href="/catering" className="ml-1 text-xs font-medium text-emerald-700 hover:underline">
               เดือนนี้
             </Link>
           )}
@@ -182,10 +182,10 @@ async function CateringData({ year, monthIndex0 }: { year: number; monthIndex0: 
 
       {upcomingPickups.length > 0 && (
         <div className="mb-6">
-          <h2 className="mb-2 text-sm font-bold text-gray-800">ออเดอร์นัดรับ 3 วันข้างหน้า</h2>
+          <h2 className="mb-2 text-sm font-bold text-emerald-950">ออเดอร์นัดรับ 3 วันข้างหน้า</h2>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {upcomingPickups.map((o) => (
-              <Link key={o.id} href={`/catering/pickup-orders/${o.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm hover:shadow-sm">
+              <Link key={o.id} href={`/catering/pickup-orders/${o.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white px-3 py-2 text-sm hover:border-emerald-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
                 <div className="min-w-0">
                   <p className="truncate font-medium text-gray-800">{o.customerName}</p>
                   <p className="truncate text-xs text-gray-500">
@@ -201,28 +201,28 @@ async function CateringData({ year, monthIndex0 }: { year: number; monthIndex0: 
         </div>
       )}
 
-      <details className="group rounded-2xl border border-gray-200 bg-white">
-        <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3 text-sm font-semibold text-gray-700 [&::-webkit-details-marker]:hidden">
+      <details className="group overflow-hidden rounded-2xl border border-emerald-100 bg-white">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3 text-sm font-semibold text-emerald-900 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-600 [&::-webkit-details-marker]:hidden">
           รายได้ย้อนหลัง 12 เดือน
-          <ChevronDown className="h-4 w-4 text-gray-400 transition-transform group-open:rotate-180" />
+          <ChevronDown className="h-4 w-4 text-emerald-600 transition-transform group-open:rotate-180" />
         </summary>
-        <div className="flex flex-col gap-1.5 border-t border-gray-100 px-5 py-4">
+        <div className="flex flex-col gap-1.5 border-t border-emerald-100 px-5 py-4">
           {revenueRows.map((r) => {
             const total = r.booking + r.pickup;
             return (
               <div key={monthKey(r.date)} className="flex items-center gap-3 text-xs">
                 <span className="w-24 shrink-0 text-gray-500">{thaiMonthLabel(r.date.getUTCFullYear(), r.date.getUTCMonth())}</span>
-                <div className="flex h-4 flex-1 overflow-hidden rounded-full bg-gray-100">
-                  <div className="h-full bg-brand-500" style={{ width: `${(r.booking / maxRevenue) * 100}%` }} title={`จัดเลี้ยง ${formatBaht(r.booking)}`} />
-                  <div className="h-full bg-emerald-400" style={{ width: `${(r.pickup / maxRevenue) * 100}%` }} title={`นัดรับ ${formatBaht(r.pickup)}`} />
+                <div className="flex h-4 flex-1 overflow-hidden rounded-full bg-emerald-50">
+                  <div className="h-full bg-emerald-600" style={{ width: `${(r.booking / maxRevenue) * 100}%` }} title={`จัดเลี้ยง ${formatBaht(r.booking)}`} />
+                  <div className="h-full bg-emerald-300" style={{ width: `${(r.pickup / maxRevenue) * 100}%` }} title={`นัดรับ ${formatBaht(r.pickup)}`} />
                 </div>
                 <span className="w-24 shrink-0 text-right font-medium text-gray-700">{formatBaht(total)}</span>
               </div>
             );
           })}
           <p className="mt-1 flex gap-4 text-[11px] text-gray-400">
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-brand-500" /> งานจัดเลี้ยง</span>
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-400" /> ออเดอร์นัดรับ</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-600" /> งานจัดเลี้ยง</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-300" /> ออเดอร์นัดรับ</span>
           </p>
         </div>
       </details>
