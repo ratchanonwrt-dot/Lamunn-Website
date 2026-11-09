@@ -3,14 +3,14 @@
 import { useRef, useState } from "react";
 import { EllipsisVertical, Plus, Trash2, X } from "lucide-react";
 import { useServerRefresh } from "./useServerRefresh";
-import { addVatExclusive, fmtSatang, signedInputToSatang, toSatang, type VatRounding } from "@/lib/accounting/money";
+import { fmtSatang, signedInputToSatang, toSatang, type VatRounding } from "@/lib/accounting/money";
 import PurchaseTaxClaimPeriodSelect from "./PurchaseTaxClaimPeriodSelect";
 import AccountCombobox from "./AccountCombobox";
 import AccountingDateInput from "./AccountingDateInput";
 import PartnerCombobox from "./PartnerCombobox";
 import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
 import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
-import { lineTotalInputFromSnapshot, satangToPlainInput, summarizePurchaseTaxLineItems, totalConditionFromSnapshot, unitPriceDecimalFromSnapshot, type PurchaseTaxItemCategory, type PurchaseTaxPriceCondition, type PurchaseTaxTotalCondition } from "@/lib/accounting/purchaseTaxLineItems";
+import { lineTotalInputFromSnapshot, satangToPlainInput, summarizePurchaseTaxLineItems, summarizePurchaseTaxTotal, totalConditionFromSnapshot, unitPriceDecimalFromSnapshot, type PurchaseTaxItemCategory, type PurchaseTaxPriceCondition, type PurchaseTaxTotalCondition } from "@/lib/accounting/purchaseTaxLineItems";
 
 interface PurchaseLineFormValue {
   key: string;
@@ -149,6 +149,8 @@ export default function EditPurchaseInvoiceButton({ id, vatRate = 0.07 }: { id: 
     if (!form) return;
     const calculated = summarizePurchaseTaxLineItems(lineItems, vatRate, vatRounding);
     if (calculated.errors.length > 0) return setError(calculated.errors[0]);
+    const totalCondition = lineItems.find((line) => line.priceCondition === "VAT")?.totalCondition ?? "VAT_EXCLUDED";
+    const manualSummary = summarizePurchaseTaxTotal(signedInputToSatang(baseAmount), vatRate, totalCondition, vatRounding);
     setSubmitting(true); setError(null);
     const res = await fetch(`/api/accounting/purchase-tax-invoices/${id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
@@ -156,7 +158,7 @@ export default function EditPurchaseInvoiceButton({ id, vatRate = 0.07 }: { id: 
         invoiceNo: form.invoiceNo, invoiceDate: form.invoiceDate, claimPeriod: form.claimPeriod,
         partnerId: form.partnerId, vendorName: form.vendorName, vendorTaxId: form.vendorTaxId ?? "",
         vendorAddress: form.vendorAddress, vendorBranchTag: form.vendorBranchTag ?? "", description: form.description,
-        note: form.note ?? "", isClaimable: form.isClaimable, amount: baseAmount, amountIncludesVat: false,
+        note: form.note ?? "", isClaimable: form.isClaimable, amount: ((calculated.hasItems ? calculated.baseSatang : manualSummary.baseSatang) / 100).toFixed(2), amountIncludesVat: false,
         vatRounding, lineItems,
         ...(!amountLocked ? { expenseLines, paymentDate, paymentAccountId, whtIncomeType, whtRatePercent, whtBaseAmount } : {}),
       }),
@@ -168,10 +170,12 @@ export default function EditPurchaseInvoiceButton({ id, vatRate = 0.07 }: { id: 
 
   const amountLocked = entry?.status === "POSTED" || paymentEntry?.status === "POSTED";
   const summary = summarizePurchaseTaxLineItems(lineItems, vatRate, vatRounding);
-  const manual = addVatExclusive(signedInputToSatang(baseAmount), vatRate, vatRounding);
-  const base = summary.hasItems ? summary.baseSatang : manual.base;
-  const vat = summary.hasItems ? summary.vatSatang : manual.vat;
+  const invoiceTotalCondition = lineItems.find((line) => line.priceCondition === "VAT")?.totalCondition ?? "VAT_EXCLUDED";
+  const manual = summarizePurchaseTaxTotal(signedInputToSatang(baseAmount), vatRate, invoiceTotalCondition, vatRounding);
+  const base = summary.hasItems ? summary.baseSatang : manual.baseSatang;
+  const vat = summary.hasItems ? summary.vatSatang : manual.vatSatang;
   const total = base + vat;
+  const enteredTotal = invoiceTotalCondition === "VAT_INCLUDED" ? total : base;
   const wht = withholdingFromPercent(whtBaseAmount.trim() ? toSatang(whtBaseAmount) : base, whtRatePercent);
   const activeExpenseLines = expenseLines.filter((line) => line.accountId || line.amount.trim());
   const allocationTotal = activeExpenseLines.length === 1 && activeExpenseLines[0].accountId && !activeExpenseLines[0].amount.trim()
@@ -181,7 +185,6 @@ export default function EditPurchaseInvoiceButton({ id, vatRate = 0.07 }: { id: 
   const field = "mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50 disabled:text-gray-400";
   const label = "text-xs text-gray-500";
   const selectedPriceLine = lineItems.find((line) => line.key === priceConditionLineKey) ?? null;
-  const invoiceTotalCondition = lineItems.find((line) => line.priceCondition === "VAT")?.totalCondition ?? "VAT_EXCLUDED";
   const branches = partners.find((partner) => partner.id === form?.partnerId)?.branches ?? form?.partner?.branches ?? [];
 
   return <>
@@ -201,7 +204,7 @@ export default function EditPurchaseInvoiceButton({ id, vatRate = 0.07 }: { id: 
             <label className={label}>เลขประจำตัวผู้เสียภาษีผู้ขาย<input value={form.vendorTaxId ?? ""} onChange={(e) => setForm({ ...form, vendorTaxId: e.target.value })} maxLength={13} className={field} /></label>
             <label className={`${label} sm:col-span-2`}>ที่อยู่ผู้ขายตามสาขา<input value={form.vendorAddress} onChange={(e) => setForm({ ...form, vendorAddress: e.target.value })} className={field} /></label>
             <label className={label}>รายการ<input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={field} /></label>
-            <label className={label}>ยอดก่อนภาษี<input inputMode="decimal" disabled={amountLocked || summary.hasItems} value={summary.hasItems ? fmtSatang(base, { zeroDash: false }) : baseAmount} onChange={(e) => setBaseAmount(e.target.value)} className={field} /></label>
+            <label className={label}>{invoiceTotalCondition === "VAT_INCLUDED" ? "ยอดรวมภาษี 7%" : "ยอดก่อนภาษี 7%"}<input inputMode="decimal" disabled={amountLocked || summary.hasItems} value={summary.hasItems ? fmtSatang(base, { zeroDash: false }) : baseAmount} onChange={(e) => setBaseAmount(e.target.value)} className={field} /></label>
             <label className={label}>ภาษี 7%<input readOnly value={fmtSatang(vat, { zeroDash: false })} className={`${field} bg-gray-50 tabular-nums`} /></label>
             <label className={label}>ปัดทศนิยมของภาษี 7%<select disabled={amountLocked} value={vatRounding} onChange={(e) => setVatRounding(e.target.value as VatRounding)} className={field}><option value="NEAREST">ปกติ</option><option value="UP">ปัดขึ้น 0.01 บาท</option><option value="DOWN">ปัดลง 0.01 บาท</option></select></label>
             <label className={label}>ยอดรวม<input readOnly value={fmtSatang(total, { zeroDash: false })} className={`${field} bg-gray-50 font-medium tabular-nums`} /></label>
@@ -241,7 +244,7 @@ export default function EditPurchaseInvoiceButton({ id, vatRate = 0.07 }: { id: 
               </div>;
             })}</div></div></div>
             <button type="button" disabled={amountLocked} onClick={() => setLineItems((items) => [...items, { ...emptyLine(`edit-line-${nextLineKey.current++}`, vatRate), totalCondition: invoiceTotalCondition }])} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-medium text-sky-700 disabled:opacity-40"><Plus size={15} /> เพิ่มบรรทัด</button>
-            <div className="mt-4 ml-auto grid max-w-sm grid-cols-[1fr_auto_36px] items-center gap-x-3 gap-y-2 border-t border-sky-200 pt-4 text-sm"><span>ยอดรวม</span><strong className="text-right">{fmtSatang(base, { zeroDash: false })}</strong><button type="button" disabled={amountLocked} onClick={() => setTotalConditionOpen(true)} aria-label="เงื่อนไขยอดรวม" className="rounded-lg p-1.5 text-gray-500 hover:bg-white disabled:opacity-40"><EllipsisVertical size={18} /></button><span>ภาษี 7%</span><strong className="text-right">{fmtSatang(vat, { zeroDash: false })}</strong><span /><span className="font-semibold">ยอดเงินสุทธิ</span><strong className="text-right text-base">{fmtSatang(total, { zeroDash: false })}</strong><span /></div>
+            <div className="mt-4 ml-auto grid max-w-sm grid-cols-[1fr_auto_36px] items-center gap-x-3 gap-y-2 border-t border-sky-200 pt-4 text-sm"><span>ยอดรวม</span><strong className="text-right">{fmtSatang(enteredTotal, { zeroDash: false })}</strong><button type="button" disabled={amountLocked} onClick={() => setTotalConditionOpen(true)} aria-label="เงื่อนไขยอดรวม" className="rounded-lg p-1.5 text-gray-500 hover:bg-white disabled:opacity-40"><EllipsisVertical size={18} /></button><span>ภาษี 7%</span><strong className="text-right">{fmtSatang(vat, { zeroDash: false })}</strong><span /><span className="font-semibold">ยอดเงินสุทธิ</span><strong className="text-right text-base">{fmtSatang(total, { zeroDash: false })}</strong><span /></div>
           </section>
           <label className="mt-4 flex items-start gap-2.5 rounded-lg bg-gray-50 p-3"><input type="checkbox" checked={form.isClaimable} onChange={(e) => setForm({ ...form, isClaimable: e.target.checked })} className="mt-0.5 h-4 w-4" /><span className="text-sm text-gray-700">ภาษีซื้อใบนี้ขอเครดิตได้<span className="mt-0.5 block text-xs text-gray-500">เอาติ๊กออกถ้าเป็นภาษีซื้อต้องห้าม — ยังอยู่ในรายงาน แต่ไม่ถูกหักใน ภ.พ.30</span></span></label>
           <section className="mt-4 rounded-lg border border-violet-200 bg-violet-50/50 p-4">

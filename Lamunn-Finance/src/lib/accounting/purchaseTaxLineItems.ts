@@ -44,6 +44,31 @@ export interface PurchaseTaxLineItemSummary {
   totalSatang: number;
 }
 
+/** คำนวณยอดกรอกแบบรวม/ไม่รวม VAT จากตัวเลขเดียวกัน เพื่อให้สลับเงื่อนไขแล้วทั้งสามยอดสัมพันธ์กันเสมอ */
+export function summarizePurchaseTaxTotal(
+  enteredSatang: number,
+  vatRate: number,
+  totalCondition: PurchaseTaxTotalCondition,
+  rounding: VatRounding = "NEAREST"
+): { baseSatang: number; vatSatang: number; totalSatang: number } {
+  if (totalCondition === "VAT_INCLUDED") {
+    const nearest = splitVatInclusive(enteredSatang, vatRate);
+    const vatSatang = adjustVatSatang(nearest.vat, rounding);
+    return {
+      baseSatang: enteredSatang - vatSatang,
+      vatSatang,
+      totalSatang: enteredSatang,
+    };
+  }
+
+  const exclusive = addVatExclusive(enteredSatang, vatRate, rounding);
+  return {
+    baseSatang: exclusive.base,
+    vatSatang: exclusive.vat,
+    totalSatang: exclusive.base + exclusive.vat,
+  };
+}
+
 const CATEGORIES = new Set<PurchaseTaxItemCategory>(["RAW_MATERIAL", "PACKAGING", "OTHER"]);
 const CONDITIONS = new Set<PurchaseTaxPriceCondition>(["VAT", "VAT_EXEMPT", "FREE"]);
 const TOTAL_CONDITIONS = new Set<PurchaseTaxTotalCondition>(["VAT_INCLUDED", "VAT_EXCLUDED"]);

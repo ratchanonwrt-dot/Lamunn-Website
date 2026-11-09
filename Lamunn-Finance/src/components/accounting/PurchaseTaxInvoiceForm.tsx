@@ -7,13 +7,14 @@ import PartnerCombobox from "./PartnerCombobox";
 import AccountCombobox from "./AccountCombobox";
 import AccountingDateInput from "./AccountingDateInput";
 import { WHT_INCOME_TYPES } from "@/lib/accounting/whtTypes";
-import { addVatExclusive, fmtSatang, signedInputToSatang, toSatang, type VatRounding } from "@/lib/accounting/money";
+import { fmtSatang, signedInputToSatang, toSatang, type VatRounding } from "@/lib/accounting/money";
 import { withholdingFromPercent } from "@/lib/accounting/withholdingMath";
 import PurchaseTaxClaimPeriodSelect from "./PurchaseTaxClaimPeriodSelect";
 import { partnerBranchChoices, resolvePartnerBranchChoice } from "@/lib/accounting/partnerBranchSelection";
 import {
   satangToPlainInput,
   summarizePurchaseTaxLineItems,
+  summarizePurchaseTaxTotal,
   type PurchaseTaxItemCategory,
   type PurchaseTaxPriceCondition,
   type PurchaseTaxTotalCondition,
@@ -145,13 +146,15 @@ export default function PurchaseTaxInvoiceForm({
       setError(lineSummary.errors[0]);
       return;
     }
+    const totalCondition = form.lineItems.find((line) => line.priceCondition === "VAT")?.totalCondition ?? "VAT_EXCLUDED";
+    const manualSummary = summarizePurchaseTaxTotal(signedInputToSatang(form.baseAmount), vatRate, totalCondition, form.vatRounding);
     const res = await fetch("/api/accounting/purchase-tax-invoices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...form,
         // รายละเอียดแต่ละบรรทัดอาจกรอกแบบรวม VAT แต่ API เดิมยังต้องรับยอดฐานที่สรุปแล้ว
-        amount: lineSummary.hasItems ? (lineSummary.baseSatang / 100).toFixed(2) : form.baseAmount,
+        amount: ((lineSummary.hasItems ? lineSummary.baseSatang : manualSummary.baseSatang) / 100).toFixed(2),
         amountIncludesVat: false,
       }),
     });
@@ -191,16 +194,18 @@ export default function PurchaseTaxInvoiceForm({
   const field = "mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900";
   const label = "text-xs text-gray-500";
   const lineSummary = summarizePurchaseTaxLineItems(form.lineItems, vatRate, form.vatRounding);
+  const invoiceTotalCondition = form.lineItems.find((line) => line.priceCondition === "VAT")?.totalCondition ?? "VAT_EXCLUDED";
   const enteredBase = signedInputToSatang(form.baseAmount);
-  const manualAmounts = addVatExclusive(enteredBase, vatRate, form.vatRounding);
-  const base = lineSummary.hasItems ? lineSummary.baseSatang : manualAmounts.base;
-  const vat = lineSummary.hasItems ? lineSummary.vatSatang : manualAmounts.vat;
+  const manualAmounts = summarizePurchaseTaxTotal(enteredBase, vatRate, invoiceTotalCondition, form.vatRounding);
+  const base = lineSummary.hasItems ? lineSummary.baseSatang : manualAmounts.baseSatang;
+  const vat = lineSummary.hasItems ? lineSummary.vatSatang : manualAmounts.vatSatang;
   const isCreditNote = base < 0;
   const vatRateLabel = (vatRate * 100).toLocaleString("th-TH", { maximumFractionDigits: 2 });
   const whtEnabled = Boolean(form.whtIncomeType);
   const whtBase = form.whtBaseAmount.trim() ? toSatang(form.whtBaseAmount) : base;
   const wht = withholdingFromPercent(whtBase, form.whtRatePercent);
   const total = base + vat;
+  const enteredTotal = invoiceTotalCondition === "VAT_INCLUDED" ? total : base;
   const netPayable = total - wht.amount;
   const partnerBranches = partnerBranchChoices(partners, form.partnerId);
   const allocationTarget = Math.abs(base);
@@ -210,7 +215,6 @@ export default function PurchaseTaxInvoiceForm({
     : activeExpenseLines.reduce((sum, line) => sum + Math.max(0, signedInputToSatang(line.amount)), 0);
   const allocationDifference = allocationTarget - allocationTotal;
   const selectedPriceLine = form.lineItems.find((line) => line.key === priceConditionLineKey) ?? null;
-  const invoiceTotalCondition = form.lineItems.find((line) => line.priceCondition === "VAT")?.totalCondition ?? "VAT_EXCLUDED";
   return (
     <form onSubmit={submit} className="w-full rounded-xl border border-gray-200 bg-white p-5">
       <p className="mb-4 text-sm font-semibold text-gray-800">{isCreditNote ? "บันทึกใบลดหนี้" : "บันทึกใบกำกับภาษีซื้อ"}</p>
@@ -305,7 +309,7 @@ export default function PurchaseTaxInvoiceForm({
         </label>
 
         <label className={label}>
-          ยอดก่อนภาษี
+          {invoiceTotalCondition === "VAT_INCLUDED" ? `ยอดรวมภาษี ${vatRateLabel}%` : `ยอดก่อนภาษี ${vatRateLabel}%`}
           <input
             required={!lineSummary.hasItems}
             readOnly={lineSummary.hasItems}
@@ -511,7 +515,7 @@ export default function PurchaseTaxInvoiceForm({
         </button>
 
         <div className="mt-4 ml-auto grid max-w-sm grid-cols-[1fr_auto_36px] items-center gap-x-3 gap-y-2 border-t border-sky-200 pt-4 text-sm">
-          <span className="font-medium text-gray-700">ยอดรวม</span><strong className="text-right tabular-nums">{fmtSatang(base, { zeroDash: false })}</strong><button type="button" onClick={() => setTotalConditionOpen(true)} aria-label="เงื่อนไขยอดรวม" className="rounded-lg p-1.5 text-gray-500 hover:bg-white hover:text-gray-800"><EllipsisVertical size={18} /></button>
+          <span className="font-medium text-gray-700">ยอดรวม</span><strong className="text-right tabular-nums">{fmtSatang(enteredTotal, { zeroDash: false })}</strong><button type="button" onClick={() => setTotalConditionOpen(true)} aria-label="เงื่อนไขยอดรวม" className="rounded-lg p-1.5 text-gray-500 hover:bg-white hover:text-gray-800"><EllipsisVertical size={18} /></button>
           <span className="font-medium text-gray-700">ภาษี 7%</span><strong className="text-right tabular-nums">{fmtSatang(vat, { zeroDash: false })}</strong><span />
           <span className="font-semibold text-gray-900">ยอดเงินสุทธิ</span><strong className="text-right text-base tabular-nums text-gray-900">{fmtSatang(total, { zeroDash: false })}</strong><span />
         </div>
