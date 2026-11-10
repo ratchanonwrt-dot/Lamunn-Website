@@ -8,7 +8,6 @@ import { fmtSatang } from "@/lib/accounting/money";
 import { buildWhtReport } from "@/lib/accounting/taxReports";
 import { WHT_FORM_SHORT } from "@/lib/accounting/whtTypes";
 import { formatAccountingDate } from "@/lib/accounting/dateFormat";
-import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 import PrintButton from "@/components/accounting/PrintButton";
 
 export const dynamic = "force-dynamic";
@@ -65,7 +64,7 @@ export default async function WhtReportPrintPage({ searchParams }: { searchParam
                 <td className="border border-black px-1.5 py-1.5 text-center">{index + 1}</td>
                 <td className="whitespace-nowrap border border-black px-1.5 py-1.5">{formatAccountingDate(row.payDate)}</td>
                 <td className="break-words border border-black px-1.5 py-1.5 font-mono">{row.docNo}</td>
-                <td className="break-words border border-black px-1.5 py-1.5">{formatPartnerDisplayName(row.payeeName, row.payeeBranchTag)}</td>
+                <td className="break-words border border-black px-1.5 py-1.5">{row.payeeName}</td>
                 <td className="break-words border border-black px-1.5 py-1.5 font-mono">{row.payeeTaxId ?? "-"}</td>
                 <td className="break-words border border-black px-1.5 py-1.5">{row.incomeType}</td>
                 <td className="border border-black px-1.5 py-1.5 text-right">{fmtSatang(row.base, { zeroDash: false })}</td>
