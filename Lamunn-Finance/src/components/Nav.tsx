@@ -158,6 +158,7 @@ const taxReportLinks: NavLink[] = [
 
 const accountingReportItems: NavMenuItem[] = [
   { href: "/accounting/journal", label: "บันทึกบัญชี", icon: ListTree, color: "bg-indigo-100 text-indigo-500", section: "ACCOUNTING" },
+  { href: "/accounting/all-channel-sales", label: "ขายทุกช่องทาง", icon: ShoppingBag, color: "bg-pink-100 text-pink-600", section: "ACCOUNTING" },
   { href: "/accounting/purchase-items", label: "วัตถุดิบ / บรรจุภัณฑ์ / อื่น ๆ", icon: Boxes, color: "bg-lime-100 text-lime-600", section: "ACCOUNTING" },
   { href: "/accounting/fixed-assets", label: "ทะเบียนทรัพย์สิน", icon: PackageSearch, color: "bg-emerald-100 text-emerald-500", section: "ACCOUNTING" },
   { href: "/accounting/ledger", label: "บัญชีแยกประเภท", icon: BookOpen, color: "bg-purple-100 text-purple-500", section: "ACCOUNTING" },
