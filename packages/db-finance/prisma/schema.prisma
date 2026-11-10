@@ -1294,3 +1294,22 @@ model AccWhtCertificate {
   @@index([partnerId])
   @@map("acc_wht_certificates")
 }
+
+model AccAllChannelCashDaily {
+  id          String   @id @default(cuid())
+  periodYear  Int
+  periodMonth Int
+  day         Int
+  branchKey   String
+  branchName  String
+  branchOrder Int
+  amount      Decimal  @db.Decimal(15, 2)
+  sourceFile  String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([periodYear, periodMonth, day, branchKey])
+  @@index([periodYear, periodMonth, branchOrder])
+  @@map("acc_all_channel_cash_daily")
+}
