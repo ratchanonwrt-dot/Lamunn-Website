@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { FileSpreadsheet, Upload } from "lucide-react";
+import { FileSpreadsheet, Trash2, Upload } from "lucide-react";
 import { useServerRefresh } from "./useServerRefresh";
 import type { CashReport } from "@/lib/accounting/allChannelCash";
 import { fmtSatang } from "@/lib/accounting/money";
@@ -40,6 +40,25 @@ export function AllChannelCashSheet({ initialReport, fallbackBranches }: { initi
     }
   }
 
+  async function clearMonth() {
+    const label = `${MONTHS[report.month - 1]} ${report.year + 543}`;
+    if (!window.confirm(`ยืนยันล้างข้อมูล Cash เดือน${label}\n\nการทำรายการนี้ไม่กระทบสมุดรายวันและเดือนอื่น`)) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/accounting/all-channel-sales/cash?year=${report.year}&month=${report.month}`, { method: "DELETE" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "ล้างข้อมูลไม่สำเร็จ");
+      setReport({ ...report, sourceFile: null, branches: [], rows: [], branchTotals: [], grandTotal: 0 });
+      setMessage(`ล้างข้อมูล Cash เดือน${label} สำเร็จ — ${payload.deleted} รายการ`);
+      refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "ล้างข้อมูลไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const branches = report.branches.length ? report.branches.map((branch) => branch.name) : [...fallbackBranches];
   return (
     <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -59,6 +78,7 @@ export function AllChannelCashSheet({ initialReport, fallbackBranches }: { initi
         <form onSubmit={importFile} className="mt-4 flex flex-wrap items-center gap-2 rounded-xl bg-gray-50 p-3">
           <input ref={fileRef} type="file" accept=".xlsx" className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm file:mr-3 file:border-0 file:bg-transparent file:font-medium" />
           <button disabled={busy || refreshing} className="inline-flex items-center gap-2 rounded-xl bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700 disabled:opacity-50"><Upload size={16} />{busy ? "กำลังนำเข้า..." : "นำเข้าไฟล์ Cash"}</button>
+          <button type="button" onClick={clearMonth} disabled={busy || refreshing || report.rows.length === 0} className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"><Trash2 size={16} />ล้างข้อมูลเดือนนี้</button>
           {report.sourceFile && <span className="text-xs text-gray-500">ไฟล์ล่าสุด: {report.sourceFile}</span>}
         </form>
         {message && <p className={`mt-2 text-sm ${message.includes("สำเร็จ") ? "text-emerald-700" : "text-red-600"}`}>{message}</p>}
