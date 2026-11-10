@@ -80,9 +80,15 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
     <div>
       <style>{`
         @page { size: A4 portrait; margin: 0; }
+        .wht-form { box-sizing: border-box; height: 264mm; display: flex; flex-direction: column; }
+        .wht-form-header { min-height: 16mm; }
+        .wht-party { min-height: 22mm; display: flex; flex-direction: column; justify-content: center; }
+        .wht-form-options { min-height: 18mm; }
+        .wht-income-table { flex: 1 1 auto; height: 1px; }
+        .wht-signature { min-height: 39mm; }
         @media print {
           html, body { width: 210mm; min-height: 297mm; background: white !important; }
-          .wht-page { box-sizing: border-box; width: 210mm; min-height: 297mm; padding: 7mm !important; }
+          .wht-page { box-sizing: border-box; width: 210mm; height: 297mm; min-height: 297mm; overflow: hidden; padding: 7mm !important; }
         }
       `}</style>
       <div className="mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3 print:hidden">
@@ -100,8 +106,8 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
           <p>ฉบับที่ 2　(สำหรับผู้ถูกหักภาษี ณ ที่จ่าย เก็บไว้เป็นหลักฐาน)</p>
         </div>
 
-        <div className="border-2 border-black px-2 py-1.5">
-          <header className="grid grid-cols-[1fr_2fr_1fr] items-start border-b border-black pb-1">
+        <div className="wht-form border-2 border-black px-2 py-1.5">
+          <header className="wht-form-header grid grid-cols-[1fr_2fr_1fr] items-center border-b border-black pb-1">
             <div />
             <div className="text-center">
               <h1 className="whitespace-nowrap text-[18px] font-bold">หนังสือรับรองการหักภาษี ณ ที่จ่าย</h1>
@@ -121,7 +127,7 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
           />
           <PartyBox title="ผู้ถูกหักภาษี ณ ที่จ่าย" name={formatPartnerDisplayName(certificate.payeeName, certificate.payeeBranchTag)} address={payeeAddress} taxId={certificate.payeeTaxId || ""} />
 
-          <section className="flex items-center gap-2 border-b border-black px-1 py-1">
+          <section className="wht-form-options flex items-center gap-2 border-b border-black px-1 py-1">
             <div className="w-48">
               <b>ลำดับที่</b> <span className="inline-block w-24 border-b border-dotted border-black">　</span>
               <p className="text-[7px]">(ให้อ้างอิงหรือสอบยันกันได้ระหว่างหนังสือรับรองฯ กับแบบยื่นรายการ)</p>
@@ -139,7 +145,7 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
             </div>
           </section>
 
-          <table className="w-full table-fixed border-collapse">
+          <table className="wht-income-table w-full table-fixed border-collapse">
             <thead>
               <tr className="border-b border-black text-[10px]">
                 <th className="w-[52%] border-r border-black py-1">ประเภทเงินได้พึงประเมินที่จ่าย</th>
@@ -182,7 +188,7 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
             {[["✓", "(1) หัก ณ ที่จ่าย"], ["", "(2) ออกให้ตลอดไป"], ["", "(3) ออกให้ครั้งเดียว"], ["", "(4) อื่น ๆ (ระบุ) ..............................."]].map(([mark, label]) => <Check key={label} mark={mark} label={label} />)}
           </div>
 
-          <div className="grid grid-cols-[28%_72%] text-[8px]">
+          <div className="wht-signature grid grid-cols-[28%_72%] text-[8px]">
             <div className="border-r border-black p-2 text-center leading-relaxed"><b className="text-[10px]">คำเตือน</b>　ผู้มีหน้าที่ออกหนังสือรับรองการหักภาษี ณ ที่จ่าย ฝ่าฝืนไม่ปฏิบัติตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร ต้องรับโทษทางอาญาตามมาตรา 35 แห่งประมวลรัษฎากร</div>
             <div className="p-2 text-center">
               <p>ขอรับรองว่าข้อความและตัวเลขดังกล่าวข้างต้นถูกต้องตรงกับความจริงทุกประการ</p>
@@ -200,7 +206,7 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
 
 function PartyBox({ title, name, address, taxId }: { title: string; name: string; address: string; taxId: string }) {
   return (
-    <section className="border-b border-black px-1 py-1">
+    <section className="wht-party border-b border-black px-1 py-1">
       <div className="flex items-center justify-between gap-3"><b className="text-[10px]">{title} :-</b><TaxIdBoxes taxId={taxId} /></div>
       <p><b>ชื่อ</b>　{name}</p>
       <p className="pl-8 text-[7px]">(ให้ระบุว่าเป็น บุคคล นิติบุคคล บริษัท สมาคม หรือคณะบุคคล)</p>

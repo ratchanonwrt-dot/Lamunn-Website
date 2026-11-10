@@ -53,7 +53,7 @@ export default function WhtCertificateForm({
     partnerBranchId: "",
     payeeName: "",
     payeeTaxId: "",
-    payeeBranchTag: "สำนักงานใหญ่",
+    payeeBranchTag: "",
     payeeAddress: "",
     incomeType: WHT_INCOME_TYPES[0].label,
     baseAmount: "",
@@ -78,7 +78,7 @@ export default function WhtCertificateForm({
       partnerBranchId: branch.partnerBranchId,
       payeeName: p ? p.name : f.payeeName,
       payeeTaxId: p?.taxId ?? f.payeeTaxId,
-      payeeBranchTag: branch.branchTag || f.payeeBranchTag,
+      payeeBranchTag: branch.branchTag,
       payeeAddress: branch.address || f.payeeAddress,
     }));
   }
@@ -103,7 +103,7 @@ export default function WhtCertificateForm({
       setError(data.error ?? "บันทึกไม่สำเร็จ");
       return;
     }
-    setForm({ ...form, payeeName: "", payeeTaxId: "", payeeAddress: "", baseAmount: "", note: "" });
+    setForm({ ...form, partnerId: "", partnerBranchId: "", payeeName: "", payeeTaxId: "", payeeBranchTag: "", payeeAddress: "", baseAmount: "", note: "" });
     setOpen(false);
     refresh();
   }
