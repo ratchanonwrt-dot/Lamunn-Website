@@ -14,6 +14,7 @@ import Link from "next/link";
 import { fmtSatang } from "@/lib/accounting/money";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 import { formatAccountingDate } from "@/lib/accounting/dateFormat";
+import { FileSpreadsheet, Printer } from "lucide-react";
 
 /** หน้ารายงาน ภ.ง.ด.3 และ ภ.ง.ด.53 ใช้โครงเดียวกันทั้งหมด ต่างแค่แบบที่กรอง
  * แยกเป็นคอมโพเนนต์กลางเพื่อไม่ให้ต้องดูแลโค้ดซ้ำสองชุด */
@@ -80,14 +81,30 @@ export default async function WhtReportView({
             สรุปภาษีหัก ณ ที่จ่ายของเดือน — กำหนดยื่นภายในวันที่ 7 {thaiMonthLabel(dueMonth.getUTCFullYear(), dueMonth.getUTCMonth())}
           </p>
         </div>
-        {canEdit && (
-          <WhtCertificateForm
-            partners={partners}
-            defaultFormType={formType === "PND3" ? "PND3" : "PND53"}
-            expenseAccounts={expenseAccounts}
-            creditAccounts={creditAccounts}
-          />
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/print/wht-report?formType=${formType}&year=${year}&month=${month}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"
+          >
+            <Printer size={15} /> พิมพ์ / PDF
+          </Link>
+          <a
+            href={`/api/accounting/tax-reports/wht/export?formType=${formType}&year=${year}&month=${month}`}
+            className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+          >
+            <FileSpreadsheet size={15} /> Export Excel
+          </a>
+          {canEdit && (
+            <WhtCertificateForm
+              partners={partners}
+              defaultFormType={formType === "PND3" ? "PND3" : "PND53"}
+              expenseAccounts={expenseAccounts}
+              creditAccounts={creditAccounts}
+            />
+          )}
+        </div>
       </div>
 
       <TaxReportTabs />
