@@ -78,6 +78,21 @@ export function validateLines(lines: DraftLine[]): { debit: number; credit: numb
   return { debit, credit };
 }
 
+/** รายงานภาษีซื้ออ้างเลขที่ใบกำกับจากบรรทัดภาษีซื้อ จึงห้ามผ่านรายการโดยไม่มีเลขนี้
+ * ร่างยังบันทึกได้เพื่อให้ผู้ทำบัญชีกลับมาเติมภายหลัง แต่ก่อนผ่านรายการต้องกรอกให้ครบ */
+async function assertInputVatDocumentNumbers(lines: DraftLine[]) {
+  const usedLines = lines.filter((line) => line.accountId && (toSatang(line.debit) !== 0 || toSatang(line.credit) !== 0));
+  const accountIds = Array.from(new Set(usedLines.map((line) => line.accountId)));
+  const inputVatAccounts = await prisma.accAccount.findMany({
+    where: { id: { in: accountIds }, vatRole: "INPUT" },
+    select: { id: true },
+  });
+  const inputVatAccountIds = new Set(inputVatAccounts.map((account) => account.id));
+  if (usedLines.some((line) => inputVatAccountIds.has(line.accountId) && !line.docNo?.trim())) {
+    throw new AccountingError("พบบรรทัดภาษีซื้อที่ยังไม่ได้กรอกเลขที่ใบกำกับภาษี — กรุณากรอกก่อนผ่านรายการ");
+  }
+}
+
 /** สร้างงวดบัญชีถ้ายังไม่มี แล้วคืนสถานะของงวดนั้น */
 export async function ensurePeriod(date: Date) {
   const year = date.getUTCFullYear();
@@ -125,6 +140,7 @@ export async function createEntry(draft: DraftEntry) {
 
   const journalType = draft.journalType ?? "GENERAL";
   const status = draft.status ?? "DRAFT";
+  if (status === "POSTED") await assertInputVatDocumentNumbers(lines);
 
   const entry = await prisma.$transaction(async (tx) => {
     if (draft.sourceType && draft.sourceKey) {
@@ -224,6 +240,12 @@ export async function postEntry(entryId: string, userId?: string | null) {
   if (entry.status === "VOID") throw new AccountingError("ใบสำคัญนี้ถูกยกเลิกไปแล้ว ผ่านรายการไม่ได้");
 
   validateLines(entry.lines.map((l) => ({ accountId: l.accountId, debit: Number(l.debit), credit: Number(l.credit) })));
+  await assertInputVatDocumentNumbers(entry.lines.map((l) => ({
+    accountId: l.accountId,
+    debit: Number(l.debit),
+    credit: Number(l.credit),
+    docNo: l.docNo,
+  })));
   await assertPeriodOpen(entry.date);
 
   // อัปเดตสถานะที่บรรทัดด้วยเสมอ ไม่งั้นงบจะไม่เห็นรายการนี้ (คิวรีงบอ่านสถานะจากบรรทัด)

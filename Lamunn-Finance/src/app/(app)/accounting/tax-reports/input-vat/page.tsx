@@ -130,12 +130,13 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
           title="รายงานภาษีซื้อ"
           subtitle={`สำหรับเดือนภาษี ${thaiMonthLabel(year, month - 1)}`}
         >
-          <table className="w-full min-w-[60rem] text-sm">
+          <table className="w-full min-w-[70rem] text-sm">
             <thead>
               <tr className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-400">
                 <th className="w-12 py-2 pr-2 text-right font-medium">ลำดับ</th>
                 <th className="py-2 px-2 text-left font-medium">วันที่</th>
-                <th className="py-2 px-2 text-left font-medium">เลขที่ใบกำกับ</th>
+                <th className="py-2 px-2 text-left font-medium">เลขที่ใบกำกับภาษี</th>
+                <th className="py-2 px-2 text-left font-medium">เลขที่ใบสำคัญ</th>
                 <th className="py-2 px-2 text-left font-medium">ชื่อผู้ขาย</th>
                 <th className="py-2 px-2 text-left font-medium">เลขผู้เสียภาษี</th>
                 <th className="py-2 px-2 text-right font-medium">มูลค่าสินค้า/บริการ</th>
@@ -149,16 +150,20 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
                   <td className="py-1.5 pr-2 text-right text-xs text-gray-400">{i + 1}</td>
                   <td className="py-1.5 px-2 font-mono text-xs text-gray-500">{formatAccountingDate(r.date)}</td>
                   <td className="py-1.5 px-2 font-mono text-xs text-gray-700">
-                    {/* แถว AI โชว์เลขใบกำกับที่ตรวจแล้วเท่านั้น เพื่อไม่ให้คนเข้าใจว่าใบสำคัญคีย์เองถูกนำเข้ารายงาน */}
+                    {/* เลขนี้มาจากบรรทัดภาษีซื้อเสมอ ไม่ใช้เลขที่ใบสำคัญแทน */}
                     {r.invoiceNo ? (
                       r.invoiceNo
                     ) : (
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 font-sans text-amber-700">ยังไม่ใส่เลขที่ใบกำกับ</span>
                     )}
+                  </td>
+                  <td className="py-1.5 px-2 font-mono text-xs text-gray-700">
+                    {r.entryNo ?? "-"}
                     {r.kind === "AI_AUTOKEY" && (
-                      <span className="ml-1.5 whitespace-nowrap rounded bg-indigo-100 px-1.5 py-0.5 font-sans text-xs text-indigo-700">
-                        AI Autokey {r.entryNo}
-                      </span>
+                      <span className="ml-1.5 whitespace-nowrap rounded bg-indigo-100 px-1.5 py-0.5 font-sans text-xs text-indigo-700">AI Autokey</span>
+                    )}
+                    {r.kind === "JOURNAL" && (
+                      <span className="ml-1.5 whitespace-nowrap rounded bg-sky-100 px-1.5 py-0.5 font-sans text-xs text-sky-700">คีย์ใบสำคัญ</span>
                     )}
                   </td>
                   <td className="py-1.5 px-2 text-gray-800">
@@ -173,7 +178,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
                   <td className="py-1.5 px-2 text-right">{fmtSatang(r.vat)}</td>
                   {canEdit && (
                     <td className="py-1.5 pl-2 text-right print:hidden">
-                      {/* แถว AI ไม่มีทะเบียนภาษีให้แก้ตรงนี้ ต้องย้อนกลับไปตรวจรายการที่ AI สร้าง */}
+                      {/* แถวจากใบสำคัญไม่มีทะเบียนภาษีให้แก้ตรงนี้ ต้องย้อนกลับไปตรวจรายการต้นทาง */}
                       {r.kind === "DOC" ? (
                         <span className="inline-flex gap-1.5">
                           <EditPurchaseInvoiceButton id={r.id} vatRate={Number(settings.vatRate)} />
@@ -184,7 +189,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
                           href={`/accounting/journal?year=${year}&month=${month}&q=${encodeURIComponent(r.entryNo ?? "")}`}
                           className="whitespace-nowrap rounded-lg border border-gray-200 px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-50"
                         >
-                          ตรวจรายการ AI
+                          {r.kind === "AI_AUTOKEY" ? "ตรวจรายการ AI" : "ดูใบสำคัญ"}
                         </Link>
                       )}
                     </td>
@@ -194,9 +199,11 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-gray-800 font-bold tabular-nums">
-                <td colSpan={5} className="py-2 pr-2">
+                <td colSpan={6} className="py-2 pr-2">
                   รวม {report.rows.length} รายการ
-                  {report.aiAutokeyCount > 0 ? ` (${report.docCount} บันทึกเอง + ${report.aiAutokeyCount} จาก AI Autokey)` : ""}
+                  {report.aiAutokeyCount > 0 || report.journalCount > 0
+                    ? ` (${report.docCount} จากทะเบียน + ${report.aiAutokeyCount} จาก AI Autokey + ${report.journalCount} จากใบสำคัญ)`
+                    : ""}
                 </td>
                 <td className="py-2 px-2 text-right">{fmtSatang(report.totalBase, { zeroDash: false })}</td>
                 <td className="py-2 px-2 text-right">{fmtSatang(report.totalVat, { zeroDash: false })}</td>
@@ -204,7 +211,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
               </tr>
               {report.nonClaimableVat !== 0 && (
                 <tr className="tabular-nums text-sm text-gray-600">
-                  <td colSpan={6} className="py-1.5 pr-2 text-right">
+                  <td colSpan={7} className="py-1.5 pr-2 text-right">
                     ในจำนวนนี้ ขอเครดิตได้
                   </td>
                   <td className="py-1.5 px-2 text-right font-semibold">{fmtSatang(report.claimableVat, { zeroDash: false })}</td>

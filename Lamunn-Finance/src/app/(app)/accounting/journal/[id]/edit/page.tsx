@@ -55,7 +55,7 @@ export default async function EditJournalEntryPage({ params }: { params: { id: s
       <JournalEntryForm
         mode="edit"
         entryId={entry.id}
-        accounts={accounts.map((a) => ({ id: a.id, code: a.code, nameTh: a.nameTh }))}
+        accounts={accounts.map((a) => ({ id: a.id, code: a.code, nameTh: a.nameTh, vatRole: a.vatRole }))}
         branches={branches}
         partners={partners}
         defaultDate={entry.date.toISOString().slice(0, 10)}

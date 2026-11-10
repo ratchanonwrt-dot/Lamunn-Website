@@ -39,7 +39,7 @@ export default async function NewJournalEntryPage() {
         ใช้สำหรับยอดยกมา รายการปรับปรุง หรือรายการที่ไม่ได้มาจากยอดขายรายวัน — เดบิตต้องเท่ากับเครดิตจึงจะบันทึกได้
       </p>
       <JournalEntryForm
-        accounts={accounts.map((a) => ({ id: a.id, code: a.code, nameTh: a.nameTh }))}
+        accounts={accounts.map((a) => ({ id: a.id, code: a.code, nameTh: a.nameTh, vatRole: a.vatRole }))}
         branches={branches}
         partners={partners}
         defaultDate={new Date().toISOString().slice(0, 10)}
