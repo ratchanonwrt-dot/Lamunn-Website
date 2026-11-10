@@ -74,6 +74,7 @@ async function main() {
     assetIds.push(manual.id);
     check("เพิ่มเองและเก็บจำนวน", manual.quantity, 2);
     check("คอมพิวเตอร์ใช้อายุเริ่มต้น 36 เดือน", manual.usefulLifeMonths, 36);
+    check("QR เปิดหน้ารายละเอียดทรัพย์สินรายการเดียว", fixedAssets.fixedAssetDetailUrl("https://lamunn-finance.vercel.app", manual.id), `https://lamunn-finance.vercel.app/accounting/fixed-assets/${manual.id}`);
 
     const schedule = await fixedAssets.loadDepreciationSchedule(YEAR, 5);
     const manualSchedule = schedule.find((item) => item.id === manual.id)!;
@@ -124,4 +125,14 @@ async function main() {
   process.exit(failures === 0 ? 0 : 1);
 }
 
-main();
+async function run() {
+  if (process.argv.includes("--pure")) {
+    const fixedAssets = await import("../src/lib/accounting/fixedAssets");
+    check("QR เปิดหน้ารายละเอียดทรัพย์สินรายการเดียว", fixedAssets.fixedAssetDetailUrl("https://lamunn-finance.vercel.app", "[test]-asset-id"), "https://lamunn-finance.vercel.app/accounting/fixed-assets/%5Btest%5D-asset-id");
+    console.log(failures === 0 ? "\n✅ ผ่านทั้งหมด\n" : `\n❌ ไม่ผ่าน ${failures} ข้อ\n`);
+    process.exit(failures === 0 ? 0 : 1);
+  }
+  await main();
+}
+
+run();

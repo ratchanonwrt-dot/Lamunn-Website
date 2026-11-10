@@ -24,6 +24,15 @@ export const FIXED_ASSET_POLICIES: Record<AccFixedAssetCategory, { months: numbe
   SOFTWARE: { months: 36, taxRate: 20, prefix: "SOF" },
 };
 
+/** QR ต้องเปิดข้อมูลจากระบบแทนการฝังรายละเอียดไว้ในรูป เพื่อให้สาขาและสถานะที่แก้ภายหลังเป็นข้อมูลล่าสุดเสมอ */
+export function fixedAssetDetailPath(assetId: string) {
+  return `/accounting/fixed-assets/${encodeURIComponent(assetId)}`;
+}
+
+export function fixedAssetDetailUrl(origin: string, assetId: string) {
+  return new URL(fixedAssetDetailPath(assetId), `${new URL(origin).origin}/`).toString();
+}
+
 type DepreciableAsset = {
   quantity: number;
   unitCost: Money;
