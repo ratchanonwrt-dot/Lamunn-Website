@@ -1,16 +1,23 @@
 import Link from "next/link";
 import { ArrowRight, BarChart3, FileSpreadsheet, ReceiptText } from "lucide-react";
 import { requireSectionPage } from "@/lib/permissions";
-import { ALL_CHANNEL_SALES_CASH_BRANCHES, ALL_CHANNEL_SALES_CASH_FIXED_COLUMNS, ALL_CHANNEL_SALES_LINKS, ALL_CHANNEL_SALES_POS_COLUMNS, ALL_CHANNEL_SALES_SHEETS, ALL_CHANNEL_SALES_SUMMARY_COLUMNS, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
+import { ALL_CHANNEL_SALES_CASH_BRANCHES, ALL_CHANNEL_SALES_LINKS, ALL_CHANNEL_SALES_POS_COLUMNS, ALL_CHANNEL_SALES_SHEETS, ALL_CHANNEL_SALES_SUMMARY_COLUMNS, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
+import { loadAllChannelCashReport } from "@/lib/accounting/allChannelCash";
+import { AllChannelCashSheet } from "@/components/accounting/AllChannelCashSheet";
 
 export const dynamic = "force-dynamic";
 
-export default async function AllChannelSalesPage({ searchParams }: { searchParams: { sheet?: string } }) {
+export default async function AllChannelSalesPage({ searchParams }: { searchParams: { sheet?: string; year?: string; month?: string } }) {
   await requireSectionPage("ACCOUNTING");
   const activeSheet = resolveAllChannelSalesSheet(searchParams.sheet);
   const isSummary = activeSheet.key === "summary";
   const isPos = activeSheet.key === "pos";
   const isCash = activeSheet.key === "cash";
+  const now = new Date();
+  const year = /^20\d{2}$/.test(searchParams.year ?? "") ? Number(searchParams.year) : now.getFullYear();
+  const requestedMonth = Number(searchParams.month);
+  const month = Number.isInteger(requestedMonth) && requestedMonth >= 1 && requestedMonth <= 12 ? requestedMonth : now.getMonth() + 1;
+  const cashReport = isCash ? await loadAllChannelCashReport(year, month) : null;
 
   return (
     <div className="space-y-5">
@@ -73,27 +80,7 @@ export default async function AllChannelSalesPage({ searchParams }: { searchPara
           </div>
         </section>
       ) : isCash ? (
-        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
-            <div><h2 className="font-semibold text-gray-900">Cash</h2><p className="mt-0.5 text-sm text-gray-500">มูลค่ารวมภาษีของยอดขายเงินสดแยกตามสาขา</p></div>
-            <FileSpreadsheet size={20} className="text-pink-500" />
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-max text-sm">
-              <thead className="bg-gray-50 text-xs font-medium text-gray-500">
-                <tr className="border-b border-gray-200">
-                  <th rowSpan={2} className="min-w-20 px-4 py-3 text-left">{ALL_CHANNEL_SALES_CASH_FIXED_COLUMNS[0]}</th>
-                  <th rowSpan={2} className="min-w-44 px-4 py-3 text-left">{ALL_CHANNEL_SALES_CASH_FIXED_COLUMNS[1]}</th>
-                  <th colSpan={ALL_CHANNEL_SALES_CASH_BRANCHES.length} className="px-4 py-2 text-center">สาขา</th>
-                </tr>
-                <tr>{ALL_CHANNEL_SALES_CASH_BRANCHES.map((branch) => <th key={branch} className="min-w-36 whitespace-nowrap border-l border-gray-100 px-4 py-3 text-right">{branch}</th>)}</tr>
-              </thead>
-              <tbody>
-                <tr className="border-t border-gray-100"><td className="px-4 py-3 text-gray-500">1</td><td className="px-4 py-3 font-medium text-gray-800">มูลค่ารวมภาษี</td>{ALL_CHANNEL_SALES_CASH_BRANCHES.map((branch) => <td key={branch} className="border-l border-gray-100 px-4 py-3 text-right text-gray-400">—</td>)}</tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <AllChannelCashSheet initialReport={cashReport!} fallbackBranches={ALL_CHANNEL_SALES_CASH_BRANCHES} />
       ) : (
         <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
