@@ -92,6 +92,14 @@ function checkLineTotalVatConditions() {
   if (totalConditionFromSnapshot({}) !== "VAT_EXCLUDED") {
     throw new Error("เอกสารเก่าต้องใช้เงื่อนไขยอดก่อนภาษีเพื่อไม่เปลี่ยนยอดเดิม");
   }
+
+  const linkedItems = summarizePurchaseTaxLineItems([
+    { category: "RAW_MATERIAL", description: "[test] ยอดเชื่อมช่องหลัก", quantity: "2", unitPrice: "107", priceCondition: "VAT", totalCondition: "VAT_INCLUDED", vatRatePercent: "7" },
+  ], 0.07);
+  const linkedHeader = summarizePurchaseTaxTotal(linkedItems.totalSatang, 0.07, "VAT_INCLUDED");
+  if (linkedHeader.baseSatang !== linkedItems.baseSatang || linkedHeader.vatSatang !== linkedItems.vatSatang || linkedHeader.totalSatang !== linkedItems.totalSatang) {
+    throw new Error("ช่องกรอกจำนวนเงินแบบรวมภาษีไม่สัมพันธ์กับยอดจากวัตถุดิบ/บรรจุภัณฑ์/อื่น ๆ");
+  }
 }
 
 async function main() {

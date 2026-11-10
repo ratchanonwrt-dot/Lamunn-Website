@@ -107,6 +107,7 @@ export default function PurchaseTaxInvoiceForm({
     vendorBranchTag: "สำนักงานใหญ่",
     description: "ค่าสินค้า/บริการ",
     baseAmount: "",
+    amountCondition: "VAT_EXCLUDED" as PurchaseTaxTotalCondition,
     vatRounding: "NEAREST" as VatRounding,
     itemCategory: "RAW_MATERIAL" as PurchaseTaxItemCategory,
     lineItems: [emptyPurchaseLine("purchase-line-1", "RAW_MATERIAL", vatRate)],
@@ -146,8 +147,7 @@ export default function PurchaseTaxInvoiceForm({
       setError(lineSummary.errors[0]);
       return;
     }
-    const totalCondition = form.lineItems.find((line) => line.priceCondition === "VAT")?.totalCondition ?? "VAT_EXCLUDED";
-    const manualSummary = summarizePurchaseTaxTotal(signedInputToSatang(form.baseAmount), vatRate, totalCondition, form.vatRounding);
+    const manualSummary = summarizePurchaseTaxTotal(signedInputToSatang(form.baseAmount), vatRate, form.amountCondition, form.vatRounding);
     const res = await fetch("/api/accounting/purchase-tax-invoices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -194,7 +194,7 @@ export default function PurchaseTaxInvoiceForm({
   const field = "mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900";
   const label = "text-xs text-gray-500";
   const lineSummary = summarizePurchaseTaxLineItems(form.lineItems, vatRate, form.vatRounding);
-  const invoiceTotalCondition = form.lineItems.find((line) => line.priceCondition === "VAT")?.totalCondition ?? "VAT_EXCLUDED";
+  const invoiceTotalCondition = form.amountCondition;
   const enteredBase = signedInputToSatang(form.baseAmount);
   const manualAmounts = summarizePurchaseTaxTotal(enteredBase, vatRate, invoiceTotalCondition, form.vatRounding);
   const base = lineSummary.hasItems ? lineSummary.baseSatang : manualAmounts.baseSatang;
@@ -309,12 +309,12 @@ export default function PurchaseTaxInvoiceForm({
         </label>
 
         <label className={label}>
-          {invoiceTotalCondition === "VAT_INCLUDED" ? `ยอดรวมภาษี ${vatRateLabel}%` : `ยอดก่อนภาษี ${vatRateLabel}%`}
+          กรอกจำนวนเงิน
           <input
             required={!lineSummary.hasItems}
             readOnly={lineSummary.hasItems}
             inputMode="decimal"
-            value={lineSummary.hasItems ? fmtSatang(base, { zeroDash: false }) : form.baseAmount}
+            value={lineSummary.hasItems ? fmtSatang(enteredTotal, { zeroDash: false }) : form.baseAmount}
             onChange={(e) => {
               const baseAmount = e.target.value;
               setForm({
@@ -329,6 +329,25 @@ export default function PurchaseTaxInvoiceForm({
           {lineSummary.hasItems
             ? <span className="mt-1 block text-[11px] text-emerald-700">คำนวณจากรายละเอียดสินค้าด้านล่าง</span>
             : <span className="mt-1 block text-[11px] text-gray-500">กรอกยอดนี้ แล้วระบบคำนวณภาษี {vatRateLabel}% ให้อัตโนมัติ</span>}
+        </label>
+        <label className={label}>
+          ประเภทจำนวนเงิน
+          <select
+            value={invoiceTotalCondition}
+            onChange={(event) => {
+              const amountCondition = event.target.value as PurchaseTaxTotalCondition;
+              setForm((current) => ({
+                ...current,
+                amountCondition,
+                // เงื่อนไขบนหัวเอกสารต้องเป็นชุดเดียวกับบรรทัด เพื่อให้ยอดบนและยอดสรุปตรงกันทุกสตางค์
+                lineItems: current.lineItems.map((item) => ({ ...item, totalCondition: amountCondition })),
+              }));
+            }}
+            className={field}
+          >
+            <option value="VAT_EXCLUDED">ยอดก่อนภาษี {vatRateLabel}%</option>
+            <option value="VAT_INCLUDED">ยอดรวมภาษี {vatRateLabel}%</option>
+          </select>
         </label>
         <label className={label}>
           ภาษี {vatRateLabel}%
@@ -506,7 +525,7 @@ export default function PurchaseTaxInvoiceForm({
             ...current,
             lineItems: [
               ...current.lineItems,
-              { ...emptyPurchaseLine(`purchase-line-${nextPurchaseLineKey.current++}`, current.itemCategory, vatRate), totalCondition: invoiceTotalCondition },
+              { ...emptyPurchaseLine(`purchase-line-${nextPurchaseLineKey.current++}`, current.itemCategory, vatRate), totalCondition: current.amountCondition },
             ],
           }))}
           className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50"
@@ -564,7 +583,7 @@ export default function PurchaseTaxInvoiceForm({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" aria-label="เงื่อนไขยอดรวม">
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4"><h3 className="text-lg font-semibold text-gray-900">เงื่อนไขยอดรวม</h3><button type="button" onClick={() => setTotalConditionOpen(false)} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100" aria-label="ปิด"><X size={20} /></button></div>
-            <div className="space-y-3 p-5">{([['VAT_INCLUDED', 'ยอดรวมภาษี 7%'], ['VAT_EXCLUDED', 'ยอดก่อนภาษี 7%']] as Array<[PurchaseTaxTotalCondition, string]>).map(([value, text]) => <label key={value} className="flex items-center gap-3 text-sm text-gray-800"><input type="radio" name="invoice-total-condition" checked={invoiceTotalCondition === value} onChange={() => setForm((current) => ({ ...current, lineItems: current.lineItems.map((item) => ({ ...item, totalCondition: value })) }))} />{text}</label>)}</div>
+            <div className="space-y-3 p-5">{([['VAT_INCLUDED', 'ยอดรวมภาษี 7%'], ['VAT_EXCLUDED', 'ยอดก่อนภาษี 7%']] as Array<[PurchaseTaxTotalCondition, string]>).map(([value, text]) => <label key={value} className="flex items-center gap-3 text-sm text-gray-800"><input type="radio" name="invoice-total-condition" checked={invoiceTotalCondition === value} onChange={() => setForm((current) => ({ ...current, amountCondition: value, lineItems: current.lineItems.map((item) => ({ ...item, totalCondition: value })) }))} />{text}</label>)}</div>
             <div className="flex justify-end border-t border-gray-200 px-5 py-4"><button type="button" onClick={() => setTotalConditionOpen(false)} className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700">บันทึก</button></div>
           </div>
         </div>
