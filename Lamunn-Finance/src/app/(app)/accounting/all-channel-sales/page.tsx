@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { BarChart3, FileSpreadsheet, Store } from "lucide-react";
+import { BarChart3, FileSpreadsheet } from "lucide-react";
 import { requireSectionPage } from "@/lib/permissions";
-import { ALL_CHANNEL_SALES_SHEETS, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
+import { ALL_CHANNEL_SALES_SHEETS, ALL_CHANNEL_SALES_SUMMARY_COLUMNS, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
 
 export const dynamic = "force-dynamic";
 
@@ -35,16 +35,21 @@ export default async function AllChannelSalesPage({ searchParams }: { searchPara
       </div>
 
       {isSummary ? (
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-2"><BarChart3 className="text-pink-600" size={20} /><h2 className="font-semibold text-gray-900">สรุปยอดขายทุกช่องทาง</h2></div>
-          <p className="mt-1 text-sm text-gray-500">แต่ละช่องทางจะแสดงยอดเมื่อมีการกำหนดแหล่งข้อมูลหรือนำเข้าข้อมูลในขั้นถัดไป</p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {ALL_CHANNEL_SALES_SHEETS.slice(1).map((sheet) => (
-              <Link key={sheet.key} href={`/accounting/all-channel-sales?sheet=${sheet.key}`} className="rounded-xl border border-gray-100 bg-gray-50 p-4 hover:border-pink-200 hover:bg-pink-50">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-800"><Store size={16} className="text-pink-500" />{sheet.label}</div>
-                <p className="mt-3 text-xs text-gray-400">ยังไม่มีข้อมูล</p>
-              </Link>
-            ))}
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-100 px-5 py-4">
+            <div className="flex items-center gap-2"><BarChart3 className="text-pink-600" size={20} /><h2 className="font-semibold text-gray-900">สรุปยอดขาย</h2></div>
+            <p className="mt-1 text-sm text-gray-500">สรุปมูลค่าขายและภาษีมูลค่าเพิ่มแยกตามสาขา</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-xs font-medium text-gray-500">
+                <tr>{ALL_CHANNEL_SALES_SUMMARY_COLUMNS.map((column, index) => <th key={column} className={`px-4 py-3 ${index < 2 ? "text-left" : "text-right"}`}>{column}</th>)}</tr>
+              </thead>
+              <tbody><tr><td colSpan={ALL_CHANNEL_SALES_SUMMARY_COLUMNS.length} className="px-4 py-14 text-center text-gray-400">ยังไม่มีข้อมูลยอดขายรายสาขา</td></tr></tbody>
+              <tfoot className="border-t border-gray-200 bg-pink-50 font-semibold text-gray-800">
+                <tr><td className="px-4 py-3" /><td className="px-4 py-3">รวม</td><td className="px-4 py-3 text-right">0.00</td><td className="px-4 py-3 text-right">0.00</td><td className="px-4 py-3 text-right">0.00</td></tr>
+              </tfoot>
+            </table>
           </div>
         </section>
       ) : (
