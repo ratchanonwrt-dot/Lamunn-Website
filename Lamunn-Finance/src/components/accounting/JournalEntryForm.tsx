@@ -14,6 +14,7 @@ interface AccountOption {
   id: string;
   code: string;
   nameTh: string;
+  vatRole?: string | null;
 }
 
 interface BranchOption {
@@ -121,6 +122,9 @@ export default function JournalEntryForm({
   }, [lines]);
 
   const filledLines = lines.filter((l) => l.accountId && (satang(l.debit) !== 0 || satang(l.credit) !== 0));
+  const missingInputVatDocNo = filledLines.some((line) =>
+    accounts.find((account) => account.id === line.accountId)?.vatRole === "INPUT" && !line.docNo.trim()
+  );
   const isAutokey = Boolean(autokeyDocumentId || autokeyDraftId);
   const taxReviewReady = !autokeyTaxReview?.whtFormType || ((autokeyTaxReview.whtRatePercent ?? 0) > 0 && Boolean(autokeyTaxReview.incomeType?.trim()));
   const canSave = totals.diff === 0 && totals.debit > 0 && filledLines.length >= 2 && description.trim().length > 0 && taxReviewReady;
@@ -147,6 +151,10 @@ export default function JournalEntryForm({
   }
 
   async function submit(postNow: boolean) {
+    if (postNow && missingInputVatDocNo) {
+      setError("พบบรรทัดภาษีซื้อที่ยังไม่ได้กรอกเลขที่ใบกำกับภาษี — กรุณากรอกก่อนผ่านรายการ");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     const url = mode === "edit" ? `/api/accounting/journal/${entryId}` : "/api/accounting/journal";
@@ -349,6 +357,11 @@ export default function JournalEntryForm({
       </button>
 
       {error && <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+      {missingInputVatDocNo && (
+        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          พบบรรทัดภาษีซื้อที่ยังไม่ได้กรอกเลขที่ใบกำกับภาษี — บันทึกเป็นร่างได้ แต่จะผ่านรายการและเข้ารายงานภาษีซื้อไม่ได้จนกว่าจะกรอกครบ
+        </p>
+      )}
 
       <div className="mt-5 flex flex-wrap gap-2">
         {!isAutokey && <button

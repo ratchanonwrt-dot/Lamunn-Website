@@ -19,6 +19,7 @@ import { formatPartnerDisplayName } from "./partnerDisplay";
 export interface JournalTaxRow {
   entryId: string;
   entryNo: string;
+  sourceType: string | null;
   /** บรรทัดภาษีที่แถวนี้มาจาก — ภาษีซื้อแยกแถวต่อบรรทัด (ใบสำคัญใบเดียวมีใบกำกับหลายใบได้) */
   lineId: string;
   /** เลขที่ใบกำกับที่กรอกไว้ที่บรรทัด — null ถ้ายังไม่ได้ใส่ (ห้ามเอาเลขที่ใบสำคัญมาแทน) */
@@ -118,6 +119,7 @@ export async function journalOutputVatRows(start: Date, end: Date): Promise<Jour
     rows.push({
       entryId: e.id,
       entryNo: e.entryNo,
+      sourceType: e.sourceType,
       lineId: vatLine?.id ?? e.id,
       docNo: vatLine?.docNo ?? null,
       date: e.date,
@@ -131,7 +133,7 @@ export async function journalOutputVatRows(start: Date, end: Date): Promise<Jour
   return rows;
 }
 
-/** ภาษีซื้อที่มาจาก AI Autokey — ไม่รวมใบที่คนบันทึกในทะเบียนภาษีซื้อไว้แล้ว
+/** ภาษีซื้อที่มาจาก AI Autokey หรือใบสำคัญที่นักบัญชีคีย์เอง — ไม่รวมใบที่บันทึกในทะเบียนภาษีซื้อไว้แล้ว
  *
  * ออกมา "หนึ่งแถวต่อหนึ่งบรรทัดภาษีซื้อ" ไม่ใช่ต่อใบสำคัญ — ใบสำคัญจ่ายเงินใบเดียวมักรวมใบกำกับ
  * หลายใบ (ค่าเช่า + ค่าบริการ + ค่าที่ดิน) ซึ่งรายงานภาษีซื้อต้องแสดงเลขที่ใบกำกับแยกกันทุกใบ
@@ -158,9 +160,9 @@ export async function journalInputVatRows(start: Date, end: Date): Promise<Journ
   const rows: JournalTaxRow[] = [];
 
   for (const e of entries) {
-    // ใบสำคัญที่คนคีย์เองเป็นเพียงรายการบัญชี ไม่ใช่ทะเบียนภาษีซื้อ
-    // จึงรับเข้ารายงานอัตโนมัติเฉพาะเอกสารที่ผ่านขั้นตรวจของ AI Autokey เท่านั้น
-    if (e.sourceType !== "AI_AUTOKEY" || linked.has(e.id)) continue;
+    // รับเฉพาะใบที่คนคีย์เองกับ AI Autokey ส่วนใบจากระบบอื่นมีทะเบียนเอกสารของตัวเองอยู่แล้ว
+    // จึงต้องกันออกเพื่อไม่ให้รายงานภาษีซื้อซ้ำกับต้นทางนั้น
+    if ((e.sourceType !== null && e.sourceType !== "AI_AUTOKEY") || linked.has(e.id)) continue;
 
     const vatLines = e.lines
       .map((l) => ({ line: l, vat: toSatang(l.debit) - toSatang(l.credit) }))
@@ -202,6 +204,7 @@ export async function journalInputVatRows(start: Date, end: Date): Promise<Journ
       rows.push({
         entryId: e.id,
         entryNo: e.entryNo,
+        sourceType: e.sourceType,
         lineId: line.id,
         docNo: line.docNo?.trim() || null,
         date: e.date,
@@ -263,6 +266,7 @@ export async function journalWhtRows(start: Date, end: Date): Promise<JournalWht
     rows.push({
       entryId: e.id,
       entryNo: e.entryNo,
+      sourceType: e.sourceType,
       lineId: whtLine?.id ?? e.id,
       docNo: whtLine?.docNo ?? null,
       date: e.date,

@@ -17,7 +17,7 @@ function check(label: string, actual: unknown, expected: unknown) {
 }
 
 async function main() {
-  const [{ prisma }, { createEntry }, { buildInputVatReport }, { buildInputVatWorkbook }, { SYSTEM_ACCOUNTS }, { monthRange }] = await Promise.all([
+  const [{ prisma }, { createEntry, postEntry }, { buildInputVatReport }, { buildInputVatWorkbook }, { SYSTEM_ACCOUNTS }, { monthRange }] = await Promise.all([
     import("@lamunn/db-finance"),
     import("../src/lib/accounting/post"),
     import("../src/lib/accounting/taxReports"),
@@ -58,12 +58,12 @@ async function main() {
     });
     entryIds.push(multi.id);
 
-    // ใบสำคัญที่ลืมใส่เลขที่ใบกำกับ — ต้องออกมาเป็นช่องว่าง ไม่ใช่เลขที่ใบสำคัญ
+    // ใบสำคัญที่ลืมใส่เลขที่ใบกำกับบันทึกเป็นร่างได้ แต่ต้องถูกเตือนและห้ามผ่านรายการ
     const noDoc = await createEntry({
       date: new Date(Date.UTC(YEAR, 8, 9)),
       journalType: "PAYMENT",
       description: "[test] ซื้อของไม่ได้ใส่เลข",
-      status: "POSTED",
+      status: "DRAFT",
       sourceType: "AI_AUTOKEY",
       sourceKey: `${P}-AI-NODOC`,
       lines: [
@@ -73,6 +73,12 @@ async function main() {
       ],
     });
     entryIds.push(noDoc.id);
+    let missingDocError = "";
+    try {
+      await postEntry(noDoc.id);
+    } catch (error) {
+      missingDocError = error instanceof Error ? error.message : String(error);
+    }
 
     const manual = await createEntry({
       date: new Date(Date.UTC(YEAR, 8, 10)),
@@ -91,6 +97,7 @@ async function main() {
     const { start, end } = monthRange(YEAR, 8);
     const report = await buildInputVatReport(start, end);
     const rows = report.rows.filter((r) => r.kind === "AI_AUTOKEY");
+    const manualRows = report.rows.filter((r) => r.kind === "JOURNAL");
 
     console.log("\n=== ใบสำคัญ 1 ใบ มีภาษีซื้อ 3 บรรทัด ===");
     const multiRows = rows.filter((r) => r.entryNo === multi.entryNo);
@@ -105,9 +112,12 @@ async function main() {
     check("แถวแต่ละแถวมี id ไม่ซ้ำกัน (ไม่ชนกันตอน render)", new Set(multiRows.map((r) => r.id)).size, 3);
 
     console.log("\n=== เงื่อนไขแหล่งข้อมูลรายงาน ===");
-    check("รายงานระบุแหล่ง AI แยกจากใบสำคัญที่คนคีย์เอง", rows.every((r) => r.kind === "AI_AUTOKEY"), true);
-    check("AI Autokey ที่ไม่มีเลขใบกำกับยังไม่เข้ารายงาน", rows.some((r) => r.entryNo === noDoc.entryNo), false);
-    check("ใบสำคัญที่คนคีย์เองไม่เข้ารายงาน แม้มีบัญชีภาษีซื้อและเลขใบกำกับ", rows.some((r) => r.entryNo === manual.entryNo), false);
+    check("รายงานระบุแหล่ง AI แยกจากใบสำคัญที่คนคีย์เอง", rows.every((r) => r.kind === "AI_AUTOKEY") && manualRows.every((r) => r.kind === "JOURNAL"), true);
+    check("ใบสำคัญที่ไม่มีเลขใบกำกับถูกห้ามผ่านรายการพร้อมข้อความแจ้งเตือน", missingDocError.includes("กรอกเลขที่ใบกำกับภาษี"), true);
+    check("ใบสำคัญที่ไม่มีเลขใบกำกับยังไม่เข้ารายงาน", report.rows.some((r) => r.entryNo === noDoc.entryNo), false);
+    const manualRow = manualRows.find((r) => r.entryNo === manual.entryNo);
+    check("ใบสำคัญที่คนคีย์เองเข้ารายงานเมื่อผ่านรายการและมีเลขใบกำกับ", manualRow?.invoiceNo, `${P}-MANUAL-001`);
+    check("ยอดฐานและภาษีซื้อจากใบสำคัญที่คนคีย์เองถูกต้อง", [manualRow?.base, manualRow?.vat], [100000, 7000]);
 
     const recordedInvoice = await prisma.accPurchaseTaxInvoice.create({
       data: {
@@ -142,7 +152,7 @@ async function main() {
     check("ป้ายแถวรวม", totalRow.getCell(6).value, "ยอดรวมทั้งหมด");
     check("ยอดเป็นตัวเลขบาท ไม่ใช่ข้อความ", typeof ws.getRow(7).getCell(8).value, "number");
     const excelDocNos = Array.from({ length: n }, (_, i) => String(ws.getRow(7 + i).getCell(3).value ?? ""));
-    check("Excel มีเลขที่ใบกำกับทั้ง 3 ใบของใบสำคัญเดียวกัน", ["202-10900640", "2026-10900638", "2026-10900639"].every((d) => excelDocNos.includes(d)), true);
+    check("Excel มีเลขที่ใบกำกับทั้งจาก AI และใบสำคัญที่คนคีย์เอง", ["202-10900640", "2026-10900638", "2026-10900639", `${P}-MANUAL-001`].every((d) => excelDocNos.includes(d)), true);
     check("Excel ไม่มีเลขที่ใบสำคัญในคอลัมน์เลขที่ใบกำกับ", excelDocNos.some((d) => d === multi.entryNo || d === noDoc.entryNo), false);
   } finally {
     for (const id of invoiceIds) await prisma.accPurchaseTaxInvoice.delete({ where: { id } }).catch(() => undefined);

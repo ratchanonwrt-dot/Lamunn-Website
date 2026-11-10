@@ -97,7 +97,7 @@ async function main() {
       status: "POSTED",
       lines: [
         { accountId: rent.id, debit: 2000 },
-        { accountId: inVat.id, debit: 140 },
+        { accountId: inVat.id, debit: 140, docNo: `${P}-PUR-0001` },
         { accountId: cash.id, credit: 2140 },
       ],
     });
@@ -162,9 +162,9 @@ async function main() {
     check("ภ.ง.ด.53 ตรงกับบัญชีภาษีหัก ณ ที่จ่ายค้างนำส่ง", baht(pnd53.glWhtPayable), 2500);
     check("ภ.ง.ด.3 ไม่มีรายการ (จ่ายให้นิติบุคคล ไม่เข้าแบบนี้)", pnd3.rows.length, 0);
 
-    console.log("\n=== แยกใบสำคัญที่คนคีย์เองออกจากรายงานภาษีซื้อ ===");
+    console.log("\n=== เชื่อมใบสำคัญที่คนคีย์เองเข้ารายงานภาษีซื้อ ===");
 
-    // แม้คนคีย์เลขใบกำกับไว้ในบรรทัด บัญชีก็ยังไม่ใช่ทะเบียนภาษีซื้อ
+    // รายงานใช้เลขที่ใบกำกับจากบรรทัดภาษีซื้อ และรับเฉพาะใบที่ผ่านรายการแล้ว
     const journalPurchase = await createEntry({
       date: day,
       journalType: "PURCHASE",
@@ -193,9 +193,10 @@ async function main() {
     created.push(journalSale.id);
 
     const inp2 = await buildInputVatReport(start, end);
-    const aiInputRows = inp2.rows.filter((r) => r.kind === "AI_AUTOKEY");
-    check("ภาษีซื้อ: ใบสำคัญที่คนคีย์เองไม่เข้ารายงาน แม้มีเลขใบกำกับ", aiInputRows.length, 0);
-    check("ภาษีซื้อรวมยังมาจากทะเบียนใบกำกับเท่านั้น", baht(inp2.totalVat), 140);
+    const manualInputRows = inp2.rows.filter((r) => r.kind === "JOURNAL");
+    check("ภาษีซื้อ: ใบสำคัญที่คนคีย์เองเข้ารายงาน", manualInputRows.length, 1);
+    check("ภาษีซื้อ: ใช้เลขที่ใบกำกับจากบรรทัด", manualInputRows[0]?.invoiceNo, `${P}-MANUAL-PURCHASE`);
+    check("ภาษีซื้อรวมจากทะเบียนและใบสำคัญ", baht(inp2.totalVat), 210);
 
     const out2 = await buildOutputVatReport(start, end);
     const jOut = out2.rows.filter((r) => r.kind === "JOURNAL");
@@ -204,8 +205,8 @@ async function main() {
     check("ภาษีขายรวม = 840 (700 เดิม + 140 จากสมุดรายวัน)", baht(out2.totalVat), 840);
 
     const pp30b = await buildPp30(start, end);
-    check("ภ.พ.30 เตือนยอดไม่ตรงเมื่อคนลงบัญชีภาษีซื้อแต่ยังไม่บันทึกทะเบียน", pp30b.reconciled, false);
-    check("ผลต่างภาษีซื้อเท่ากับรายการคนคีย์เอง 70 บาท", baht(pp30b.inputDiff), -70);
+    check("ภ.พ.30 กระทบยอดตรงเมื่อใบสำคัญภาษีซื้อเข้ารายงานแล้ว", pp30b.reconciled, true);
+    check("ผลต่างภาษีซื้อเป็นศูนย์", baht(pp30b.inputDiff), 0);
 
     // หัก ณ ที่จ่ายที่คีย์เองโดยไม่ออกหนังสือรับรอง — ต้องขึ้นในส่วนแยก ไม่รวมในยอดของแบบ
     const journalWht = await createEntry({

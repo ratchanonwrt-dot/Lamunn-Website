@@ -141,10 +141,10 @@ export async function buildOutputVatReport(start: Date, end: Date): Promise<Outp
 
 export interface InputVatRow {
   id: string;
-  /** แยกต้นทางให้ชัด เพราะใบสำคัญที่คนคีย์เองต้องไม่เป็นแหล่งของรายงานภาษีซื้อ */
-  kind: "DOC" | "AI_AUTOKEY";
+  /** แยกต้นทางให้ชัด เพื่อย้อนกลับไปตรวจเอกสารต้นทางได้ถูกหน้า */
+  kind: "DOC" | "AI_AUTOKEY" | "JOURNAL";
   date: Date;
-  /** เลขที่ใบกำกับตามใบของผู้ขาย — แถว AI จะไม่เข้ารายงานจนกว่าจะกรอกที่บรรทัด (ไม่ใช้เลขที่ใบสำคัญแทน) */
+  /** เลขที่ใบกำกับตามใบของผู้ขาย — แถวจากใบสำคัญจะไม่เข้ารายงานจนกว่าจะกรอกที่บรรทัด (ไม่ใช้เลขที่ใบสำคัญแทน) */
   invoiceNo: string;
   /** เลขที่รายการต้นทางของ AI — ใช้ย้อนกลับไปตรวจ ไม่ใช่เลขที่ใบกำกับ */
   entryNo: string | null;
@@ -167,6 +167,7 @@ export interface InputVatReport {
   nonClaimableVat: number;
   docCount: number;
   aiAutokeyCount: number;
+  journalCount: number;
 }
 
 export async function buildInputVatReport(start: Date, end: Date): Promise<InputVatReport> {
@@ -182,7 +183,7 @@ export async function buildInputVatReport(start: Date, end: Date): Promise<Input
       },
       orderBy: [{ invoiceDate: "asc" }, { invoiceNo: "asc" }],
     }),
-    // AI Autokey ที่คนตรวจและผ่านรายการแล้ว — ใบสำคัญคีย์เองไม่ใช่ทะเบียนภาษีซื้อ
+    // ภาษีซื้อจากใบสำคัญที่ผ่านรายการแล้ว ทั้ง AI Autokey และรายการที่นักบัญชีคีย์เอง
     journalInputVatRows(start, end),
   ]);
 
@@ -205,7 +206,7 @@ export async function buildInputVatReport(start: Date, end: Date): Promise<Input
   for (const j of journalRows) {
     rows.push({
       id: j.lineId,
-      kind: "AI_AUTOKEY",
+      kind: j.sourceType === "AI_AUTOKEY" ? "AI_AUTOKEY" : "JOURNAL",
       date: j.date,
       invoiceNo: j.docNo ?? "",
       entryNo: j.entryNo,
@@ -230,6 +231,7 @@ export async function buildInputVatReport(start: Date, end: Date): Promise<Input
     nonClaimableVat: rows.filter((r) => !r.isClaimable).reduce((s, r) => s + r.vat, 0),
     docCount: rows.filter((r) => r.kind === "DOC").length,
     aiAutokeyCount: rows.filter((r) => r.kind === "AI_AUTOKEY").length,
+    journalCount: rows.filter((r) => r.kind === "JOURNAL").length,
   };
 }
 
