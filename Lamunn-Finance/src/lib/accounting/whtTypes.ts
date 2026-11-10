@@ -1,3 +1,5 @@
+import { formatPartnerDisplayName } from "./partnerDisplay";
+
 /** ประเภทเงินได้ที่หักภาษี ณ ที่จ่ายบ่อยในธุรกิจร้านอาหาร/ค้าปลีก พร้อมอัตราที่ใช้กันทั่วไป
  *
  * แยกไฟล์จาก taxReports.ts เพราะฟอร์มฝั่ง client ต้องใช้รายการนี้
@@ -35,3 +37,8 @@ export const WHT_FORM_SHORT: Record<string, string> = {
   PND3: "ภ.ง.ด.3",
   PND53: "ภ.ง.ด.53",
 };
+
+/** ภ.ง.ด.53 ต้องระบุสาขาของนิติบุคคล ส่วน ภ.ง.ด.3 แสดงชื่อบุคคลโดยไม่เติมข้อความสาขา */
+export function formatWhtPayeeDisplayName(formType: string, name: string, branchTag: string | null | undefined) {
+  return formType === "PND53" ? formatPartnerDisplayName(name, branchTag) : name.trim();
+}

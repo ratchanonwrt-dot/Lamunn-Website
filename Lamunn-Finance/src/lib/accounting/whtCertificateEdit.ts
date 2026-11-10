@@ -5,6 +5,7 @@ export interface WhtCertificateDetailsPatch {
   payeeName?: unknown;
   payeeTaxId?: unknown;
   payeeAddress?: unknown;
+  payeeBranchTag?: unknown;
   incomeType?: unknown;
   note?: unknown;
 }
@@ -22,11 +23,13 @@ export async function updateWhtCertificateDetails(id: string, patch: WhtCertific
   const payeeName = text(patch.payeeName);
   const payeeTaxId = text(patch.payeeTaxId).replace(/\D/g, "");
   const payeeAddress = text(patch.payeeAddress);
+  const payeeBranchTag = text(patch.payeeBranchTag);
   const incomeType = text(patch.incomeType);
   const note = text(patch.note);
   if (!payeeName || !incomeType) throw new AccountingError("กรอกชื่อผู้ถูกหักภาษีและประเภทเงินได้ให้ครบ");
   if (payeeTaxId && payeeTaxId.length !== 13) throw new AccountingError("เลขประจำตัวผู้เสียภาษีต้องมี 13 หลัก");
   if (current.formType === "PND3" && !payeeAddress) throw new AccountingError("ภ.ง.ด.3 ต้องกรอกที่อยู่ผู้ถูกหักภาษี");
+  if (current.formType === "PND53" && !payeeBranchTag) throw new AccountingError("ภ.ง.ด.53 ต้องกรอกสำนักงานใหญ่/สาขา");
 
   return prisma.accWhtCertificate.update({
     where: { id },
@@ -34,8 +37,8 @@ export async function updateWhtCertificateDetails(id: string, patch: WhtCertific
       payeeName,
       payeeTaxId: payeeTaxId || null,
       payeeAddress: payeeAddress || null,
-      // หนังสือรับรองใช้ชื่อผู้ถูกหักตามที่กรอก โดยไม่เติมสำนักงานใหญ่/สาขาจากข้อมูลเก่า
-      payeeBranchTag: null,
+      // ภ.ง.ด.3 เป็นบุคคลธรรมดาจึงไม่เก็บป้ายสาขา แต่ ภ.ง.ด.53 ต้องรักษาสาขาของนิติบุคคลไว้
+      payeeBranchTag: current.formType === "PND3" ? null : payeeBranchTag,
       incomeType,
       note: note || null,
     },

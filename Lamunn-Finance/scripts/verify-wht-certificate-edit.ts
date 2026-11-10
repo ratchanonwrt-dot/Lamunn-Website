@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { prisma } from "@lamunn/db-finance";
 import { updateWhtCertificateDetails } from "../src/lib/accounting/whtCertificateEdit";
+import { formatWhtPayeeDisplayName } from "../src/lib/accounting/whtTypes";
 
 const createdIds: string[] = [];
 
@@ -17,7 +18,13 @@ async function main() {
     ];
     for (const file of outputFiles) {
       const source = readFileSync(resolve(process.cwd(), file), "utf8");
-      assert.ok(!source.includes("formatPartnerDisplayName"), `${file} ต้องไม่เติมสำนักงานใหญ่/สาขาในชื่อผู้ถูกหัก`);
+      assert.ok(source.includes("formatWhtPayeeDisplayName"), `${file} ต้องใช้เงื่อนไขสาขาแยกตามแบบ ภ.ง.ด.`);
+    }
+    assert.equal(formatWhtPayeeDisplayName("PND3", "[test] บุคคล", "สำนักงานใหญ่"), "[test] บุคคล");
+    assert.equal(formatWhtPayeeDisplayName("PND53", "[test] บริษัท", "00001"), "[test] บริษัท (สาขา 00001)");
+    if (process.env.VERIFY_STATIC_ONLY === "1") {
+      console.log("✅ verify-wht-certificate-edit ผ่านการตรวจเงื่อนไขแสดงผล (static)");
+      return;
     }
 
     for (const formType of ["PND3", "PND53"] as const) {
@@ -31,10 +38,11 @@ async function main() {
       createdIds.push(certificate.id);
       const updated = await updateWhtCertificateDetails(certificate.id, {
         payeeName: `[test] ชื่อแก้ไข ${formType}`, payeeTaxId: "0105568147638",
-        payeeAddress: "[test] ที่อยู่แก้ไข", incomeType: "ค่าบริการอื่น ๆ ม.40(8)", note: "[test] หมายเหตุแก้ไข",
+        payeeAddress: "[test] ที่อยู่แก้ไข", payeeBranchTag: "00001",
+        incomeType: "ค่าบริการอื่น ๆ ม.40(8)", note: "[test] หมายเหตุแก้ไข",
       });
       assert.equal(updated.payeeName, `[test] ชื่อแก้ไข ${formType}`);
-      assert.equal(updated.payeeBranchTag, null, `${formType} ต้องล้างสำนักงานใหญ่/สาขาเดิม`);
+      assert.equal(updated.payeeBranchTag, formType === "PND3" ? null : "00001", `${formType} ต้องจัดการสาขาตามประเภทแบบ`);
       assert.equal(updated.note, "[test] หมายเหตุแก้ไข");
       assert.equal(Number(updated.baseAmount), 1000, "การแก้รายละเอียดต้องไม่เปลี่ยนยอดบัญชี");
       assert.equal(updated.payDate.toISOString(), "2092-04-15T00:00:00.000Z", "การแก้รายละเอียดต้องไม่เปลี่ยนวันที่");
