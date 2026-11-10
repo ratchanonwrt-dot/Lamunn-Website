@@ -94,6 +94,7 @@ export default function PurchaseTaxInvoiceForm({
   const nextPurchaseLineKey = useRef(2);
   const [priceConditionLineKey, setPriceConditionLineKey] = useState<string | null>(null);
   const [totalConditionOpen, setTotalConditionOpen] = useState(false);
+  const [pendingTotalCondition, setPendingTotalCondition] = useState<PurchaseTaxTotalCondition>("VAT_EXCLUDED");
   const defaultPaymentAccountId = paymentAccounts.find((account) => account.code === "11111")?.id ?? "";
   const [form, setForm] = useState({
     invoiceNo: "",
@@ -515,7 +516,7 @@ export default function PurchaseTaxInvoiceForm({
         </button>
 
         <div className="mt-4 ml-auto grid max-w-sm grid-cols-[1fr_auto_36px] items-center gap-x-3 gap-y-2 border-t border-sky-200 pt-4 text-sm">
-          <span className="font-medium text-gray-700">ยอดรวม</span><strong className="text-right tabular-nums">{fmtSatang(enteredTotal, { zeroDash: false })}</strong><button type="button" onClick={() => setTotalConditionOpen(true)} aria-label="เงื่อนไขยอดรวม" className="rounded-lg p-1.5 text-gray-500 hover:bg-white hover:text-gray-800"><EllipsisVertical size={18} /></button>
+          <span className="font-medium text-gray-700">ยอดรวม</span><strong className="text-right tabular-nums">{fmtSatang(enteredTotal, { zeroDash: false })}</strong><button type="button" onClick={() => { setPendingTotalCondition(invoiceTotalCondition); setTotalConditionOpen(true); }} aria-label="เงื่อนไขยอดรวม" className="rounded-lg p-1.5 text-gray-500 hover:bg-white hover:text-gray-800"><EllipsisVertical size={18} /></button>
           <span className="font-medium text-gray-700">ภาษี 7%</span><strong className="text-right tabular-nums">{fmtSatang(vat, { zeroDash: false })}</strong><span />
           <span className="font-semibold text-gray-900">ยอดเงินสุทธิ</span><strong className="text-right text-base tabular-nums text-gray-900">{fmtSatang(total, { zeroDash: false })}</strong><span />
         </div>
@@ -564,8 +565,8 @@ export default function PurchaseTaxInvoiceForm({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" aria-label="เงื่อนไขยอดรวม">
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4"><h3 className="text-lg font-semibold text-gray-900">เงื่อนไขยอดรวม</h3><button type="button" onClick={() => setTotalConditionOpen(false)} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100" aria-label="ปิด"><X size={20} /></button></div>
-            <div className="space-y-3 p-5">{([['VAT_INCLUDED', 'ยอดรวมภาษี 7%'], ['VAT_EXCLUDED', 'ยอดก่อนภาษี 7%']] as Array<[PurchaseTaxTotalCondition, string]>).map(([value, text]) => <label key={value} className="flex items-center gap-3 text-sm text-gray-800"><input type="radio" name="invoice-total-condition" checked={invoiceTotalCondition === value} onChange={() => setForm((current) => ({ ...current, lineItems: current.lineItems.map((item) => ({ ...item, totalCondition: value })) }))} />{text}</label>)}</div>
-            <div className="flex justify-end border-t border-gray-200 px-5 py-4"><button type="button" onClick={() => setTotalConditionOpen(false)} className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700">บันทึก</button></div>
+            <div className="space-y-3 p-5">{([['VAT_INCLUDED', 'ยอดรวมภาษี 7%'], ['VAT_EXCLUDED', 'ยอดก่อนภาษี 7%']] as Array<[PurchaseTaxTotalCondition, string]>).map(([value, text]) => <label key={value} className="flex items-center gap-3 text-sm text-gray-800"><input type="radio" name="invoice-total-condition" checked={pendingTotalCondition === value} onChange={() => setPendingTotalCondition(value)} />{text}</label>)}</div>
+            <div className="flex justify-end border-t border-gray-200 px-5 py-4"><button type="button" onClick={() => { setForm((current) => ({ ...current, lineItems: current.lineItems.map((item) => ({ ...item, totalCondition: pendingTotalCondition })) })); setTotalConditionOpen(false); }} className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700">บันทึก</button></div>
           </div>
         </div>
       )}

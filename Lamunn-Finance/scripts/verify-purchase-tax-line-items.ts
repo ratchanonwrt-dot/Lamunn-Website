@@ -71,6 +71,11 @@ function checkLineTotalVatConditions() {
     throw new Error("ยอดกรอก 20,000 แบบรวม VAT ต้องถอดฐาน 18,691.59 ภาษี 1,308.41 และสุทธิเท่าเดิม");
   }
 
+  const exactIncluded = summarizePurchaseTaxTotal(2_140_000, 0.07, "VAT_INCLUDED");
+  if (exactIncluded.baseSatang !== 2_000_000 || exactIncluded.vatSatang !== 140_000 || exactIncluded.totalSatang !== 2_140_000) {
+    throw new Error("ยอดกรอก 21,400 แบบรวม VAT ต้องถอดฐาน 20,000 ภาษี 1,400 และสุทธิ 21,400");
+  }
+
   const vatIncluded = summarizePurchaseTaxLineItems([
     { category: "RAW_MATERIAL", description: "[test] ยอดรวมภาษี", quantity: "1", unitPrice: "107", lineTotal: "107.00", priceCondition: "VAT", totalCondition: "VAT_INCLUDED", vatRatePercent: "7" },
   ], 0.07);
