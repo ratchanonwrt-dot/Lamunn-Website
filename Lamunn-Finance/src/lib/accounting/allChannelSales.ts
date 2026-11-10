@@ -13,6 +13,8 @@ export const ALL_CHANNEL_SALES_SHEETS = [
   { key: "tiktok", label: "Tiktok" },
 ] as const;
 
+export const ALL_CHANNEL_SALES_SUMMARY_COLUMNS = ["ลำดับ", "สาขา", "มูลค่าก่อนภาษี", "ภาษี 7%", "มูลค่ารวมภาษี"] as const;
+
 export type AllChannelSalesSheetKey = (typeof ALL_CHANNEL_SALES_SHEETS)[number]["key"];
 
 /** ลิงก์อาจถูกพิมพ์เอง จึงคืนแท็บสรุปแทนการปล่อยให้หน้าไม่มีแท็บที่เลือก */
