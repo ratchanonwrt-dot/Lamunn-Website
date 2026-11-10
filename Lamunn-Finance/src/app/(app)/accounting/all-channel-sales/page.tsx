@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BarChart3, FileSpreadsheet } from "lucide-react";
 import { requireSectionPage } from "@/lib/permissions";
-import { ALL_CHANNEL_SALES_CASH_BRANCHES, ALL_CHANNEL_SALES_CASH_COLUMNS, ALL_CHANNEL_SALES_POS_COLUMNS, ALL_CHANNEL_SALES_SHEETS, ALL_CHANNEL_SALES_SUMMARY_COLUMNS, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
+import { ALL_CHANNEL_SALES_CASH_BRANCHES, ALL_CHANNEL_SALES_CASH_FIXED_COLUMNS, ALL_CHANNEL_SALES_POS_COLUMNS, ALL_CHANNEL_SALES_SHEETS, ALL_CHANNEL_SALES_SUMMARY_COLUMNS, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
 
 export const dynamic = "force-dynamic";
 
@@ -79,12 +79,17 @@ export default async function AllChannelSalesPage({ searchParams }: { searchPara
             <FileSpreadsheet size={20} className="text-pink-500" />
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-max text-sm">
               <thead className="bg-gray-50 text-xs font-medium text-gray-500">
-                <tr>{ALL_CHANNEL_SALES_CASH_COLUMNS.map((column, index) => <th key={column} className={`px-4 py-3 ${index < 2 ? "text-left" : "text-right"}`}>{column}</th>)}</tr>
+                <tr className="border-b border-gray-200">
+                  <th rowSpan={2} className="min-w-20 px-4 py-3 text-left">{ALL_CHANNEL_SALES_CASH_FIXED_COLUMNS[0]}</th>
+                  <th rowSpan={2} className="min-w-44 px-4 py-3 text-left">{ALL_CHANNEL_SALES_CASH_FIXED_COLUMNS[1]}</th>
+                  <th colSpan={ALL_CHANNEL_SALES_CASH_BRANCHES.length} className="px-4 py-2 text-center">สาขา</th>
+                </tr>
+                <tr>{ALL_CHANNEL_SALES_CASH_BRANCHES.map((branch) => <th key={branch} className="min-w-36 whitespace-nowrap border-l border-gray-100 px-4 py-3 text-right">{branch}</th>)}</tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {ALL_CHANNEL_SALES_CASH_BRANCHES.map((branch, index) => <tr key={branch}><td className="px-4 py-3 text-gray-500">{index + 1}</td><td className="px-4 py-3 font-medium text-gray-800">{branch}</td><td className="px-4 py-3 text-right text-gray-400">—</td></tr>)}
+              <tbody>
+                <tr className="border-t border-gray-100"><td className="px-4 py-3 text-gray-500">1</td><td className="px-4 py-3 font-medium text-gray-800">มูลค่ารวมภาษี</td>{ALL_CHANNEL_SALES_CASH_BRANCHES.map((branch) => <td key={branch} className="border-l border-gray-100 px-4 py-3 text-right text-gray-400">—</td>)}</tr>
               </tbody>
             </table>
           </div>

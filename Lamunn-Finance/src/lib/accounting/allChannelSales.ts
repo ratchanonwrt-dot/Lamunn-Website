@@ -15,7 +15,7 @@ export const ALL_CHANNEL_SALES_SHEETS = [
 
 export const ALL_CHANNEL_SALES_SUMMARY_COLUMNS = ["ลำดับ", "สาขา", "มูลค่าก่อนภาษี", "ภาษี 7%", "มูลค่ารวมภาษี"] as const;
 export const ALL_CHANNEL_SALES_POS_COLUMNS = ["ลำดับ", "ช่องทาง", "สาขา", "มูลค่ารวมภาษี"] as const;
-export const ALL_CHANNEL_SALES_CASH_COLUMNS = ["ลำดับ", "สาขา", "มูลค่ารวมภาษี"] as const;
+export const ALL_CHANNEL_SALES_CASH_FIXED_COLUMNS = ["ลำดับ", "รายการ"] as const;
 export const ALL_CHANNEL_SALES_CASH_BRANCHES = [
   "อโศก",
   "บรรทัดทอง",
