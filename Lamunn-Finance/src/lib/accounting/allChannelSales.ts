@@ -14,6 +14,7 @@ export const ALL_CHANNEL_SALES_SHEETS = [
 ] as const;
 
 export const ALL_CHANNEL_SALES_SUMMARY_COLUMNS = ["ลำดับ", "สาขา", "มูลค่าก่อนภาษี", "ภาษี 7%", "มูลค่ารวมภาษี"] as const;
+export const ALL_CHANNEL_SALES_POS_COLUMNS = ["ลำดับ", "ช่องทาง", "สาขา", "มูลค่ารวมภาษี"] as const;
 
 export type AllChannelSalesSheetKey = (typeof ALL_CHANNEL_SALES_SHEETS)[number]["key"];
 
