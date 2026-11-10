@@ -2,7 +2,6 @@ import ExcelJS from "exceljs";
 import type { AccWhtFormType } from "@lamunn/db-finance";
 import type { WhtReport } from "./taxReports";
 import { formatAccountingDate } from "./dateFormat";
-import { formatPartnerDisplayName } from "./partnerDisplay";
 import { WHT_FORM_SHORT } from "./whtTypes";
 
 export interface WhtExcelOptions {
@@ -56,7 +55,7 @@ export function buildWhtWorkbook(report: WhtReport, opts: WhtExcelOptions): Exce
       index + 1,
       formatAccountingDate(row.payDate),
       row.docNo,
-      formatPartnerDisplayName(row.payeeName, row.payeeBranchTag),
+      row.payeeName,
       row.payeeTaxId ?? "",
       row.incomeType,
       row.base / 100,
