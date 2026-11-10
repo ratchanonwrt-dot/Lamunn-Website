@@ -14,7 +14,7 @@ export const ALL_CHANNEL_SALES_SHEETS = [
 ] as const;
 
 export const ALL_CHANNEL_SALES_SUMMARY_COLUMNS = ["ลำดับ", "สาขา", "มูลค่าก่อนภาษี", "ภาษี 7%", "มูลค่ารวมภาษี"] as const;
-export const ALL_CHANNEL_SALES_POS_COLUMNS = ["ลำดับ", "ช่องทาง", "สาขา", "มูลค่ารวมภาษี"] as const;
+export const ALL_CHANNEL_SALES_POS_COLUMNS = ["ลำดับ", "ช่องทาง", "มูลค่ารวมภาษี"] as const;
 export const ALL_CHANNEL_SALES_CASH_FIXED_COLUMNS = ["ลำดับ", "รายการ"] as const;
 export const ALL_CHANNEL_SALES_CASH_BRANCHES = [
   "อโศก",
@@ -62,4 +62,9 @@ export type AllChannelSalesSheetKey = (typeof ALL_CHANNEL_SALES_SHEETS)[number][
 /** ลิงก์อาจถูกพิมพ์เอง จึงคืนแท็บสรุปแทนการปล่อยให้หน้าไม่มีแท็บที่เลือก */
 export function resolveAllChannelSalesSheet(value: string | undefined) {
   return ALL_CHANNEL_SALES_SHEETS.find((sheet) => sheet.key === value) ?? ALL_CHANNEL_SALES_SHEETS[0];
+}
+
+/** POS เป็นหน้ารวมตามช่องทาง จึงรับยอด Cash ที่สรุปและตรวจแล้วทั้งเดือนมาเพียงหนึ่งบรรทัด */
+export function buildAllChannelPosRows(cashGrandTotal: number) {
+  return [{ sequence: 1, channel: "Cash", grossAmount: cashGrandTotal }];
 }
