@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BarChart3, FileSpreadsheet } from "lucide-react";
 import { requireSectionPage } from "@/lib/permissions";
-import { ALL_CHANNEL_SALES_SHEETS, ALL_CHANNEL_SALES_SUMMARY_COLUMNS, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
+import { ALL_CHANNEL_SALES_POS_COLUMNS, ALL_CHANNEL_SALES_SHEETS, ALL_CHANNEL_SALES_SUMMARY_COLUMNS, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +9,7 @@ export default async function AllChannelSalesPage({ searchParams }: { searchPara
   await requireSectionPage("ACCOUNTING");
   const activeSheet = resolveAllChannelSalesSheet(searchParams.sheet);
   const isSummary = activeSheet.key === "summary";
+  const isPos = activeSheet.key === "pos";
 
   return (
     <div className="space-y-5">
@@ -48,6 +49,24 @@ export default async function AllChannelSalesPage({ searchParams }: { searchPara
               <tbody><tr><td colSpan={ALL_CHANNEL_SALES_SUMMARY_COLUMNS.length} className="px-4 py-14 text-center text-gray-400">ยังไม่มีข้อมูลยอดขายรายสาขา</td></tr></tbody>
               <tfoot className="border-t border-gray-200 bg-pink-50 font-semibold text-gray-800">
                 <tr><td className="px-4 py-3" /><td className="px-4 py-3">รวม</td><td className="px-4 py-3 text-right">0.00</td><td className="px-4 py-3 text-right">0.00</td><td className="px-4 py-3 text-right">0.00</td></tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+      ) : isPos ? (
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+            <div><h2 className="font-semibold text-gray-900">POS</h2><p className="mt-0.5 text-sm text-gray-500">สรุปมูลค่ารวมภาษีจากระบบ POS แยกตามช่องทางและสาขา</p></div>
+            <FileSpreadsheet size={20} className="text-pink-500" />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-xs font-medium text-gray-500">
+                <tr>{ALL_CHANNEL_SALES_POS_COLUMNS.map((column, index) => <th key={column} className={`px-4 py-3 ${index < 3 ? "text-left" : "text-right"}`}>{column}</th>)}</tr>
+              </thead>
+              <tbody><tr><td colSpan={ALL_CHANNEL_SALES_POS_COLUMNS.length} className="px-4 py-14 text-center text-gray-400">ยังไม่มีข้อมูล POS</td></tr></tbody>
+              <tfoot className="border-t border-gray-200 bg-pink-50 font-semibold text-gray-800">
+                <tr><td className="px-4 py-3" /><td colSpan={2} className="px-4 py-3">ยอดรวมทั้งสิ้น</td><td className="px-4 py-3 text-right">0.00</td></tr>
               </tfoot>
             </table>
           </div>
