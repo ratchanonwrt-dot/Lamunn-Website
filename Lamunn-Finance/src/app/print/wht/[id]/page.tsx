@@ -9,6 +9,7 @@ import { resolveWhtPayeeAddress } from "@/lib/accounting/withholding";
 import { formatWhtOtherIncomeType } from "@/lib/accounting/whtCertificatePrint";
 import PrintButton from "@/components/accounting/PrintButton";
 import { formatAccountingDate } from "@/lib/accounting/dateFormat";
+import { formatWhtPayeeDisplayName } from "@/lib/accounting/whtTypes";
 
 export const dynamic = "force-dynamic";
 
@@ -124,7 +125,7 @@ export default async function WhtPrintPage({ params }: { params: { id: string } 
             address={WHT_PAYER_ADDRESS}
             taxId={WHT_PAYER_TAX_ID}
           />
-          <PartyBox title="ผู้ถูกหักภาษี ณ ที่จ่าย" name={certificate.payeeName} address={payeeAddress} taxId={certificate.payeeTaxId || ""} />
+          <PartyBox title="ผู้ถูกหักภาษี ณ ที่จ่าย" name={formatWhtPayeeDisplayName(certificate.formType, certificate.payeeName, certificate.payeeBranchTag)} address={payeeAddress} taxId={certificate.payeeTaxId || ""} />
 
           <section className="wht-form-options flex items-center gap-2 border-b border-black px-1 py-1">
             <div className="w-48">

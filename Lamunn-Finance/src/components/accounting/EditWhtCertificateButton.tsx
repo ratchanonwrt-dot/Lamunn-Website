@@ -14,6 +14,7 @@ interface CertificateDetails {
   payeeName: string;
   payeeTaxId: string | null;
   payeeAddress: string | null;
+  payeeBranchTag: string | null;
   incomeType: string;
   note: string | null;
   baseAmount: number;
@@ -45,7 +46,7 @@ export default function EditWhtCertificateButton({ id }: { id: string }) {
     const response = await fetch(`/api/accounting/wht/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ payeeName: form.payeeName, payeeTaxId: form.payeeTaxId, payeeAddress: form.payeeAddress, incomeType: form.incomeType, note: form.note }),
+      body: JSON.stringify({ payeeName: form.payeeName, payeeTaxId: form.payeeTaxId, payeeAddress: form.payeeAddress, payeeBranchTag: form.payeeBranchTag, incomeType: form.incomeType, note: form.note }),
     });
     const data = await response.json().catch(() => ({}));
     setSubmitting(false);
@@ -73,11 +74,12 @@ export default function EditWhtCertificateButton({ id }: { id: string }) {
             <label className={label}>ชื่อผู้ถูกหักภาษี<input required value={form.payeeName} onChange={(event) => setForm({ ...form, payeeName: event.target.value })} className={field}/></label>
             <label className={label}>เลขประจำตัวผู้เสียภาษี<input inputMode="numeric" maxLength={13} value={form.payeeTaxId ?? ""} onChange={(event) => setForm({ ...form, payeeTaxId: event.target.value })} className={field}/></label>
             <label className={`${label} sm:col-span-2`}>ที่อยู่ผู้ถูกหักภาษี<input required={form.formType === "PND3"} value={form.payeeAddress ?? ""} onChange={(event) => setForm({ ...form, payeeAddress: event.target.value })} className={field}/></label>
+            {form.formType === "PND53" && <label className={`${label} sm:col-span-2`}>สำนักงานใหญ่/สาขา<input required placeholder="เช่น สำนักงานใหญ่ หรือ 00001" value={form.payeeBranchTag ?? ""} onChange={(event) => setForm({ ...form, payeeBranchTag: event.target.value })} className={field}/></label>}
             <label className={`${label} sm:col-span-2`}>ประเภทเงินได้<select value={form.incomeType} onChange={(event) => setForm({ ...form, incomeType: event.target.value })} className={field}>{incomeChoices.map((item) => <option key={item.label} value={item.label}>{item.label}</option>)}</select></label>
             <label className={`${label} sm:col-span-2`}>หมายเหตุ<input value={form.note ?? ""} onChange={(event) => setForm({ ...form, note: event.target.value })} className={field}/></label>
           </div>
           <div className="mt-4 grid gap-2 rounded-xl bg-gray-50 p-3 text-xs sm:grid-cols-4"><div><span className="block text-gray-500">วันที่จ่าย</span><strong>{formatAccountingDate(form.payDate)}</strong></div><div><span className="block text-gray-500">ฐานภาษี</span><strong>{form.baseAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></div><div><span className="block text-gray-500">อัตรา</span><strong>{(form.whtRate * 100).toFixed(2)}%</strong></div><div><span className="block text-gray-500">ภาษีที่หัก</span><strong>{form.whtAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></div></div>
-          <p className="mt-2 text-xs text-gray-500">ยอดและวันที่ต้องแก้จากเอกสารต้นทาง เพื่อให้ตรงกับสมุดรายวัน · หนังสือรับรองจะไม่แสดงสำนักงานใหญ่/สาขาต่อท้ายชื่อ</p>
+          <p className="mt-2 text-xs text-gray-500">ยอดและวันที่ต้องแก้จากเอกสารต้นทาง เพื่อให้ตรงกับสมุดรายวัน · ภ.ง.ด.3 ไม่แสดงสาขา ส่วน ภ.ง.ด.53 แสดงสำนักงานใหญ่/สาขาตามที่กรอก</p>
         </>}
         {error && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
         <div className="mt-5 flex gap-2"><button type="submit" disabled={!form || loading || submitting || refreshing} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{submitting ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}</button><button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600">ปิด</button></div>

@@ -9,7 +9,7 @@ import StatementShell from "@/components/accounting/StatementShell";
 import WhtCertificateForm from "@/components/accounting/WhtCertificateForm";
 import VoidDocButton from "@/components/accounting/VoidDocButton";
 import { buildWhtReport } from "@/lib/accounting/taxReports";
-import { WHT_FORM_LABELS, WHT_FORM_SHORT } from "@/lib/accounting/whtTypes";
+import { formatWhtPayeeDisplayName, WHT_FORM_LABELS, WHT_FORM_SHORT } from "@/lib/accounting/whtTypes";
 import Link from "next/link";
 import { fmtSatang } from "@/lib/accounting/money";
 import { formatAccountingDate } from "@/lib/accounting/dateFormat";
@@ -167,7 +167,7 @@ export default async function WhtReportView({
                     </Link>
                   </td>
                   <td className="py-1.5 px-2 text-gray-800">
-                    {r.payeeName}
+                    {formatWhtPayeeDisplayName(formType, r.payeeName, r.payeeBranchTag)}
                   </td>
                   <td className="py-1.5 px-2 font-mono text-xs text-gray-500">{r.payeeTaxId ?? "-"}</td>
                   <td className="py-1.5 px-2 text-xs text-gray-600">{r.incomeType}</td>
