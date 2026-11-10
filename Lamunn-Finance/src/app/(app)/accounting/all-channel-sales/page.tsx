@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { ArrowRight, BarChart3, FileSpreadsheet, ReceiptText } from "lucide-react";
 import { requireSectionPage } from "@/lib/permissions";
-import { ALL_CHANNEL_SALES_CASH_BRANCHES, ALL_CHANNEL_SALES_LINKS, ALL_CHANNEL_SALES_POS_COLUMNS, ALL_CHANNEL_SALES_SHEETS, ALL_CHANNEL_SALES_SUMMARY_COLUMNS, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
+import { ALL_CHANNEL_SALES_CASH_BRANCHES, ALL_CHANNEL_SALES_LINKS, ALL_CHANNEL_SALES_POS_COLUMNS, ALL_CHANNEL_SALES_SHEETS, ALL_CHANNEL_SALES_SUMMARY_COLUMNS, buildAllChannelPosRows, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
 import { loadAllChannelCashReport } from "@/lib/accounting/allChannelCash";
+import { fmtSatang } from "@/lib/accounting/money";
 import { AllChannelCashSheet } from "@/components/accounting/AllChannelCashSheet";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,10 @@ export default async function AllChannelSalesPage({ searchParams }: { searchPara
   const year = /^20\d{2}$/.test(searchParams.year ?? "") ? Number(searchParams.year) : now.getFullYear();
   const requestedMonth = Number(searchParams.month);
   const month = Number.isInteger(requestedMonth) && requestedMonth >= 1 && requestedMonth <= 12 ? requestedMonth : now.getMonth() + 1;
-  const cashReport = isCash ? await loadAllChannelCashReport(year, month) : null;
+  const cashReport = isCash || isPos ? await loadAllChannelCashReport(year, month) : null;
+  const posRows = isPos ? buildAllChannelPosRows(cashReport!.grandTotal) : [];
+  const periodQuery = `year=${year}&month=${month}`;
+  const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 
   return (
     <div className="space-y-5">
@@ -33,7 +37,7 @@ export default async function AllChannelSalesPage({ searchParams }: { searchPara
             return (
               <Link
                 key={sheet.key}
-                href={`/accounting/all-channel-sales?sheet=${sheet.key}`}
+                href={`/accounting/all-channel-sales?sheet=${sheet.key}&${periodQuery}`}
                 className={`rounded-xl px-3.5 py-2 text-sm font-medium transition-colors ${active ? "bg-pink-600 text-white shadow-sm" : "bg-pink-50 text-pink-700 hover:bg-pink-100"}`}
               >
                 {sheet.label}
@@ -63,18 +67,24 @@ export default async function AllChannelSalesPage({ searchParams }: { searchPara
         </section>
       ) : isPos ? (
         <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
-            <div><h2 className="font-semibold text-gray-900">POS</h2><p className="mt-0.5 text-sm text-gray-500">สรุปมูลค่ารวมภาษีจากระบบ POS แยกตามช่องทางและสาขา</p></div>
-            <Link href={ALL_CHANNEL_SALES_LINKS.summary} className="inline-flex items-center gap-2 rounded-xl border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-medium text-pink-700 hover:bg-pink-100"><BarChart3 size={16} />ไปสรุปยอดขาย<ArrowRight size={15} /></Link>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+            <div><h2 className="font-semibold text-gray-900">POS</h2><p className="mt-0.5 text-sm text-gray-500">สรุปมูลค่ารวมภาษีแยกตามช่องทาง โดยยอด Cash ดึงจาก Sheet Cash อัตโนมัติ</p></div>
+            <Link href={`${ALL_CHANNEL_SALES_LINKS.summary}&${periodQuery}`} className="inline-flex items-center gap-2 rounded-xl border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-medium text-pink-700 hover:bg-pink-100"><BarChart3 size={16} />ไปสรุปยอดขาย<ArrowRight size={15} /></Link>
           </div>
+          <form className="flex flex-wrap items-end gap-2 border-b border-gray-100 px-5 py-4" method="GET">
+            <input type="hidden" name="sheet" value="pos" />
+            <label className="text-xs text-gray-500">เดือน<select name="month" defaultValue={month} className="mt-1 block rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800">{monthNames.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</select></label>
+            <label className="text-xs text-gray-500">ปี<select name="year" defaultValue={year} className="mt-1 block rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800">{Array.from({ length: 5 }, (_, index) => now.getFullYear() - 2 + index).map((value) => <option key={value} value={value}>{value + 543}</option>)}</select></label>
+            <button className="rounded-xl bg-pink-50 px-4 py-2 text-sm font-medium text-pink-700 hover:bg-pink-100">แสดงรายงาน</button>
+          </form>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-xs font-medium text-gray-500">
-                <tr>{ALL_CHANNEL_SALES_POS_COLUMNS.map((column, index) => <th key={column} className={`px-4 py-3 ${index < 3 ? "text-left" : "text-right"}`}>{column}</th>)}</tr>
+                <tr>{ALL_CHANNEL_SALES_POS_COLUMNS.map((column, index) => <th key={column} className={`px-4 py-3 ${index < 2 ? "text-left" : "text-right"}`}>{column}</th>)}</tr>
               </thead>
-              <tbody><tr><td colSpan={ALL_CHANNEL_SALES_POS_COLUMNS.length} className="px-4 py-14 text-center text-gray-400">ยังไม่มีข้อมูล POS</td></tr></tbody>
+              <tbody>{posRows.map((row) => <tr key={row.channel} className="border-t border-gray-100"><td className="px-4 py-3">{row.sequence}</td><td className="px-4 py-3 font-medium text-gray-900">{row.channel}</td><td className="px-4 py-3 text-right tabular-nums">{fmtSatang(row.grossAmount, { zeroDash: false })}</td></tr>)}</tbody>
               <tfoot className="border-t border-gray-200 bg-pink-50 font-semibold text-gray-800">
-                <tr><td className="px-4 py-3" /><td colSpan={2} className="px-4 py-3">ยอดรวมทั้งสิ้น</td><td className="px-4 py-3 text-right">0.00</td></tr>
+                <tr><td className="px-4 py-3" /><td className="px-4 py-3">ยอดรวมทั้งสิ้น</td><td className="px-4 py-3 text-right tabular-nums">{fmtSatang(cashReport!.grandTotal, { zeroDash: false })}</td></tr>
               </tfoot>
             </table>
           </div>
