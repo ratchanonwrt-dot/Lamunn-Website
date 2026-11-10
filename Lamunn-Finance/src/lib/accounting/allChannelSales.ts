@@ -52,6 +52,11 @@ export const ALL_CHANNEL_SALES_CASH_BRANCHES = [
   "วางบิล The mall",
 ] as const;
 
+export const ALL_CHANNEL_SALES_LINKS = {
+  taxInvoices: "/accounting/tax-invoices",
+  summary: "/accounting/all-channel-sales?sheet=summary",
+} as const;
+
 export type AllChannelSalesSheetKey = (typeof ALL_CHANNEL_SALES_SHEETS)[number]["key"];
 
 /** ลิงก์อาจถูกพิมพ์เอง จึงคืนแท็บสรุปแทนการปล่อยให้หน้าไม่มีแท็บที่เลือก */
