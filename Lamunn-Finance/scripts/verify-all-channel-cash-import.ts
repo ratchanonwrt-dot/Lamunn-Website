@@ -49,6 +49,10 @@ async function main() {
     assert.equal(report.grandTotal, 145_000);
     assert.equal(await prisma.accJournalEntry.count(), journalBefore, "รายงาน Cash ต้องไม่สร้างใบสำคัญ");
     console.log("✅ บันทึกรายงานครบและไม่กระทบสมุดรายวัน");
+    assert.equal(await cash.clearAllChannelCashReport(YEAR, MONTH), 4);
+    assert.equal(await prisma.accAllChannelCashDaily.count({ where: { periodYear: YEAR, periodMonth: MONTH } }), 0);
+    assert.equal(await prisma.accJournalEntry.count(), journalBefore, "การล้าง Cash ต้องไม่กระทบใบสำคัญ");
+    console.log("✅ ล้างเฉพาะข้อมูล Cash ของงวดทดสอบและไม่กระทบสมุดรายวัน");
   } finally {
     for (const id of createdIds.reverse()) await prisma.accAllChannelCashDaily.delete({ where: { id } }).catch(() => undefined);
     await prisma.$disconnect();

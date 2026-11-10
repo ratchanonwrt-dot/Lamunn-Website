@@ -120,3 +120,16 @@ export async function loadAllChannelCashReport(year: number, month: number): Pro
     grandTotal: branchTotals.reduce((sum, amount) => sum + amount, 0),
   };
 }
+
+export async function clearAllChannelCashReport(year: number, month: number) {
+  const { prisma } = await import("@lamunn/db-finance");
+  const existing = await prisma.accAllChannelCashDaily.findMany({
+    where: { periodYear: year, periodMonth: month },
+    select: { id: true },
+  });
+  // ใช้ id ที่อ่านได้จากเดือนเป้าหมายเท่านั้น เพื่อไม่ให้การล้างรายงานลามไปงวดอื่น
+  if (existing.length) {
+    await prisma.accAllChannelCashDaily.deleteMany({ where: { id: { in: existing.map((row) => row.id) } } });
+  }
+  return existing.length;
+}
