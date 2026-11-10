@@ -15,16 +15,19 @@ import { buildInputVatReport } from "@/lib/accounting/taxReports";
 import { fmtSatang } from "@/lib/accounting/money";
 import { formatPartnerDisplayName } from "@/lib/accounting/partnerDisplay";
 import { formatAccountingDate } from "@/lib/accounting/dateFormat";
+import InputVatVendorSearch from "@/components/accounting/InputVatVendorSearch";
+import { filterInputVatReportByVendor } from "@/lib/accounting/inputVatVendorSearch";
 
 export const dynamic = "force-dynamic";
 
-export default async function InputVatPage({ searchParams }: { searchParams: { year?: string; month?: string } }) {
+export default async function InputVatPage({ searchParams }: { searchParams: { year?: string; month?: string; q?: string } }) {
   const { permissions } = await requireSectionPage("ACCOUNTING");
   const canEdit = permissions.ACCOUNTING.canEdit;
 
   const now = new Date();
   const year = Number(searchParams.year) || now.getUTCFullYear();
   const month = Number(searchParams.month) || now.getUTCMonth() + 1;
+  const vendorQuery = String(searchParams.q ?? "").trim().slice(0, 100);
   const { start, end } = monthRange(year, month - 1);
 
   const [settings, report, partners, expenseAccounts, paymentAccounts] = await Promise.all([
@@ -67,6 +70,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
       select: { id: true, code: true, nameTh: true },
     }),
   ]);
+  const visibleReport = filterInputVatReportByVendor(report, vendorQuery);
 
   return (
     <div>
@@ -109,26 +113,29 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
 
       <TaxReportTabs />
       <MonthFilterBar basePath="/accounting/tax-reports/input-vat" year={year} month={month} />
+      <InputVatVendorSearch initialQuery={vendorQuery} resultCount={visibleReport.rows.length} totalCount={report.rows.length} />
 
-      {report.nonClaimableVat !== 0 && (
+      {visibleReport.nonClaimableVat !== 0 && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          มีภาษีซื้อต้องห้าม {fmtSatang(report.nonClaimableVat, { zeroDash: false })} บาทในเดือนนี้ —
+          มีภาษีซื้อต้องห้าม {fmtSatang(visibleReport.nonClaimableVat, { zeroDash: false })} บาทในรายการที่แสดง —
           แสดงในรายงานตามปกติ แต่ไม่ถูกนำไปหักใน ภ.พ.30
         </div>
       )}
 
-      {report.rows.length === 0 ? (
+      {visibleReport.rows.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
           <p className="text-sm font-medium text-gray-700">
-            เดือน {thaiMonthLabel(year, month - 1)} ยังไม่มีใบกำกับภาษีซื้อ
+            {report.rows.length === 0
+              ? `เดือน ${thaiMonthLabel(year, month - 1)} ยังไม่มีใบกำกับภาษีซื้อ`
+              : `ไม่พบผู้ขายที่ตรงกับ “${vendorQuery}”`}
           </p>
-          {canEdit && <p className="mt-1 text-sm text-gray-500">กด &ldquo;บันทึกใบกำกับภาษีซื้อ&rdquo; ด้านบนเพื่อเริ่มบันทึก</p>}
+          {report.rows.length === 0 && canEdit && <p className="mt-1 text-sm text-gray-500">กด &ldquo;บันทึกใบกำกับภาษีซื้อ&rdquo; ด้านบนเพื่อเริ่มบันทึก</p>}
         </div>
       ) : (
         <StatementShell
           companyName={settings.companyName}
           title="รายงานภาษีซื้อ"
-          subtitle={`สำหรับเดือนภาษี ${thaiMonthLabel(year, month - 1)}`}
+          subtitle={`สำหรับเดือนภาษี ${thaiMonthLabel(year, month - 1)}${vendorQuery ? ` · ผู้ขาย ${vendorQuery}` : ""}`}
         >
           <table className="w-full min-w-[60rem] text-sm">
             <thead>
@@ -144,7 +151,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
               </tr>
             </thead>
             <tbody className="tabular-nums">
-              {report.rows.map((r, i) => (
+              {visibleReport.rows.map((r, i) => (
                 <tr key={r.id} className="border-b border-gray-50">
                   <td className="py-1.5 pr-2 text-right text-xs text-gray-400">{i + 1}</td>
                   <td className="py-1.5 px-2 font-mono text-xs text-gray-500">{formatAccountingDate(r.date)}</td>
@@ -195,19 +202,19 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
             <tfoot>
               <tr className="border-t-2 border-gray-800 font-bold tabular-nums">
                 <td colSpan={5} className="py-2 pr-2">
-                  รวม {report.rows.length} รายการ
-                  {report.aiAutokeyCount > 0 ? ` (${report.docCount} บันทึกเอง + ${report.aiAutokeyCount} จาก AI Autokey)` : ""}
+                  รวม {visibleReport.rows.length} รายการ
+                  {visibleReport.aiAutokeyCount > 0 ? ` (${visibleReport.docCount} บันทึกเอง + ${visibleReport.aiAutokeyCount} จาก AI Autokey)` : ""}
                 </td>
-                <td className="py-2 px-2 text-right">{fmtSatang(report.totalBase, { zeroDash: false })}</td>
-                <td className="py-2 px-2 text-right">{fmtSatang(report.totalVat, { zeroDash: false })}</td>
+                <td className="py-2 px-2 text-right">{fmtSatang(visibleReport.totalBase, { zeroDash: false })}</td>
+                <td className="py-2 px-2 text-right">{fmtSatang(visibleReport.totalVat, { zeroDash: false })}</td>
                 {canEdit && <td className="print:hidden" />}
               </tr>
-              {report.nonClaimableVat !== 0 && (
+              {visibleReport.nonClaimableVat !== 0 && (
                 <tr className="tabular-nums text-sm text-gray-600">
                   <td colSpan={6} className="py-1.5 pr-2 text-right">
                     ในจำนวนนี้ ขอเครดิตได้
                   </td>
-                  <td className="py-1.5 px-2 text-right font-semibold">{fmtSatang(report.claimableVat, { zeroDash: false })}</td>
+                  <td className="py-1.5 px-2 text-right font-semibold">{fmtSatang(visibleReport.claimableVat, { zeroDash: false })}</td>
                   {canEdit && <td className="print:hidden" />}
                 </tr>
               )}
