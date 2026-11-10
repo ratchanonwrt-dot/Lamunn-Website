@@ -15,6 +15,42 @@ export const ALL_CHANNEL_SALES_SHEETS = [
 
 export const ALL_CHANNEL_SALES_SUMMARY_COLUMNS = ["ลำดับ", "สาขา", "มูลค่าก่อนภาษี", "ภาษี 7%", "มูลค่ารวมภาษี"] as const;
 export const ALL_CHANNEL_SALES_POS_COLUMNS = ["ลำดับ", "ช่องทาง", "สาขา", "มูลค่ารวมภาษี"] as const;
+export const ALL_CHANNEL_SALES_CASH_COLUMNS = ["ลำดับ", "สาขา", "มูลค่ารวมภาษี"] as const;
+export const ALL_CHANNEL_SALES_CASH_BRANCHES = [
+  "อโศก",
+  "บรรทัดทอง",
+  "Embassy (Tops)",
+  "ลาดพร้าว (Tops)",
+  "นอร์ธ วิล (Tops)",
+  "ปิ่นเกล้า",
+  "พระราม 2",
+  "พระราม 3",
+  "พระราม 9(Tops)",
+  "รามอินทรา",
+  "เวสเกต",
+  "คลาวด์ 11",
+  "วิลเลจ บางนา",
+  "Emporium",
+  "EmQuartier",
+  "แฟชั่น",
+  "ฟิวเจอร์ พาร์ค",
+  "แฮปปี้เทท",
+  "IconSiam",
+  "Nirvana Porch",
+  "One Bangkok",
+  "Park Silom",
+  "ราชพฤกษ์",
+  "เตาปูน",
+  "บางแค",
+  "บางกะปิ",
+  "งามวงศ์วาน",
+  "รามคำแหง",
+  "ท่าพระ",
+  "Cartering และอื่นๆ",
+  "TIKTOK",
+  "วางบิล TOPS",
+  "วางบิล The mall",
+] as const;
 
 export type AllChannelSalesSheetKey = (typeof ALL_CHANNEL_SALES_SHEETS)[number]["key"];
 
