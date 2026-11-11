@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, BarChart3, FileSpreadsheet } from "lucide-react";
+import { BarChart3, FileSpreadsheet } from "lucide-react";
 import { requireSectionPage } from "@/lib/permissions";
-import { ALL_CHANNEL_SALES_CASH_BRANCHES, ALL_CHANNEL_SALES_LINKS, ALL_CHANNEL_SALES_POS_COLUMNS, ALL_CHANNEL_SALES_SHEETS, ALL_CHANNEL_SALES_SUMMARY_COLUMNS, buildAllChannelPosRows, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
+import { ALL_CHANNEL_SALES_CASH_BRANCHES, ALL_CHANNEL_SALES_POS_COLUMNS, ALL_CHANNEL_SALES_SHEETS, ALL_CHANNEL_SALES_SUMMARY_COLUMNS, buildAllChannelPosRows, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
 import { loadAllChannelCashReport } from "@/lib/accounting/allChannelCash";
 import { fmtSatang } from "@/lib/accounting/money";
 import { AllChannelCashSheet } from "@/components/accounting/AllChannelCashSheet";
@@ -66,9 +66,8 @@ export default async function AllChannelSalesPage({ searchParams }: { searchPara
         </section>
       ) : isPos ? (
         <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+          <div className="border-b border-gray-100 px-5 py-4">
             <div><h2 className="font-semibold text-gray-900">POS</h2><p className="mt-0.5 text-sm text-gray-500">สรุปมูลค่ารวมภาษีแยกตามช่องทาง โดยยอด Cash ดึงจาก Sheet Cash อัตโนมัติ</p></div>
-            <Link href={`${ALL_CHANNEL_SALES_LINKS.summary}&${periodQuery}`} className="inline-flex items-center gap-2 rounded-xl border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-medium text-pink-700 hover:bg-pink-100"><BarChart3 size={16} />ไปสรุปยอดขาย<ArrowRight size={15} /></Link>
           </div>
           <form className="flex flex-wrap items-end gap-2 border-b border-gray-100 px-5 py-4" method="GET">
             <input type="hidden" name="sheet" value="pos" />
