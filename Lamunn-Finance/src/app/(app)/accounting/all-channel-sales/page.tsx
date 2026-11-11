@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BarChart3, FileSpreadsheet, ReceiptText } from "lucide-react";
+import { ArrowRight, BarChart3, FileSpreadsheet } from "lucide-react";
 import { requireSectionPage } from "@/lib/permissions";
 import { ALL_CHANNEL_SALES_CASH_BRANCHES, ALL_CHANNEL_SALES_LINKS, ALL_CHANNEL_SALES_POS_COLUMNS, ALL_CHANNEL_SALES_SHEETS, ALL_CHANNEL_SALES_SUMMARY_COLUMNS, buildAllChannelPosRows, resolveAllChannelSalesSheet } from "@/lib/accounting/allChannelSales";
 import { loadAllChannelCashReport } from "@/lib/accounting/allChannelCash";
@@ -49,9 +49,8 @@ export default async function AllChannelSalesPage({ searchParams }: { searchPara
 
       {isSummary ? (
         <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+          <div className="border-b border-gray-100 px-5 py-4">
             <div><div className="flex items-center gap-2"><BarChart3 className="text-pink-600" size={20} /><h2 className="font-semibold text-gray-900">สรุปยอดขาย</h2></div><p className="mt-1 text-sm text-gray-500">สรุปมูลค่าขายและภาษีมูลค่าเพิ่มแยกตามสาขา</p></div>
-            <Link href={ALL_CHANNEL_SALES_LINKS.taxInvoices} className="inline-flex items-center gap-2 rounded-xl bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700"><ReceiptText size={16} />เปิดใบกำกับภาษีเต็มรูป<ArrowRight size={15} /></Link>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
