@@ -4,7 +4,8 @@ import { requirePageRole } from "@/lib/requirePageRole";
 import BookingEditForm from "@/components/BookingEditForm";
 import BookingStaffPanel from "@/components/BookingStaffPanel";
 import BookingChecklistPanel from "@/components/BookingChecklistPanel";
-import { formatThaiDate, customerSourceLabel } from "@/lib/format";
+import BookingConfirmBanner from "@/components/BookingConfirmBanner";
+import { formatThaiDate, customerSourceLabel, isJobConfirmed } from "@/lib/format";
 
 export default async function BookingDetailPage({ params }: { params: { id: string } }) {
   await requirePageRole();
@@ -35,7 +36,19 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
         </p>
       </div>
 
+      {booking.status !== "CANCELLED" && (
+        <BookingConfirmBanner
+          bookingId={booking.id}
+          confirmed={isJobConfirmed(booking)}
+          paymentStatus={booking.paymentStatus}
+          totalAmount={booking.totalAmount}
+          depositAmount={booking.depositAmount}
+        />
+      )}
+
       <BookingEditForm
+        // key เปลี่ยนเมื่อปุ่มคอนเฟิมแก้สถานะ → ฟอร์มรีเซ็ตค่าตามข้อมูลใหม่ ไม่งั้นกดบันทึกแล้วค่าเก่าจะทับ
+        key={`${booking.status}-${booking.paymentStatus}-${booking.depositAmount}`}
         booking={{
           ...booking,
           eventDate: booking.eventDate.toISOString(),

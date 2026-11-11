@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@lamunn/db-catering";
 import { requirePageRole } from "@/lib/requirePageRole";
-import { formatBaht, formatThaiDate, paymentStatusLabel, bookingStatusLabel } from "@/lib/format";
+import { formatBaht, formatThaiDate, paymentStatusLabel, bookingStatusLabel, isJobConfirmed } from "@/lib/format";
 
 const PAYMENT_OPTIONS = ["UNPAID", "DEPOSIT_PAID", "FULLY_PAID"] as const;
 const STATUS_OPTIONS = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"] as const;
@@ -84,7 +84,7 @@ export default async function BookingsPage({
           </thead>
           <tbody>
             {bookings.map((b) => (
-              <tr key={b.id} className="border-t border-gray-100">
+              <tr key={b.id} className={isJobConfirmed(b) ? "border-t border-emerald-100 bg-emerald-50/60" : "border-t border-gray-100"}>
                 <td className="px-4 py-2 text-gray-700">{formatThaiDate(b.eventDate)}</td>
                 <td className="px-4 py-2">
                   <p className="font-medium text-gray-800">{b.customer.name}</p>
@@ -105,7 +105,15 @@ export default async function BookingsPage({
                     {paymentStatusLabel[b.paymentStatus]}
                   </span>
                 </td>
-                <td className="px-4 py-2 text-gray-500">{bookingStatusLabel[b.status]}</td>
+                <td className="px-4 py-2">
+                  {isJobConfirmed(b) ? (
+                    <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-xs font-bold text-white">✓ คอนเฟิมแล้ว</span>
+                  ) : b.status === "CANCELLED" ? (
+                    <span className="text-gray-400">{bookingStatusLabel[b.status]}</span>
+                  ) : (
+                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">รอมัดจำ/คอนเฟิม</span>
+                  )}
+                </td>
                 <td className="px-4 py-2 text-gray-500">
                   {b.staffAssignments.length > 0 ? b.staffAssignments.map((a) => a.staff.name).join(", ") : "-"}
                 </td>

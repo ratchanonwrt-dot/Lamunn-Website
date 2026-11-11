@@ -20,6 +20,11 @@ export function formatThaiDate(d: Date): string {
   return `${d.getUTCDate()} ${thaiMonths[d.getUTCMonth()]} ${d.getUTCFullYear() + 543}`;
 }
 
+/** งานที่ "มัดจำแล้ว คอนเฟิมแล้ว" = ยืนยันการจอง + ลูกค้าจ่ายอย่างน้อยมัดจำ */
+export function isJobConfirmed(b: { status: string; paymentStatus: string }): boolean {
+  return (b.status === "CONFIRMED" || b.status === "COMPLETED") && b.paymentStatus !== "UNPAID";
+}
+
 export const paymentStatusLabel: Record<string, string> = {
   UNPAID: "ยังไม่ชำระ",
   DEPOSIT_PAID: "มัดจำแล้ว",
