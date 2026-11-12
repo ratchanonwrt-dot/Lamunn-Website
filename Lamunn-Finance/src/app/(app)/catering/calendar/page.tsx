@@ -180,6 +180,64 @@ export default async function CateringCalendarPage({ searchParams }: { searchPar
         </div>
       </div>
 
+      {/* ตารางวางแผนคน — ต้องโชว์ "ทุกงาน" ของเดือน (รวมงานที่ยังไม่จ่าย/ยังไม่จัดคน) เพราะคน Plan ต้องเห็นว่างานไหนยังขาดคน
+          ตารางสรุปพนักงานด้านล่างเป็นมุมมองรายคน เลยโชว์เฉพาะงานที่มีคนถูกจัดแล้ว งานที่ยังไม่จัดคนจึงหายไปจากตารางนั้น */}
+      <h2 className="mb-1 text-sm font-semibold text-gray-700">
+        งานทั้งหมด — {label} <span className="font-normal text-gray-400">({bookings.length} งาน)</span>
+      </h2>
+      <p className="mb-3 text-xs text-gray-400">รวมงานที่ยังไม่จ่ายและยังไม่ได้จัดคน — แถวสีแดงคือยังจัดคนไม่ครบ กดชื่องานเพื่อไปจัดพนักงาน</p>
+      {bookings.length === 0 ? (
+        <p className="mb-6 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-400">ยังไม่มีงานในเดือนนี้</p>
+      ) : (
+        <div className="mb-6 overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead className="bg-gray-50 text-left text-xs text-gray-500">
+              <tr>
+                <th className="px-3 py-2">วันงาน</th>
+                <th className="px-3 py-2">ลูกค้า</th>
+                <th className="px-3 py-2 text-right">เสิร์ฟ</th>
+                <th className="px-3 py-2">คนที่ไป</th>
+                <th className="px-3 py-2">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bookings.map((b) => {
+                const days = bookingDaysInMonth(b, year, monthIndex0);
+                const names = staffNamesOf(b);
+                const need = requiredStaff(bookingServings(b));
+                const short = b.status !== "COMPLETED" && names.length < need;
+                const tone = bookingTone(b, today);
+                return (
+                  <tr key={b.id} className={`border-t border-gray-100 align-top ${short ? "bg-red-50/50" : ""}`}>
+                    <td className="whitespace-nowrap px-3 py-2 text-gray-700">
+                      {days.length > 1 ? `${shortDay(days[0])}–${shortDay(days[days.length - 1])}` : shortDay(days[0] ?? b.eventDate.toISOString().slice(0, 10))}
+                      {b.eventStartTime && <span className="ml-1 text-xs text-gray-400">{b.eventStartTime}</span>}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link href={`/catering/bookings/${b.id}`} className="font-medium text-gray-800 hover:text-brand-700 hover:underline">
+                        {b.customer.name}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2 text-right text-gray-600">{bookingServings(b) ?? "-"}</td>
+                    <td className="px-3 py-2">
+                      <span className={`mr-2 rounded px-1.5 text-[11px] ${short ? "bg-red-500 font-semibold text-white" : "bg-gray-100 text-gray-600"}`}>
+                        👤{names.length}/{need}
+                      </span>
+                      {names.length > 0 ? <span className="text-gray-700">{names.join(", ")}</span> : <span className="text-red-600">ยังไม่จัดคน</span>}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 ring-inset ${TONE[tone].badge}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${TONE[tone].dot}`} /> {TONE[tone].label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <h2 className="mb-1 text-sm font-semibold text-gray-700">สรุปพนักงาน — {label}</h2>
       <p className="mb-3 text-xs text-gray-400">ใครไปงานวันไหนบ้าง รวมกี่งาน (งานหลายวันนับเป็น 1 งาน แต่นับวันทำงานทุกวัน)</p>
       {staff.length === 0 ? (
