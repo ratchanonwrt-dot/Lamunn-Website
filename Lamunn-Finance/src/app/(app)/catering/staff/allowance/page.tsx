@@ -5,6 +5,9 @@ import { requireSectionPage } from "@/lib/permissions";
 import { formatBaht, thaiMonthLabel } from "@/lib/format";
 import { bangkokToday, loadMonthBookings } from "@/lib/cateringCalendar";
 import { computePeriodPay, halfMonthBounds, MEAL_ALLOWANCE, MEAL_MIN_HOURS } from "@/lib/cateringStaffPay";
+import { type BranchDutyKind } from "@/lib/cateringBranchDuty";
+import { makeStaffColorLookup } from "@/lib/cateringStaffColor";
+import BranchDutyManager from "@/components/catering/BranchDutyManager";
 
 type Round = 1 | 2;
 
@@ -32,7 +35,8 @@ const hrs = (n: number) => (Math.round(n * 10) / 10).toLocaleString("th-TH");
 
 /** ค่ารถ + ค่าข้าว พนักงาน Catering สรุปเป็นรอบ 1–15 / 16–สิ้นเดือน (รายงานในเว็บอย่างเดียว ยังไม่ลงบัญชี/จ่ายเงิน) */
 export default async function CateringAllowancePage({ searchParams }: { searchParams: { month?: string; round?: string } }) {
-  await requireSectionPage("CATERING");
+  const me = await requireSectionPage("CATERING");
+  const canEdit = me.role === "SUPER_ADMIN" || me.permissions.CATERING.canEdit;
   const today = bangkokToday();
   const m = /^(\d{4})-(\d{2})$/.exec(searchParams.month ?? "");
   const year = m ? Number(m[1]) : today.getUTCFullYear();
@@ -40,10 +44,26 @@ export default async function CateringAllowancePage({ searchParams }: { searchPa
   const round: Round = searchParams.round === "1" || searchParams.round === "2" ? (Number(searchParams.round) as Round) : today.getUTCDate() <= 15 ? 1 : 2;
   const { start, end } = halfMonthBounds(year, monthIndex0, round);
 
-  const [roster, bookings] = await Promise.all([prisma.cateringStaff.findMany({ orderBy: { name: "asc" } }), loadMonthBookings(year, monthIndex0)]);
-  const rows = computePeriodPay(roster, bookings, start, end).filter((r) => r.jobCount > 0);
+  const [roster, bookings, duties] = await Promise.all([
+    prisma.cateringStaff.findMany({ orderBy: { name: "asc" } }),
+    loadMonthBookings(year, monthIndex0),
+    prisma.cateringBranchDuty.findMany({ where: { date: { gte: start, lte: end } }, orderBy: [{ date: "asc" }, { createdAt: "asc" }] }),
+  ]);
+  const colorOf = makeStaffColorLookup(roster);
+  // สอนงาน/แทนสาขา: ยอดเหมาต่อวันของแต่ละคน รวมเข้าค่าข้าวของรอบนี้ (จับคู่ด้วยชื่อ ไม่สนตัวพิมพ์)
+  const dutyByName = new Map<string, { days: number; amount: number }>();
+  for (const d of duties) {
+    const k = d.staffName.trim().toLowerCase();
+    const cur = dutyByName.get(k) ?? { days: 0, amount: 0 };
+    cur.days += 1;
+    cur.amount += d.amount;
+    dutyByName.set(k, cur);
+  }
+  const dutyOf = (name: string) => dutyByName.get(name.trim().toLowerCase()) ?? { days: 0, amount: 0 };
+  const rows = computePeriodPay(roster, bookings, start, end).filter((r) => r.jobCount > 0 || dutyOf(r.name).days > 0);
   const totalTravel = rows.reduce((a, r) => a + r.travel, 0);
   const totalMeal = rows.reduce((a, r) => a + r.meal, 0);
+  const totalDuty = rows.reduce((a, r) => a + dutyOf(r.name).amount, 0);
   const missingHours = rows.some((r) => r.jobs.some((j) => j.hoursMissing));
   const label = `${start.getUTCDate()}–${end.getUTCDate()} ${thaiMonthLabel(year, monthIndex0)}`;
   const monthQ = `${year}-${String(monthIndex0 + 1).padStart(2, "0")}`;
@@ -83,7 +103,7 @@ export default async function CateringAllowancePage({ searchParams }: { searchPa
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-3 gap-3">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
           <p className="text-xs text-sky-700">ค่ารถรวม</p>
           <p className="mt-1 text-xl font-bold text-sky-800">{formatBaht(totalTravel)} ฿</p>
@@ -92,9 +112,13 @@ export default async function CateringAllowancePage({ searchParams }: { searchPa
           <p className="text-xs text-amber-700">ค่าข้าวรวม</p>
           <p className="mt-1 text-xl font-bold text-amber-800">{formatBaht(totalMeal)} ฿</p>
         </div>
+        <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+          <p className="text-xs text-violet-700">สอนงาน/แทนสาขา</p>
+          <p className="mt-1 text-xl font-bold text-violet-800">{formatBaht(totalDuty)} ฿</p>
+        </div>
         <div className="rounded-xl border border-brand-200 bg-brand-600 p-4 text-white">
           <p className="text-xs opacity-80">รวมทั้งรอบ ({rows.length} คน)</p>
-          <p className="mt-1 text-xl font-bold">{formatBaht(totalTravel + totalMeal)} ฿</p>
+          <p className="mt-1 text-xl font-bold">{formatBaht(totalTravel + totalMeal + totalDuty)} ฿</p>
         </div>
       </div>
 
@@ -104,10 +128,18 @@ export default async function CateringAllowancePage({ searchParams }: { searchPa
         </p>
       )}
 
+      <BranchDutyManager
+        staffNames={roster.filter((r) => r.isActive).map((r) => r.name)}
+        duties={duties.map((d) => ({ id: d.id, staffName: d.staffName, date: d.date.toISOString().slice(0, 10), kind: d.kind as BranchDutyKind, amount: d.amount, branchName: d.branchName, color: colorOf(d.staffName) }))}
+        canEdit={canEdit}
+        periodLabel={label}
+      />
+
       <div className="flex flex-col gap-2">
         {rows.map((r) => (
           <details key={r.name} className="group rounded-xl border border-gray-200 bg-white">
             <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+              <span className={`h-7 w-1.5 shrink-0 rounded-full ${colorOf(r.name).bar}`} />
               <span className="min-w-[8rem] font-semibold text-gray-900">
                 {r.name}
                 {!r.staff && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">ไม่อยู่ในรายชื่อ</span>}
@@ -119,10 +151,16 @@ export default async function CateringAllowancePage({ searchParams }: { searchPa
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
                 ค่าข้าว {r.mealDays} วัน · {formatBaht(r.meal)}
               </span>
-              <span className="ml-auto text-base font-bold text-brand-700">{formatBaht(r.travel + r.meal)} ฿</span>
+              {dutyOf(r.name).days > 0 && (
+                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs text-violet-800">
+                  สอน/แทนสาขา {dutyOf(r.name).days} วัน · {formatBaht(dutyOf(r.name).amount)}
+                </span>
+              )}
+              <span className="ml-auto text-base font-bold text-brand-700">{formatBaht(r.travel + r.meal + dutyOf(r.name).amount)} ฿</span>
             </summary>
             <div className="overflow-x-auto border-t border-gray-100 px-4 py-3">
-              <table className="w-full min-w-[520px] text-sm">
+              {r.jobs.length === 0 && <p className="text-sm text-gray-400">รอบนี้ไม่มีงานจัดเลี้ยง (มีเฉพาะสอนงาน/แทนสาขา)</p>}
+              <table className={`w-full min-w-[520px] text-sm ${r.jobs.length === 0 ? "hidden" : ""}`}>
                 <thead className="text-left text-xs text-gray-400">
                   <tr>
                     <th className="py-1">งาน</th>

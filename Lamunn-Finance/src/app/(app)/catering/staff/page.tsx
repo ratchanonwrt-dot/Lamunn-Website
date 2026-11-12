@@ -3,9 +3,12 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { prisma } from "@lamunn/db-finance";
 import { requireSectionPage } from "@/lib/permissions";
 import { formatBaht, thaiMonthLabel } from "@/lib/format";
-import { bangkokToday, loadMonthBookings, knownCateringStaffNames } from "@/lib/cateringCalendar";
+import { bangkokToday, loadMonthBookings, knownCateringStaffNames, monthBounds, staffNamesOf, requiredStaff, bookingServings } from "@/lib/cateringCalendar";
 import { computeMonthPay, parseDayOffs, DOW_TH } from "@/lib/cateringStaffPay";
 import StaffRosterManager from "@/components/catering/StaffRosterManager";
+import StaffQueuePanel from "@/components/catering/StaffQueuePanel";
+import { buildQueue } from "@/lib/cateringQueue";
+import { makeStaffColorLookup } from "@/lib/cateringStaffColor";
 
 function monthParam(year: number, monthIndex0: number) {
   const d = new Date(Date.UTC(year, monthIndex0, 1));
@@ -23,11 +26,30 @@ export default async function CateringStaffPage({ searchParams }: { searchParams
   const year = m ? Number(m[1]) : today.getUTCFullYear();
   const monthIndex0 = m ? Math.min(11, Math.max(0, Number(m[2]) - 1)) : today.getUTCMonth();
 
-  const [roster, bookings, known] = await Promise.all([
+  const { start: monthStart, end: monthEnd } = monthBounds(year, monthIndex0);
+  const [roster, bookings, known, duties] = await Promise.all([
     prisma.cateringStaff.findMany({ orderBy: [{ isActive: "desc" }, { name: "asc" }] }),
     loadMonthBookings(year, monthIndex0),
     knownCateringStaffNames(),
+    prisma.cateringBranchDuty.findMany({ where: { date: { gte: monthStart, lte: monthEnd } }, select: { staffName: true, date: true } }),
   ]);
+  const colorOf = makeStaffColorLookup(roster);
+  const queue = buildQueue({
+    roster: roster.map((r) => ({ name: r.name, dayOffs: r.dayOffs, isActive: r.isActive })),
+    bookings: bookings.map((b) => ({
+      id: b.id,
+      customer: b.customer.name,
+      eventDate: b.eventDate,
+      eventEndDate: b.eventEndDate,
+      status: b.status,
+      staffNames: staffNamesOf(b),
+      required: requiredStaff(bookingServings(b)),
+    })),
+    duties,
+    monthStart,
+    monthEnd,
+    today,
+  });
   const pay = computeMonthPay(roster, bookings, year, monthIndex0);
   const inRoster = new Set(roster.map((r) => r.name.trim().toLowerCase()));
   const suggest = known.filter((n) => !inRoster.has(n.toLowerCase()));
@@ -45,6 +67,14 @@ export default async function CateringStaffPage({ searchParams }: { searchParams
         </Link>
       </div>
       <p className="mb-5 text-sm text-gray-500">ตั้งวันหยุดและค่า OT ของแต่ละคน ระบบคิด OT ให้อัตโนมัติจากงานที่ถูกเลือกไป (นับเฉพาะช่วงก่อน 10:00 และหลัง 19:00)</p>
+
+      <StaffQueuePanel
+        queue={queue}
+        roster={roster}
+        label={label}
+        prevHref={`/catering/staff?month=${monthParam(year, monthIndex0 - 1)}`}
+        nextHref={`/catering/staff?month=${monthParam(year, monthIndex0 + 1)}`}
+      />
 
       <section className="mb-8">
         <h2 className="mb-2 text-sm font-bold text-gray-800">รายชื่อ ({roster.filter((r) => r.isActive).length} คน)</h2>
@@ -79,6 +109,7 @@ export default async function CateringStaffPage({ searchParams }: { searchParams
             return (
               <details key={r.name} className="group rounded-xl border border-gray-200 bg-white">
                 <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+                  <span className={`h-7 w-1.5 shrink-0 rounded-full ${colorOf(r.name).bar}`} />
                   <span className="min-w-[8rem] font-semibold text-gray-900">
                     {r.name}
                     {!r.staff && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">ไม่อยู่ในรายชื่อ</span>}

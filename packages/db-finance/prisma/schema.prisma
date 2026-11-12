@@ -606,6 +606,28 @@ model CateringBookingItem {
   @@map("catering_booking_items")
 }
 
+// หมวดงานนอกเหนืองานจัดเลี้ยงของพนักงาน Catering — ให้ค่าข้าวเหมาต่อวัน (ยอดอยู่ใน lib/cateringBranchDuty.ts)
+enum CateringBranchDutyKind {
+  TRAINING // สอนงานหน้าสาขา
+  COVER // แทนสาขา
+}
+
+// บันทึกรายวัน: ใครไปสอนงาน/แทนสาขาวันไหน — ผูกกับพนักงานด้วย "ชื่อ" เหมือน CateringBookingStaff
+// amount เก็บยอด ณ ตอนบันทึก (snapshot) เพื่อให้เปลี่ยนอัตราภายหลังแล้วรอบเก่าไม่เปลี่ยนตาม
+model CateringBranchDuty {
+  id         String                 @id @default(cuid())
+  staffName  String
+  date       DateTime               @db.Date
+  kind       CateringBranchDutyKind
+  amount     Float
+  branchName String?
+  note       String?
+  createdAt  DateTime               @default(now())
+
+  @@index([date])
+  @@map("catering_branch_duties")
+}
+
 // พนักงานที่จัดไปดูแลงาน — "ใครไปใครดูแล" กรอกแค่ชื่อพอ ไม่ผูกกับบัญชีผู้ใช้งานจริง (งานหนึ่งอาจมี 1-2 คนขึ้นไป)
 // รายชื่อพนักงาน Catering — ใช้คิด OT สิ้นเดือน ผูกกับ CateringBookingStaff ด้วย "ชื่อ" (ไม่สนตัวพิมพ์เล็ก/ใหญ่)
 // เพราะการจัดคนเดิมเก็บชื่อแบบข้อความอิสระอยู่แล้ว เปลี่ยนชื่อในรายชื่อ = เปลี่ยนชื่อในงานที่เคยจัดไว้ให้ด้วย (api/catering/staff/[id])
