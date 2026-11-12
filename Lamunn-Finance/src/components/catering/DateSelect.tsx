@@ -49,7 +49,8 @@ export default function DateSelect({
 
   const now = new Date();
   const yearStart = minYear ?? now.getUTCFullYear() - 1;
-  const yearEnd = maxYear ?? now.getUTCFullYear() + 3;
+  // ช่วงปีสั้นๆ (ปีหน้าเป็นอย่างมาก) — เคยมีงานจริงถูกกรอกเป็นปี 2029 (+3 ปี) ทั้งชุด ทำให้หายจากปฏิทิน
+  const yearEnd = maxYear ?? now.getUTCFullYear() + 1;
   const years: number[] = [];
   for (let year = yearStart; year <= yearEnd; year++) years.push(year);
 
@@ -57,7 +58,9 @@ export default function DateSelect({
   const days = Array.from({ length: maxDay }, (_, i) => i + 1);
 
   function update(next: { d?: string; m?: string; y?: string }) {
+    // เลือกวัน/เดือนแล้วยังไม่ได้เลือกปี → ใส่ปีปัจจุบันให้เลย ไม่ต้องเลื่อนหาปีเอง (ลดโอกาสเลือกปีพลาด)
     const merged = { ...parts, ...next };
+    if (!merged.y && (merged.d || merged.m)) merged.y = String(new Date().getUTCFullYear());
     setParts(merged);
     const composed =
       merged.d && merged.m && merged.y
