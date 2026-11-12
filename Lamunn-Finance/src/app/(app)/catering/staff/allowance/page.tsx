@@ -57,7 +57,7 @@ export default async function CateringAllowancePage({ searchParams }: { searchPa
         </Link>
       </div>
       <p className="mb-5 text-sm text-gray-500">
-        ค่ารถ = ที่ให้ล่วงหน้าต่องาน (กรอกในหน้างาน) · ค่าข้าว {MEAL_ALLOWANCE} บาท/วัน เมื่อทำงานเกิน {MEAL_MIN_HOURS} ชั่วโมง
+        ค่ารถ = ที่ให้ล่วงหน้าต่องาน (กรอกในหน้างาน) · ค่าข้าว {MEAL_ALLOWANCE} บาท/วัน เมื่อทำงานตั้งแต่ {MEAL_MIN_HOURS} ชั่วโมงขึ้นไป
       </p>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -145,7 +145,7 @@ export default async function CateringAllowancePage({ searchParams }: { searchPa
                         {j.dates.map((iso) => (
                           <span
                             key={iso}
-                            title={j.mealDates.includes(iso) ? "ได้ค่าข้าว" : `ไม่เกิน ${MEAL_MIN_HOURS} ชม.`}
+                            title={j.mealDates.includes(iso) ? "ได้ค่าข้าว" : `ไม่ถึง ${MEAL_MIN_HOURS} ชม.`}
                             className={`mr-1 inline-block rounded px-1 text-xs ${j.mealDates.includes(iso) ? "bg-amber-100 font-semibold text-amber-800" : "bg-gray-100"}`}
                           >
                             {day(iso)}

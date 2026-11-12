@@ -13,7 +13,7 @@
  * ค่ารถ + ค่าข้าว (สรุปเป็นรอบ 1–15 / 16–สิ้นเดือน):
  *   - ค่ารถ = ยอดที่ให้ล่วงหน้าต่อการไปงาน 1 ครั้ง (CateringBookingStaff.travelCost) นับครั้งเดียวที่วันแรกของงาน
  *     งานหลายวันที่คร่อมรอบจะไม่ถูกนับค่ารถซ้ำสองรอบ
- *   - ค่าข้าว = MEAL_ALLOWANCE บาทต่อวันที่ทำงานเกิน MEAL_MIN_HOURS ชั่วโมง — นับชั่วโมงทำงานทั้งหมดของวันนั้น
+ *   - ค่าข้าว = MEAL_ALLOWANCE บาทต่อวันที่ทำงานตั้งแต่ MEAL_MIN_HOURS ชั่วโมงขึ้นไป (พอดี 4 ชม. ก็ได้) — นับชั่วโมงทำงานทั้งหมดของวันนั้น
  *     ไม่ใช่เฉพาะชั่วโมง OT (ถ้าไม่มีเวลางาน ใช้ชั่วโมงที่กรอกเองแทน)
  *
  * ไฟล์นี้ไม่ import prisma — ใช้ได้ทั้งฝั่งเซิร์ฟเวอร์และ client (เช่น โชว์ชั่วโมงตั้งต้นในหน้างาน) */
@@ -106,7 +106,7 @@ export interface StaffJobLine {
   customer: string;
   dates: string[]; // YYYY-MM-DD ในช่วงที่ดู
   dayOffDates: string[];
-  mealDates: string[]; // วันที่ทำงานเกิน MEAL_MIN_HOURS ชม. → ได้ค่าข้าว
+  mealDates: string[]; // วันที่ทำงานตั้งแต่ MEAL_MIN_HOURS ชม. ขึ้นไป → ได้ค่าข้าว
   hoursPerDay: number; // ชั่วโมงทำงานต่อวัน (ใช้ตัดสินค่าข้าว) — ไม่ใช่ชั่วโมง OT
   normalHours: number;
   dayOffHours: number;
@@ -209,7 +209,8 @@ export function computePeriodPay(roster: RosterStaff[], bookings: PayBooking[], 
       for (const d of inMonth) {
         const iso = d.toISOString().slice(0, 10);
         line.dates.push(iso);
-        if (mealHours > MEAL_MIN_HOURS) line.mealDates.push(iso);
+        // >= (ไม่ใช่ >) ตามที่เจ้าของกำหนด: ครบ 4 ชม. พอดีก็ได้ค่าข้าว — เผื่อเศษทศนิยมจากการหารชั่วโมงรวมด้วย
+        if (mealHours >= MEAL_MIN_HOURS - 0.005) line.mealDates.push(iso);
         if (offs.has(d.getUTCDay())) {
           line.dayOffDates.push(iso);
           line.dayOffHours += manualPerDay ?? workPerDay ?? 0;
