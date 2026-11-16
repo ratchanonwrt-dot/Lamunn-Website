@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpenCheck, Building2, CheckCircle2, Loader2, UploadCloud } from "lucide-react";
+import { BookOpenCheck, Building2, CheckCircle2, FileSpreadsheet, Loader2, UploadCloud } from "lucide-react";
 import {
   BANK_RECONCILIATION_ACCOUNT_CODE,
   filterReconciliationRows,
@@ -16,6 +16,7 @@ import {
   type ReconciliationStatusFilter,
 } from "@/lib/accounting/bankReconciliation";
 import { fmtSatang } from "@/lib/accounting/money";
+import { buildBankReconciliationWorkbook } from "@/lib/accounting/reconciliationExcel";
 import { useServerRefresh } from "./useServerRefresh";
 import PlatformBankReconciliation from "./PlatformBankReconciliation";
 
@@ -25,6 +26,13 @@ const DIRECTION_LABELS: Record<ReconciliationDirection, string> = {
   in: "เงินเข้า",
   out: "เงินออก",
   both: "ทั้งเงินเข้าและเงินออก",
+};
+
+const STATUS_FILTER_LABELS: Record<ReconciliationStatusFilter, string> = {
+  all: "ทั้งหมด",
+  matched: "ตรงกัน",
+  mismatched: "ไม่ตรงกัน",
+  "not-found": "ไม่พบคู่",
 };
 
 function fileSizeLabel(bytes: number) {
@@ -176,6 +184,29 @@ export default function BankReconciliationUpload({
   const summary = results ? summarizeReconciliationRows(results) : null;
   const visibleResults = results ? filterReconciliationRows(results, statusFilter) : null;
 
+  const exportResults = async () => {
+    if (!visibleResults) return;
+    setError("");
+    try {
+      const workbook = buildBankReconciliationWorkbook(visibleResults, {
+        accountCode: BANK_RECONCILIATION_ACCOUNT_CODE,
+        year,
+        month,
+        statusLabel: STATUS_FILTER_LABELS[statusFilter],
+      });
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([new Uint8Array(buffer)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `bank-reconciliation-${year}-${String(month).padStart(2, "0")}-${statusFilter}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("ไม่สามารถสร้างไฟล์ Excel ได้");
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -304,6 +335,14 @@ export default function BankReconciliationUpload({
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-3">
+            <button
+              type="button"
+              disabled={!visibleResults}
+              onClick={exportResults}
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+            >
+              <FileSpreadsheet size={16} aria-hidden="true" /> Export Excel
+            </button>
             <label className="text-xs font-medium text-gray-600">
               สถานะ
               <select
