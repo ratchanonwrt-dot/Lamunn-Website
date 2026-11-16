@@ -17,6 +17,7 @@ import {
 } from "@/lib/accounting/bankReconciliation";
 import { fmtSatang } from "@/lib/accounting/money";
 import { useServerRefresh } from "./useServerRefresh";
+import PlatformBankReconciliation from "./PlatformBankReconciliation";
 
 const MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 
@@ -247,6 +248,8 @@ export default function BankReconciliationUpload({
           </div>
         </section>
       </div>
+
+      <PlatformBankReconciliation bankFile={bankFile} />
 
       <section className="rounded-xl border border-gray-200 bg-white p-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
