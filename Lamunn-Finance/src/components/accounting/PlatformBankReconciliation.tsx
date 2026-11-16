@@ -250,6 +250,15 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
             ))}
             {!platformFiles.length && <p className="text-xs text-gray-400">ยังไม่ได้เลือกไฟล์แพลตฟอร์ม</p>}
           </div>
+          <p className={`mt-4 rounded-lg px-3 py-2 text-xs font-medium ${
+            bankFile && platformFiles.length
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-amber-50 text-amber-700"
+          }`}>
+            {bankFile && platformFiles.length
+              ? "พร้อมเทียบไฟล์ธนาคารกับไฟล์จากแพลตฟอร์ม"
+              : "เลือกไฟล์ธนาคารและไฟล์จากแพลตฟอร์มก่อนเริ่มกระทบยอด"}
+          </p>
           <button
             type="button"
             disabled={!bankFile || !platformFiles.length || processing || refreshing}
