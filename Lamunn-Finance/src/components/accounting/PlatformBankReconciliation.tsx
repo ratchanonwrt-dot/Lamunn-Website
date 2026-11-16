@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, Layers3, Loader2, UploadCloud } from "lucide-react";
+import { CheckCircle2, FileSpreadsheet, Layers3, Loader2, UploadCloud } from "lucide-react";
 import { parseReconciliationTable, type ReconciliationItem } from "@/lib/accounting/bankReconciliation";
 import { fmtSatang } from "@/lib/accounting/money";
+import { buildPlatformReconciliationWorkbook } from "@/lib/accounting/reconciliationExcel";
 import {
   PLATFORM_LABELS,
   deduplicatePlatformPayouts,
@@ -20,6 +21,13 @@ import {
 import { useServerRefresh } from "./useServerRefresh";
 
 type ResultFilter = "all" | PlatformReconciliationResult["status"];
+
+const FILTER_LABELS: Record<ResultFilter, string> = {
+  all: "ทั้งหมด",
+  matched: "ตรงกัน",
+  mismatched: "ไม่ตรงกัน",
+  "not-found": "ไม่พบเงินเข้า",
+};
 
 function parseCsv(text: string): unknown[][] {
   const rows: string[][] = [];
@@ -190,6 +198,27 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
     }
   };
 
+  const exportResults = async () => {
+    if (!visibleResults) return;
+    setError("");
+    try {
+      const workbook = buildPlatformReconciliationWorkbook(visibleResults, {
+        platform,
+        statusLabel: FILTER_LABELS[filter],
+      });
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([new Uint8Array(buffer)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `platform-bank-reconciliation-${platform.toLowerCase()}-${filter}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("ไม่สามารถสร้างไฟล์ Excel ได้");
+    }
+  };
+
   return (
     <section className="rounded-xl border border-fuchsia-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -288,15 +317,24 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
                 อ่านยอดโอน {payoutCount.toLocaleString("th-TH")} รายการ · ตรงกัน {summary.matchedCount} · ไม่ตรง {summary.mismatchedCount} · ไม่พบ {summary.notFoundCount}
               </p>
             </div>
-            <label className="text-xs font-medium text-gray-600">
-              สถานะ
-              <select value={filter} onChange={(event) => setFilter(event.target.value as ResultFilter)} className="ml-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
-                <option value="all">ทั้งหมด</option>
-                <option value="matched">ตรงกัน</option>
-                <option value="mismatched">ไม่ตรงกัน</option>
-                <option value="not-found">ไม่พบเงินเข้า</option>
-              </select>
-            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={exportResults}
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+              >
+                <FileSpreadsheet size={16} aria-hidden="true" /> Export Excel
+              </button>
+              <label className="text-xs font-medium text-gray-600">
+                สถานะ
+                <select value={filter} onChange={(event) => setFilter(event.target.value as ResultFilter)} className="ml-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+                  <option value="all">ทั้งหมด</option>
+                  <option value="matched">ตรงกัน</option>
+                  <option value="mismatched">ไม่ตรงกัน</option>
+                  <option value="not-found">ไม่พบเงินเข้า</option>
+                </select>
+              </label>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
