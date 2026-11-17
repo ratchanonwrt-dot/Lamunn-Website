@@ -490,6 +490,7 @@ export function reconcilePlatformPayouts(
   bankRows: ReconciliationItem[],
   payoutRows: PlatformPayoutItem[],
   platform: PlatformCode,
+  options?: { allowMismatched?: boolean },
 ): PlatformReconciliationResult[] {
   // ให้รายการที่ธนาคารระบุชื่อแพลตฟอร์มตรงๆ ได้จับคู่ก่อน เพื่อลดการชนกับเงินเข้าจำนวนเท่ากันจากช่องทางอื่น
   const incomingBankRows = bankRows
@@ -558,6 +559,8 @@ export function reconcilePlatformPayouts(
       continue;
     }
 
+    if (options?.allowMismatched === false) continue;
+
     if (!bankMentionsPlatform(bank.detail, platform)) {
       // รายการที่ไม่ระบุช่องทางก็ต้องแสดง เพื่อให้ผู้ใช้ตรวจเงินเข้าที่ไม่มีข้อมูลแพลตฟอร์มได้ครบ
       results.push(bankWithoutPlatformResult(bank));
@@ -616,6 +619,51 @@ export function reconcilePlatformPayouts(
   }
 
   return results.sort((left, right) => left.dateKey.localeCompare(right.dateKey) || left.id.localeCompare(right.id));
+}
+
+/**
+ * กระทบยอดหลายแพลตฟอร์มในรอบเดียว โดยไม่ให้รายการธนาคารรายการเดียวถูกใช้ซ้ำ
+ * รายการธนาคารที่ยังไม่พบคู่จะถูกเติมหลังจากลองครบทุกแพลตฟอร์มแล้วเท่านั้น
+ */
+export function reconcileAllPlatformPayouts(
+  bankRows: ReconciliationItem[],
+  payoutRows: PlatformPayoutItem[],
+): PlatformReconciliationResult[] {
+  const platforms = (Object.keys(PLATFORM_LABELS) as PlatformCode[])
+    .filter((platform) => payoutRows.some((row) => row.platform === platform));
+  let remainingBankRows = bankRows.filter((row) => row.amount > 0);
+  const combined: PlatformReconciliationResult[] = [];
+  const usedPayouts = new Set<string>();
+
+  // รอบแรกจับเฉพาะยอดที่ตรงกันทุกแพลตฟอร์มก่อน ป้องกันยอดคลาดเคลื่อนของแพลตฟอร์มหนึ่ง
+  // ไปแย่งรายการธนาคารที่ตรงพอดีกับอีกแพลตฟอร์มหนึ่ง
+  for (const platform of platforms) {
+    const platformResults = reconcilePlatformPayouts(remainingBankRows, payoutRows, platform, { allowMismatched: false });
+    const matchedResults = platformResults.filter((row) => row.status === "matched");
+    combined.push(...matchedResults);
+    const usedBankRows = new Set(
+      matchedResults.flatMap((row) => row.bank ? [row.bank.rowNumber] : []),
+    );
+    matchedResults.flatMap((row) => row.payouts).forEach((row) => usedPayouts.add(row.id));
+    remainingBankRows = remainingBankRows.filter((row) => !usedBankRows.has(row.rowNumber));
+  }
+
+  // รอบสองค่อยจัดกลุ่มรายการที่ยอดไม่ตรง และรายการที่ไม่พบคู่
+  for (const platform of platforms) {
+    const remainingPayouts = payoutRows.filter((row) => row.platform === platform && !usedPayouts.has(row.id));
+    if (!remainingPayouts.length) continue;
+    const platformResults = reconcilePlatformPayouts(remainingBankRows, remainingPayouts, platform);
+    const meaningfulResults = platformResults.filter((row) => row.payouts.length > 0);
+    combined.push(...meaningfulResults);
+    const usedBankRows = new Set(
+      meaningfulResults.flatMap((row) => row.bank ? [row.bank.rowNumber] : []),
+    );
+    meaningfulResults.flatMap((row) => row.payouts).forEach((row) => usedPayouts.add(row.id));
+    remainingBankRows = remainingBankRows.filter((row) => !usedBankRows.has(row.rowNumber));
+  }
+
+  combined.push(...remainingBankRows.map(bankWithoutPlatformResult));
+  return combined.sort((left, right) => left.dateKey.localeCompare(right.dateKey) || left.id.localeCompare(right.id));
 }
 
 export function summarizePlatformReconciliation(rows: PlatformReconciliationResult[]): PlatformReconciliationSummary {

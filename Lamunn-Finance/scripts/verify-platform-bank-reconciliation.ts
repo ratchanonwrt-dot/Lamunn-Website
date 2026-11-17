@@ -8,6 +8,7 @@ import {
   parseGrabReportTable,
   parsePlatformTable,
   parseShopeeReportTable,
+  reconcileAllPlatformPayouts,
   reconcilePlatformPayouts,
   summarizePlatformReconciliation,
   type PlatformPayoutItem,
@@ -86,6 +87,23 @@ try {
   const shopeeResults = reconcilePlatformPayouts(shopeeBankRows, shopee, "SHOPEE");
   check("Shopee จับเงินเข้าที่รวมยอดหลายวัน", shopeeResults[0]?.payouts.length, 2);
   check("Shopee รวมยอดหลายวันแล้วตรงกับธนาคาร", shopeeResults[0]?.status, "matched");
+
+  const multiPlatformBank = parseReconciliationTable([
+    ["วันที่", "รายละเอียด", "เงินเข้า", "เงินออก"],
+    ["05/01/2090", "[test] เงินเข้ารวมไม่ระบุช่องทาง", "100.00", ""],
+  ], "bank");
+  const competingGrab = parsePlatformTable([
+    ["วันที่โอน", "สาขา", "เลขอ้างอิง", "ยอดรับสุทธิ"],
+    ["05/01/2090", "[test] Grab", "[test]-GRAB-90", "90.00"],
+  ], "GRAB", "[test] grab-generic.csv");
+  const exactTikTok = parsePlatformTable([
+    ["วันที่โอน", "สาขา", "เลขอ้างอิง", "ยอดรับสุทธิ"],
+    ["05/01/2090", "[test] TikTok", "[test]-TIKTOK-100", "100.00"],
+  ], "TIKTOK", "[test] tiktok.csv");
+  const multiPlatformResults = reconcileAllPlatformPayouts(multiPlatformBank, [...competingGrab, ...exactTikTok]);
+  check("หลายแพลตฟอร์มใช้รายการธนาคารเดียวไม่ซ้ำ", multiPlatformResults.filter((row) => row.bank).length, 1);
+  check("จับยอดตรงของอีกแพลตฟอร์มก่อนยอดคลาดเคลื่อน", [multiPlatformResults[0]?.payouts[0]?.platform, multiPlatformResults[0]?.status], ["TIKTOK", "matched"]);
+  check("แพลตฟอร์มที่ไม่พบเงินเข้ายังคงแสดง", [multiPlatformResults[1]?.payouts[0]?.platform, multiPlatformResults[1]?.status], ["GRAB", "not-found"]);
 
   const bankRows = parseReconciliationTable([
     ["วันที่", "รายละเอียด", "เงินเข้า", "เงินออก"],

@@ -110,25 +110,29 @@ export function buildBankReconciliationWorkbook(
 
 export function buildPlatformReconciliationWorkbook(
   rows: PlatformReconciliationResult[],
-  options: { platform: PlatformCode; statusLabel: string },
+  options: { platform?: PlatformCode; statusLabel: string },
 ): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("ผลกระทบยอดแพลตฟอร์ม");
-  sheet.columns = [16, 42, 24, 20, 18, 16, 38, 20, 18, 28].map((width) => ({ width }));
+  const isCombined = !options.platform;
+  const widths = [16, 42, 24, 20, 18, 16, 38, 20, 18, 28];
+  if (isCombined) widths.unshift(16);
+  sheet.columns = widths.map((width) => ({ width }));
   styleTitle(
     sheet,
-    `ผลการกระทบยอด ${PLATFORM_LABELS[options.platform]}`,
+    `ผลการกระทบยอด ${options.platform ? PLATFORM_LABELS[options.platform] : "ทุกแพลตฟอร์ม"}`,
     `เทียบยอดรับสุทธิจากแพลตฟอร์มกับเงินเข้าธนาคาร · สถานะ ${options.statusLabel}`,
-    10,
+    isCombined ? 11 : 10,
   );
 
   const headers = ["วันที่แพลตฟอร์ม", "สาขา / หมายเลขร้าน", "เลขอ้างอิง", "ยอดโอนจากรายงาน", "ค่าธรรมเนียมโอน", "วันที่ธนาคาร", "รายการธนาคาร", "เงินเข้าธนาคาร", "ผลต่าง", "สถานะ"];
+  if (isCombined) headers.unshift("แพลตฟอร์ม");
   headers.forEach((value, index) => (sheet.getRow(4).getCell(index + 1).value = value));
   styleHeader(sheet.getRow(4));
 
   rows.forEach((row, index) => {
     const excelRow = sheet.getRow(index + 5);
-    excelRow.values = [
+    const values: Array<string | number | null> = [
       row.payouts[0]?.dateLabel ?? "",
       row.payouts.map((payout) => [payout.storeName, payout.storeId].filter(Boolean).join(" / ")).join("\n"),
       row.payouts.map((payout) => payout.reference).filter(Boolean).join("\n"),
@@ -140,7 +144,10 @@ export function buildPlatformReconciliationWorkbook(
       toBaht(row.amountDifference),
       platformStatusLabel(row),
     ];
-    [4, 5, 8, 9].forEach((column) => (excelRow.getCell(column).numFmt = MONEY_FORMAT));
+    if (isCombined) values.unshift(row.payouts[0] ? PLATFORM_LABELS[row.payouts[0].platform] : "ไม่ทราบแพลตฟอร์ม");
+    excelRow.values = values;
+    const moneyColumns = isCombined ? [5, 6, 9, 10] : [4, 5, 8, 9];
+    moneyColumns.forEach((column) => (excelRow.getCell(column).numFmt = MONEY_FORMAT));
     excelRow.alignment = { vertical: "top", wrapText: true };
   });
 
@@ -163,7 +170,7 @@ export function buildPlatformReconciliationWorkbook(
   });
 
   sheet.views = [{ state: "frozen", ySplit: 4 }];
-  sheet.autoFilter = { from: "A4", to: "J4" };
+  sheet.autoFilter = { from: "A4", to: isCombined ? "K4" : "J4" };
   sheet.pageSetup = { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
   return workbook;
 }
