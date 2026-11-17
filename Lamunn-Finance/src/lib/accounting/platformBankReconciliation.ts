@@ -53,6 +53,29 @@ export type PlatformReconciliationSummary = {
   difference: number;
 };
 
+export type SalesControlChannel = "CASH" | "GRAB" | "LINE_MAN" | "CREDIT_CARD" | "E_WALLET" | "KSHOP_QR" | "OTHER";
+
+export const SALES_CONTROL_LABELS: Record<SalesControlChannel, string> = {
+  CASH: "Cash",
+  GRAB: "Grab",
+  LINE_MAN: "LINE MAN",
+  CREDIT_CARD: "บัตรเครดิต",
+  E_WALLET: "E-wallet",
+  KSHOP_QR: "KSHOP / QR EDC",
+  OTHER: "อื่น ๆ",
+};
+
+export type SalesSummaryControl = {
+  id: string;
+  sourceName: string;
+  sheetName: string;
+  branchName: string;
+  channel: SalesControlChannel;
+  amount: number;
+};
+
+export type SalesSummarySheet = { name: string; table: unknown[][] };
+
 const MONEY_PATTERN = String.raw`[+-]?(?:\(?-?[\d,]+(?:\.\d+)?\)?)`;
 const STORE_HEADING_PATTERN = /^(?:รายรับทั้งหมด|รายรับแยก|ยอดขายแยก|ค่าบริการ|สรุปการเงิน|สรุปรายวัน|วันที่|หน้าที่)/;
 
@@ -85,6 +108,91 @@ function decimalTextToSatang(value: unknown): number | null {
   if (!Number.isSafeInteger(baht)) return null;
   const satang = baht * 100 + Number(fraction) + (thirdDigit >= 5 ? 1 : 0);
   return negative ? -satang : satang;
+}
+
+function salesChannel(value: unknown): SalesControlChannel | null {
+  const text = normalizeHeader(value);
+  if (!text || text.includes("รวม")) return null;
+  if (text.includes("cash") || text.includes("เงินสด")) return "CASH";
+  if (text.includes("grab") || text.includes("แกร็บ")) return "GRAB";
+  if (text.includes("lineman") || text.includes("wongnai") || text.includes("ไลน์แมน")) return "LINE_MAN";
+  if (text.includes("ewallet") || text.includes("wallet")) return "E_WALLET";
+  if (text.includes("kshop") || text.includes("qredc") || text === "qr") return "KSHOP_QR";
+  if (text.includes("credit") || text.includes("visa") || text.includes("vpay") || text.includes("บัตร")) return "CREDIT_CARD";
+  return null;
+}
+
+function branchFromSource(sourceName: string): string {
+  const match = sourceName.match(/สาขา\s*\d+\s*\(([^)]+)\)/i);
+  if (match?.[1]) return match[1].trim();
+  if (/สนญ|สำนักงานใหญ่/i.test(sourceName)) return "สำนักงานใหญ่";
+  return sourceName.replace(/\.xlsx$/i, "").trim();
+}
+
+/** อ่าน Sheet POS จากไฟล์สรุปยอดขาย ทั้งแบบเมทริกซ์สำนักงานใหญ่และแบบรายวันรายสาขา */
+export function parseSalesSummarySheets(sheets: SalesSummarySheet[], sourceName: string): SalesSummaryControl[] {
+  const controls: SalesSummaryControl[] = [];
+  const add = (sheetName: string, branchName: string, channel: SalesControlChannel, amount: number) => {
+    if (!amount) return;
+    controls.push({
+      id: `${sourceName}:${sheetName}:${branchName}:${channel}`,
+      sourceName,
+      sheetName,
+      branchName: branchName || branchFromSource(sourceName),
+      channel,
+      amount,
+    });
+  };
+
+  for (const sheet of sheets.filter((item) => /pos/i.test(item.name))) {
+    const rows = sheet.table;
+    const dailyHeaderIndex = rows.findIndex((row) => row.filter((cell) => salesChannel(cell)).length >= 2);
+    if (dailyHeaderIndex >= 0) {
+      const header = rows[dailyHeaderIndex];
+      header.forEach((cell, columnIndex) => {
+        const channel = salesChannel(cell);
+        if (!channel) return;
+        let total: number | null = null;
+        let accumulated = 0;
+        for (const row of rows.slice(dailyHeaderIndex + 1)) {
+          const firstCells = row.slice(0, 3).map((value) => normalizeHeader(value)).join(" ");
+          const amount = decimalTextToSatang(row[columnIndex]);
+          if (amount === null) continue;
+          if (firstCells.includes("รวม")) total = amount;
+          else if (row.some((value) => parseDateText(value))) accumulated += amount;
+        }
+        add(sheet.name, branchFromSource(sourceName), channel, total ?? accumulated);
+      });
+      continue;
+    }
+
+    // รูปแบบสำนักงานใหญ่: ช่องทางอยู่ตามแถว และสาขาอยู่เป็นหัวคอลัมน์
+    rows.forEach((row, rowIndex) => {
+      const channelColumn = row.findIndex((cell) => Boolean(salesChannel(cell)));
+      if (channelColumn < 0) return;
+      const channel = salesChannel(row[channelColumn]);
+      if (!channel) return;
+      row.forEach((cell, columnIndex) => {
+        if (columnIndex <= channelColumn) return;
+        const amount = decimalTextToSatang(cell);
+        if (amount === null) return;
+        let branch = "";
+        for (let headerIndex = rowIndex - 1; headerIndex >= 0 && !branch; headerIndex--) {
+          const candidate = String(rows[headerIndex]?.[columnIndex] ?? "").trim();
+          if (candidate && !decimalTextToSatang(candidate) && !/รวม|total/i.test(candidate)) branch = candidate;
+        }
+        if (branch) add(sheet.name, branch, channel, amount);
+      });
+    });
+  }
+
+  const merged = new Map<string, SalesSummaryControl>();
+  controls.forEach((row) => {
+    const key = `${row.sourceName}|${row.sheetName}|${row.branchName}|${row.channel}`;
+    const existing = merged.get(key);
+    merged.set(key, existing ? { ...existing, amount: existing.amount + row.amount } : row);
+  });
+  return [...merged.values()];
 }
 
 function parseDateText(value: unknown): { dateKey: string; dateLabel: string } | null {
@@ -662,7 +770,12 @@ export function reconcileAllPlatformPayouts(
     remainingBankRows = remainingBankRows.filter((row) => !usedBankRows.has(row.rowNumber));
   }
 
-  combined.push(...remainingBankRows.map(bankWithoutPlatformResult));
+  // รายงานนี้ตรวจเฉพาะเงินเข้าจากแพลตฟอร์ม จึงไม่ควรนำเงินเข้าอื่นทั้งหมด
+  // (เช่น โอนระหว่างบัญชีหรือรับชำระลูกหนี้) มาสร้างผลต่างเกินจริง
+  const platformBankRows = remainingBankRows.filter((row) => (
+    platforms.some((platform) => bankMentionsPlatform(row.detail, platform))
+  ));
+  combined.push(...platformBankRows.map(bankWithoutPlatformResult));
   return combined.sort((left, right) => left.dateKey.localeCompare(right.dateKey) || left.id.localeCompare(right.id));
 }
 

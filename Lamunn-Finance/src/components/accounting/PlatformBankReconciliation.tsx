@@ -7,16 +7,20 @@ import { fmtSatang } from "@/lib/accounting/money";
 import { buildPlatformReconciliationWorkbook } from "@/lib/accounting/reconciliationExcel";
 import {
   PLATFORM_LABELS,
+  SALES_CONTROL_LABELS,
   deduplicatePlatformPayouts,
   parseGrabReportTable,
   parseLineManReportText,
   parsePlatformTable,
   parseShopeeReportTable,
+  parseSalesSummarySheets,
   reconcileAllPlatformPayouts,
   summarizePlatformReconciliation,
   type PlatformCode,
   type PlatformPayoutItem,
   type PlatformReconciliationResult,
+  type SalesSummaryControl,
+  type SalesSummarySheet,
 } from "@/lib/accounting/platformBankReconciliation";
 import { useServerRefresh } from "./useServerRefresh";
 
@@ -94,6 +98,20 @@ async function readFileTable(file: File, preferredSheetName?: string): Promise<u
     rows.push(values.map(excelValue));
   });
   return rows;
+}
+
+async function readWorkbookSheets(file: File): Promise<SalesSummarySheet[]> {
+  const ExcelJS = (await import("exceljs")).default;
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await file.arrayBuffer());
+  return workbook.worksheets.map((sheet) => {
+    const table: unknown[][] = [];
+    sheet.eachRow({ includeEmpty: false }, (sheetRow) => {
+      const values = Array.isArray(sheetRow.values) ? sheetRow.values.slice(1) : [];
+      table.push(values.map(excelValue));
+    });
+    return { name: sheet.name, table };
+  });
 }
 
 async function readPdfText(file: File): Promise<string> {
@@ -201,6 +219,8 @@ function matchesFilter(row: PlatformReconciliationResult, filter: ResultFilter):
 
 export default function PlatformBankReconciliation({ bankFile }: { bankFile: File | null }) {
   const [platformFiles, setPlatformFiles] = useState<File[]>([]);
+  const [salesSummaryFiles, setSalesSummaryFiles] = useState<File[]>([]);
+  const [salesControls, setSalesControls] = useState<SalesSummaryControl[]>([]);
   const [fileReports, setFileReports] = useState<PlatformFileReport[]>([]);
   const [results, setResults] = useState<PlatformReconciliationResult[] | null>(null);
   const [payoutCount, setPayoutCount] = useState(0);
@@ -219,6 +239,7 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
   const platformDashboard = useMemo(() => detectedPlatforms.map((platform) => {
     const reports = fileReports.filter((report) => report.platform === platform);
     const platformResults = results?.filter((row) => row.payouts.some((payout) => payout.platform === platform)) ?? [];
+    const controlChannel = platform === "GRAB" ? "GRAB" : platform === "LINE_MAN" ? "LINE_MAN" : null;
     return {
       platform,
       fileCount: reports.length,
@@ -226,14 +247,31 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
       payoutTotal: reports.reduce((sum, report) => sum + report.payoutTotal, 0),
       matchedCount: platformResults.filter((row) => row.status === "matched").length,
       reviewCount: platformResults.filter((row) => row.status !== "matched").length,
+      controlTotal: controlChannel
+        ? salesControls.filter((row) => row.channel === controlChannel).reduce((sum, row) => sum + row.amount, 0)
+        : 0,
     };
-  }), [detectedPlatforms, fileReports, results]);
+  }), [detectedPlatforms, fileReports, results, salesControls]);
+  const salesDashboard = useMemo(() => {
+    const grouped = new Map<SalesSummaryControl["channel"], { amount: number; branches: Set<string> }>();
+    salesControls.forEach((row) => {
+      const current = grouped.get(row.channel) ?? { amount: 0, branches: new Set<string>() };
+      current.amount += row.amount;
+      current.branches.add(row.branchName);
+      grouped.set(row.channel, current);
+    });
+    return [...grouped].map(([channel, value]) => ({ channel, amount: value.amount, branchCount: value.branches.size }));
+  }, [salesControls]);
 
   const reconcile = async () => {
     if (!bankFile || !platformFiles.length) return;
     setProcessing(true);
     setError("");
     try {
+      const parsedSalesControls = (await Promise.all(salesSummaryFiles.map(async (file) => (
+        parseSalesSummarySheets(await readWorkbookSheets(file), file.name)
+      )))).flat();
+      setSalesControls(parsedSalesControls);
       const bankRows = parseReconciliationTable(await readFileTable(bankFile), "bank")
         .filter((row): row is ReconciliationItem => row.amount > 0);
       const parsed = await Promise.all(platformFiles.map(async (file): Promise<{ report: PlatformFileReport; payouts: PlatformPayoutItem[] }> => {
@@ -321,6 +359,36 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.45fr)]">
+        <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/50 px-5 py-5 text-center text-blue-700 hover:border-blue-400">
+          <FileSpreadsheet size={28} aria-hidden="true" />
+          <span className="mt-2 text-sm font-semibold">
+            {salesSummaryFiles.length ? `เลือกไฟล์สรุปยอดขายแล้ว ${salesSummaryFiles.length} ไฟล์` : "เลือกไฟล์สรุปยอดขายประจำเดือน"}
+          </span>
+          <span className="mt-1 text-xs opacity-75">สำนักงานใหญ่และทุกสาขาที่แยกไฟล์ · เลือกพร้อมกันได้หลายไฟล์</span>
+          <input
+            type="file"
+            accept=".xlsx"
+            multiple
+            className="sr-only"
+            onChange={(event) => {
+              setSalesSummaryFiles(Array.from(event.target.files ?? []));
+              setSalesControls([]);
+              setResults(null);
+              setError("");
+            }}
+          />
+        </label>
+        <div className="rounded-xl bg-blue-50 p-4 text-sm text-blue-900">
+          <p className="font-semibold">ไฟล์สรุปยอดขาย (ยอดควบคุม)</p>
+          <p className="mt-1 text-xs text-blue-700">ระบบอ่าน Sheet POS เพื่อสรุปยอดตามช่องทางและสาขา โดยไม่แก้ไขไฟล์ต้นฉบับ</p>
+          <div className="mt-3 max-h-20 space-y-1 overflow-y-auto text-xs">
+            {salesSummaryFiles.map((file) => <p key={`${file.name}-${file.size}`} className="truncate">{file.name}</p>)}
+            {!salesSummaryFiles.length && <p className="text-blue-500">ยังไม่ได้เลือก (เลือกภายหลังได้)</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.45fr)]">
         <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-fuchsia-200 bg-fuchsia-50/50 px-5 py-6 text-center text-fuchsia-700 hover:border-fuchsia-400">
           {platformFiles.length ? <CheckCircle2 size={30} aria-hidden="true" /> : <UploadCloud size={30} aria-hidden="true" />}
           <span className="mt-2 text-sm font-semibold">
@@ -383,12 +451,29 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
 
       {!bankFile && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">กรุณาเลือกไฟล์ธนาคารด้านบนก่อน</p>}
       <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
-        เลือกไฟล์ Grab, LINE MAN, TikTok และ Shopee พร้อมกันได้ ระบบจะแยกแพลตฟอร์มและรวมผลกระทบยอดให้เอง · PDF รองรับรายงานรายเดือน LINE MAN
+        ไฟล์สรุปยอดขายใช้ตรวจยอดควบคุม ส่วนการจับเงินจริงต้องมีไฟล์โอนจาก Grab, LINE MAN, TikTok หรือ Shopee และไฟล์ธนาคาร · PDF รองรับรายงานรายเดือน LINE MAN
       </p>
+      <div className="mt-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-xs text-gray-600">
+        <p className="font-semibold text-gray-800">ไฟล์ที่ต้องแนบในแต่ละเดือน</p>
+        <p className="mt-1">1) Statement ธนาคาร Excel/CSV · 2) ไฟล์สรุปยอดขายสำนักงานใหญ่และทุกสาขา · 3) ไฟล์ยอดโอน Grab CSV, LINE MAN PDF, TikTok Excel/CSV และ Shopee Excel เฉพาะช่องทางที่ใช้งาน</p>
+      </div>
       {error && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
       {results && summary && (
         <div className="mt-5 overflow-hidden rounded-xl border border-gray-200">
+          {salesDashboard.length > 0 && (
+            <div className="border-b border-blue-100 bg-blue-50/60 p-4">
+              <h3 className="font-semibold text-gray-900">ยอดควบคุมจากไฟล์สรุปยอดขาย</h3>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {salesDashboard.map((item) => (
+                  <div key={item.channel} className="rounded-lg border border-blue-100 bg-white p-3">
+                    <p className="text-xs text-gray-500">{SALES_CONTROL_LABELS[item.channel]} · {item.branchCount} สาขา</p>
+                    <p className="mt-1 font-semibold tabular-nums text-gray-900">{fmtSatang(item.amount, { zeroDash: false })}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
             <div>
               <h3 className="font-semibold text-gray-900">ผลการกระทบยอดทุกแพลตฟอร์ม</h3>
@@ -480,6 +565,9 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
                   </div>
                   <p className="mt-3 text-xs text-gray-500">ยอดโอนจากรายงาน</p>
                   <p className="mt-1 text-xl font-bold tabular-nums text-gray-900">{fmtSatang(item.payoutTotal, { zeroDash: false })}</p>
+                  {item.controlTotal > 0 && (
+                    <p className="mt-2 text-xs text-blue-700">ยอดขายควบคุม {fmtSatang(item.controlTotal, { zeroDash: false })}</p>
+                  )}
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
                     <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">{item.itemCount} รายการ</span>
                     <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">ตรง {item.matchedCount}</span>
