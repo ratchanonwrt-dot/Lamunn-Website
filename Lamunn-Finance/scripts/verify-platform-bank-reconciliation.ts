@@ -8,6 +8,7 @@ import {
   parseGrabReportTable,
   parsePlatformTable,
   parseShopeeReportTable,
+  parseSalesSummarySheets,
   reconcileAllPlatformPayouts,
   reconcilePlatformPayouts,
   summarizePlatformReconciliation,
@@ -57,6 +58,25 @@ try {
   ], "GRAB", "[test] grab.csv");
   check("Excel/CSV รูปแบบกลางอ่านยอดรับสุทธิได้", generic[0]?.payoutAmount, 123_456);
 
+  const salesControls = parseSalesSummarySheets([{
+    name: "POS 01-90",
+    table: [
+      ["[test] สรุปยอดขาย"],
+      ["ช่องทาง", "[test] สาขา A", "[test] สาขา B", "รวม"],
+      ["Cash", 100, 200, 300],
+      ["Grab", 50, 75, 125],
+      ["LINE MAN", 25, 30, 55],
+    ],
+  }], "[test] ยอดขาย สนญ. ม.ค.-90.xlsx");
+  check("ไฟล์สรุป POS อ่านช่องทางและสาขาได้", salesControls.map((row) => [row.channel, row.branchName, row.amount]), [
+    ["CASH", "[test] สาขา A", 10_000],
+    ["CASH", "[test] สาขา B", 20_000],
+    ["GRAB", "[test] สาขา A", 5_000],
+    ["GRAB", "[test] สาขา B", 7_500],
+    ["LINE_MAN", "[test] สาขา A", 2_500],
+    ["LINE_MAN", "[test] สาขา B", 3_000],
+  ]);
+
   const grab = parseGrabReportTable([
     ["ชื่อร้าน", "Merchant ID", "ชื่อร้าน", "รหัสร้านค้า", "สถานะ", "รหัสการทำรายการ", "วันที่โอน", "ทั้งหมด"],
     ["[test] บริษัท", "[test]-M", "[test] Grab สาขา A", "[test]-STORE-A", "โอนแล้ว", "[test]-PAYOUT-1", "05/01/2090 04:30", "100.25"],
@@ -104,6 +124,13 @@ try {
   check("หลายแพลตฟอร์มใช้รายการธนาคารเดียวไม่ซ้ำ", multiPlatformResults.filter((row) => row.bank).length, 1);
   check("จับยอดตรงของอีกแพลตฟอร์มก่อนยอดคลาดเคลื่อน", [multiPlatformResults[0]?.payouts[0]?.platform, multiPlatformResults[0]?.status], ["TIKTOK", "matched"]);
   check("แพลตฟอร์มที่ไม่พบเงินเข้ายังคงแสดง", [multiPlatformResults[1]?.payouts[0]?.platform, multiPlatformResults[1]?.status], ["GRAB", "not-found"]);
+
+  const unrelatedBank = parseReconciliationTable([
+    ["วันที่", "รายละเอียด", "เงินเข้า", "เงินออก"],
+    ["05/01/2090", "[test] รับชำระลูกหนี้ที่ไม่ใช่แพลตฟอร์ม", "9,999.00", ""],
+  ], "bank");
+  const unrelatedResults = reconcileAllPlatformPayouts(unrelatedBank, competingGrab);
+  check("ไม่นำเงินเข้าอื่นมาสร้างผลต่างของแพลตฟอร์ม", unrelatedResults.some((row) => row.bank?.amount === 999_900), false);
 
   const bankRows = parseReconciliationTable([
     ["วันที่", "รายละเอียด", "เงินเข้า", "เงินออก"],
