@@ -90,6 +90,12 @@ try {
   check("แสดงสถานะตรงกัน", platformSheet?.getCell("J5").value, "ตรงกัน · หักค่าธรรมเนียมโอน 5 บาท");
   check("แสดงเงินเข้าที่ไม่มีรายการแพลตฟอร์ม", platformSheet?.getCell("H6").value, 200);
   check("แสดงสถานะไม่พบยอดโอนจากแพลตฟอร์ม", platformSheet?.getCell("J6").value, "ไม่พบยอดโอนจากแพลตฟอร์ม");
+
+  const combinedWorkbook = buildPlatformReconciliationWorkbook(platformRows, { statusLabel: "ทุกแพลตฟอร์ม" });
+  const combinedSheet = combinedWorkbook.getWorksheet("ผลกระทบยอดแพลตฟอร์ม");
+  check("Excel แบบรวมเพิ่มคอลัมน์แพลตฟอร์ม", combinedSheet?.getCell("A4").value, "แพลตฟอร์ม");
+  check("Excel แบบรวมแสดงชื่อแพลตฟอร์ม", combinedSheet?.getCell("A5").value, "LINE MAN");
+  check("Excel แบบรวมยังคงยอดโอนเป็นตัวเลขบาท", combinedSheet?.getCell("E5").value, 100);
 } finally {
   console.log("\n=== ล้างข้อมูลทดสอบ ===");
   bankRows.length = 0;

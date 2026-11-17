@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, FileSpreadsheet, Layers3, Loader2, UploadCloud } from "lucide-react";
+import { BarChart3, CheckCircle2, FileSpreadsheet, Layers3, Loader2, UploadCloud } from "lucide-react";
 import { parseReconciliationTable, type ReconciliationItem } from "@/lib/accounting/bankReconciliation";
 import { fmtSatang } from "@/lib/accounting/money";
 import { buildPlatformReconciliationWorkbook } from "@/lib/accounting/reconciliationExcel";
@@ -12,7 +12,7 @@ import {
   parseLineManReportText,
   parsePlatformTable,
   parseShopeeReportTable,
-  reconcilePlatformPayouts,
+  reconcileAllPlatformPayouts,
   summarizePlatformReconciliation,
   type PlatformCode,
   type PlatformPayoutItem,
@@ -28,6 +28,14 @@ const FILTER_LABELS: Record<ResultFilter, string> = {
   mismatched: "ไม่ตรงกัน",
   "platform-without-bank": "มีรายการแพลตฟอร์ม แต่ไม่พบเงินเข้า",
   "bank-without-platform": "มีเงินเข้า แต่ไม่พบยอดโอนจากแพลตฟอร์ม",
+};
+
+type PlatformFileReport = {
+  fileName: string;
+  platform: PlatformCode | null;
+  itemCount: number;
+  payoutTotal: number;
+  error?: string;
 };
 
 function parseCsv(text: string): unknown[][] {
@@ -106,25 +114,53 @@ async function readPdfText(file: File): Promise<string> {
   return pages.join("\n");
 }
 
-async function parsePlatformFile(file: File, platform: PlatformCode): Promise<PlatformPayoutItem[]> {
+function platformFromFileName(fileName: string): PlatformCode | null {
+  const normalized = fileName.toLowerCase().replace(/[\s_-]+/g, "");
+  if (normalized.includes("lineman") || normalized.includes("wongnai") || normalized.includes("ไลน์แมน")) return "LINE_MAN";
+  if (normalized.includes("grab") || normalized.includes("แกร็บ")) return "GRAB";
+  if (normalized.includes("shopee") || normalized.includes("ช้อปปี้")) return "SHOPEE";
+  if (normalized.includes("tiktok") || normalized.includes("ติ๊กต็อก")) return "TIKTOK";
+  return null;
+}
+
+function platformFromTable(table: unknown[][]): PlatformCode | null {
+  const sample = table.slice(0, 20).flat().map((value) => String(value ?? "").toLowerCase()).join(" ");
+  if (sample.includes("grab") || sample.includes("รหัสการทำรายการ")) return "GRAB";
+  if (sample.includes("shopee") || sample.includes("วันที่โอนชำระเงินสำเร็จ")) return "SHOPEE";
+  if (sample.includes("tiktok")) return "TIKTOK";
+  if (sample.includes("line man") || sample.includes("lineman") || sample.includes("หมายเลขร้าน")) return "LINE_MAN";
+  return null;
+}
+
+async function parsePlatformFile(file: File): Promise<{ platform: PlatformCode; payouts: PlatformPayoutItem[] }> {
+  const namedPlatform = platformFromFileName(file.name);
   if (file.name.toLowerCase().endsWith(".pdf")) {
-    if (platform !== "LINE_MAN") {
-      throw new Error(`PDF ของ ${PLATFORM_LABELS[platform]} ต้องมีไฟล์ตัวอย่างก่อนเพิ่มรูปแบบการอ่านเฉพาะแพลตฟอร์ม`);
-    }
-    return parseLineManReportText(await readPdfText(file), file.name);
+    const payouts = parseLineManReportText(await readPdfText(file), file.name);
+    if (!payouts.length) throw new Error("ยังอ่าน PDF รูปแบบนี้ไม่ได้ (รองรับ PDF รายงานรายเดือนของ LINE MAN)");
+    return { platform: "LINE_MAN", payouts };
   }
-  if (platform === "SHOPEE" && file.name.toLowerCase().endsWith(".xlsx")) {
-    return parseShopeeReportTable(await readFileTable(file, "Income"), file.name);
+  if (file.name.toLowerCase().endsWith(".xlsx") && (!namedPlatform || namedPlatform === "SHOPEE")) {
+    try {
+      const payouts = parseShopeeReportTable(await readFileTable(file, "Income"), file.name);
+      if (payouts.length) return { platform: "SHOPEE", payouts };
+    } catch {
+      // ไม่ใช่ไฟล์ Shopee ให้ตรวจรูปแบบอื่นต่อ
+    }
   }
   const table = await readFileTable(file);
-  if (platform === "GRAB") {
+  if (!namedPlatform || namedPlatform === "GRAB") {
     try {
-      return parseGrabReportTable(table, file.name);
+      const payouts = parseGrabReportTable(table, file.name);
+      if (payouts.length) return { platform: "GRAB", payouts };
     } catch {
-      // ยังรองรับไฟล์ Grab รูปแบบกลางที่มีวันที่และยอดรับสุทธิเดิม
+      // ไม่ใช่ไฟล์ Grab ให้ตรวจรูปแบบกลางต่อ
     }
   }
-  return parsePlatformTable(table, platform, file.name);
+  const platform = namedPlatform ?? platformFromTable(table);
+  if (!platform) {
+    throw new Error("ไม่ทราบแพลตฟอร์ม กรุณาใส่ชื่อ Grab, LINE MAN, TikTok หรือ Shopee ในชื่อไฟล์");
+  }
+  return { platform, payouts: parsePlatformTable(table, platform, file.name) };
 }
 
 function fileSizeLabel(bytes: number) {
@@ -164,8 +200,8 @@ function matchesFilter(row: PlatformReconciliationResult, filter: ResultFilter):
 }
 
 export default function PlatformBankReconciliation({ bankFile }: { bankFile: File | null }) {
-  const [platform, setPlatform] = useState<PlatformCode>("LINE_MAN");
   const [platformFiles, setPlatformFiles] = useState<File[]>([]);
+  const [fileReports, setFileReports] = useState<PlatformFileReport[]>([]);
   const [results, setResults] = useState<PlatformReconciliationResult[] | null>(null);
   const [payoutCount, setPayoutCount] = useState(0);
   const [filter, setFilter] = useState<ResultFilter>("all");
@@ -177,14 +213,21 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
   const visibleResults = useMemo(() => (
     results?.filter((row) => matchesFilter(row, filter)) ?? null
   ), [filter, results]);
-
-  const changePlatform = (value: PlatformCode) => {
-    setPlatform(value);
-    setPlatformFiles([]);
-    setResults(null);
-    setPayoutCount(0);
-    setError("");
-  };
+  const detectedPlatforms = useMemo(() => (
+    (Object.keys(PLATFORM_LABELS) as PlatformCode[]).filter((platform) => fileReports.some((report) => report.platform === platform))
+  ), [fileReports]);
+  const platformDashboard = useMemo(() => detectedPlatforms.map((platform) => {
+    const reports = fileReports.filter((report) => report.platform === platform);
+    const platformResults = results?.filter((row) => row.payouts.some((payout) => payout.platform === platform)) ?? [];
+    return {
+      platform,
+      fileCount: reports.length,
+      itemCount: reports.reduce((sum, report) => sum + report.itemCount, 0),
+      payoutTotal: reports.reduce((sum, report) => sum + report.payoutTotal, 0),
+      matchedCount: platformResults.filter((row) => row.status === "matched").length,
+      reviewCount: platformResults.filter((row) => row.status !== "matched").length,
+    };
+  }), [detectedPlatforms, fileReports, results]);
 
   const reconcile = async () => {
     if (!bankFile || !platformFiles.length) return;
@@ -193,12 +236,41 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
     try {
       const bankRows = parseReconciliationTable(await readFileTable(bankFile), "bank")
         .filter((row): row is ReconciliationItem => row.amount > 0);
-      const parsed = await Promise.all(platformFiles.map((file) => parsePlatformFile(file, platform)));
-      const payouts = deduplicatePlatformPayouts(parsed.flat());
+      const parsed = await Promise.all(platformFiles.map(async (file): Promise<{ report: PlatformFileReport; payouts: PlatformPayoutItem[] }> => {
+        try {
+          const detected = await parsePlatformFile(file);
+          return {
+            report: {
+              fileName: file.name,
+              platform: detected.platform,
+              itemCount: detected.payouts.length,
+              payoutTotal: detected.payouts.reduce((sum, row) => sum + row.payoutAmount, 0),
+            },
+            payouts: detected.payouts,
+          };
+        } catch (caught) {
+          return {
+            report: {
+              fileName: file.name,
+              platform: null,
+              itemCount: 0,
+              payoutTotal: 0,
+              error: caught instanceof Error ? caught.message : "อ่านไฟล์ไม่ได้",
+            },
+            payouts: [],
+          };
+        }
+      }));
+      setFileReports(parsed.map(({ report }) => report));
+      const payouts = deduplicatePlatformPayouts(parsed.flatMap(({ payouts: rows }) => rows));
       if (!bankRows.length) throw new Error("ไม่พบรายการเงินเข้าในไฟล์ธนาคาร");
-      if (!payouts.length) throw new Error(`ไม่พบยอดโอนสุทธิในไฟล์ ${PLATFORM_LABELS[platform]}`);
+      if (!payouts.length) throw new Error("ไม่พบยอดโอนสุทธิจากไฟล์แพลตฟอร์มที่เลือก");
       setPayoutCount(payouts.length);
-      setResults(reconcilePlatformPayouts(bankRows, payouts, platform));
+      setResults(reconcileAllPlatformPayouts(bankRows, payouts));
+      const failedFiles = parsed.filter(({ report }) => report.error);
+      if (failedFiles.length) {
+        setError(`อ่านได้ ${parsed.length - failedFiles.length} จาก ${parsed.length} ไฟล์ · ไฟล์ที่อ่านไม่ได้: ${failedFiles.map(({ report }) => report.fileName).join(", ")}`);
+      }
       refresh();
     } catch (caught) {
       setResults(null);
@@ -214,7 +286,6 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
     setError("");
     try {
       const workbook = buildPlatformReconciliationWorkbook(visibleResults, {
-        platform,
         statusLabel: FILTER_LABELS[filter],
       });
       const buffer = await workbook.xlsx.writeBuffer();
@@ -222,7 +293,7 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `platform-bank-reconciliation-${platform.toLowerCase()}-${filter}.xlsx`;
+      link.download = `platform-bank-reconciliation-all-${filter}.xlsx`;
       link.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -244,25 +315,16 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
             </p>
           </div>
         </div>
-        <label className="text-sm font-medium text-gray-700">
-          แพลตฟอร์ม
-          <select
-            value={platform}
-            onChange={(event) => changePlatform(event.target.value as PlatformCode)}
-            className="ml-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-          >
-            {(Object.keys(PLATFORM_LABELS) as PlatformCode[]).map((code) => (
-              <option key={code} value={code}>{PLATFORM_LABELS[code]}</option>
-            ))}
-          </select>
-        </label>
+        <span className="rounded-full bg-fuchsia-50 px-3 py-1.5 text-xs font-medium text-fuchsia-700">
+          ตรวจแพลตฟอร์มจากไฟล์ให้อัตโนมัติ
+        </span>
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.45fr)]">
         <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-fuchsia-200 bg-fuchsia-50/50 px-5 py-6 text-center text-fuchsia-700 hover:border-fuchsia-400">
           {platformFiles.length ? <CheckCircle2 size={30} aria-hidden="true" /> : <UploadCloud size={30} aria-hidden="true" />}
           <span className="mt-2 text-sm font-semibold">
-            {platformFiles.length ? `เลือกแล้ว ${platformFiles.length} ไฟล์` : `เลือกไฟล์ ${PLATFORM_LABELS[platform]}`}
+            {platformFiles.length ? `เลือกแล้ว ${platformFiles.length} ไฟล์` : "เลือกไฟล์จากทุกแพลตฟอร์ม"}
           </span>
           <span className="mt-1 text-xs opacity-75">รองรับ PDF, Excel (.xlsx) และ CSV · เลือกพร้อมกันได้หลายไฟล์</span>
           <input
@@ -272,6 +334,7 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
             className="sr-only"
             onChange={(event) => {
               setPlatformFiles(Array.from(event.target.files ?? []));
+              setFileReports([]);
               setResults(null);
               setPayoutCount(0);
               setError("");
@@ -282,12 +345,19 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
         <div className="rounded-xl bg-gray-50 p-4 text-sm">
           <p className="font-semibold text-gray-800">ไฟล์ที่เลือก</p>
           <div className="mt-2 max-h-28 space-y-1 overflow-y-auto">
-            {platformFiles.map((file) => (
+            {platformFiles.map((file) => {
+              const report = fileReports.find((item) => item.fileName === file.name);
+              return (
               <div key={`${file.name}-${file.size}`} className="flex justify-between gap-3 text-xs text-gray-600">
-                <span className="truncate">{file.name}</span>
-                <span className="shrink-0 text-gray-400">{fileSizeLabel(file.size)}</span>
+                <span className="min-w-0 truncate">{file.name}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  {report?.platform && <span className="rounded-full bg-white px-2 py-0.5 font-medium text-fuchsia-700">{PLATFORM_LABELS[report.platform]}</span>}
+                  {report?.error && <span className="rounded-full bg-rose-100 px-2 py-0.5 font-medium text-rose-700">อ่านไม่ได้</span>}
+                  <span className="text-gray-400">{fileSizeLabel(file.size)}</span>
+                </span>
               </div>
-            ))}
+              );
+            })}
             {!platformFiles.length && <p className="text-xs text-gray-400">ยังไม่ได้เลือกไฟล์แพลตฟอร์ม</p>}
           </div>
           <p className={`mt-4 rounded-lg px-3 py-2 text-xs font-medium ${
@@ -312,20 +382,18 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
       </div>
 
       {!bankFile && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">กรุณาเลือกไฟล์ธนาคารด้านบนก่อน</p>}
-      {platform !== "LINE_MAN" && (
-        <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
-          Excel/CSV ใช้ได้เมื่อมีคอลัมน์วันที่และยอดรับสุทธิ ส่วน PDF ของ {PLATFORM_LABELS[platform]} ต้องเพิ่มรูปแบบจากไฟล์ตัวอย่างของแพลตฟอร์มนั้น
-        </p>
-      )}
+      <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
+        เลือกไฟล์ Grab, LINE MAN, TikTok และ Shopee พร้อมกันได้ ระบบจะแยกแพลตฟอร์มและรวมผลกระทบยอดให้เอง · PDF รองรับรายงานรายเดือน LINE MAN
+      </p>
       {error && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
       {results && summary && (
         <div className="mt-5 overflow-hidden rounded-xl border border-gray-200">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
             <div>
-              <h3 className="font-semibold text-gray-900">ผลการกระทบยอด {PLATFORM_LABELS[platform]}</h3>
+              <h3 className="font-semibold text-gray-900">ผลการกระทบยอดทุกแพลตฟอร์ม</h3>
               <p className="mt-0.5 text-xs text-gray-500">
-                อ่านยอดโอน {payoutCount.toLocaleString("th-TH")} รายการ · ตรงกัน {summary.matchedCount} · ไม่ตรง {summary.mismatchedCount} · แพลตฟอร์มไม่มีเงินเข้า {summary.platformWithoutBankCount} · ธนาคารไม่มีรายการแพลตฟอร์ม {summary.bankWithoutPlatformCount}
+                พบ {detectedPlatforms.length} แพลตฟอร์ม · อ่านยอดโอน {payoutCount.toLocaleString("th-TH")} รายการ · ตรงกัน {summary.matchedCount} · ต้องตรวจสอบ {summary.mismatchedCount + summary.notFoundCount}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -350,9 +418,10 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[72rem] text-sm">
+            <table className="w-full min-w-[78rem] text-sm">
               <thead className="bg-gray-50 text-xs text-gray-500">
                 <tr>
+                  <th className="px-4 py-3 text-left font-medium">แพลตฟอร์ม</th>
                   <th className="px-4 py-3 text-left font-medium">วันที่แพลตฟอร์ม</th>
                   <th className="px-4 py-3 text-left font-medium">สาขา / หมายเลขร้าน</th>
                   <th className="px-4 py-3 text-right font-medium">ยอดโอนจากรายงาน</th>
@@ -367,6 +436,7 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
               <tbody>
                 {(visibleResults ?? []).map((row) => (
                   <tr key={row.id} className={`border-t ${tone(row.status)}`}>
+                    <td className="whitespace-nowrap px-4 py-3 font-semibold">{row.payouts[0] ? PLATFORM_LABELS[row.payouts[0].platform] : "—"}</td>
                     <td className="whitespace-nowrap px-4 py-3">{row.payouts[0]?.dateLabel ?? "—"}</td>
                     <td className="px-4 py-3">
                       <div className="space-y-1">
@@ -390,10 +460,34 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
                   </tr>
                 ))}
                 {visibleResults?.length === 0 && (
-                  <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">ไม่มีรายการในสถานะที่เลือก</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">ไม่มีรายการในสถานะที่เลือก</td></tr>
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="border-t border-gray-200 bg-white p-4">
+            <div className="flex items-center gap-2">
+              <BarChart3 size={18} className="text-fuchsia-600" aria-hidden="true" />
+              <h3 className="font-semibold text-gray-900">แดชบอร์ดแยกตามแพลตฟอร์ม</h3>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {platformDashboard.map((item) => (
+                <div key={item.platform} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-gray-900">{PLATFORM_LABELS[item.platform]}</p>
+                    <span className="rounded-full bg-white px-2 py-1 text-xs text-gray-500">{item.fileCount} ไฟล์</span>
+                  </div>
+                  <p className="mt-3 text-xs text-gray-500">ยอดโอนจากรายงาน</p>
+                  <p className="mt-1 text-xl font-bold tabular-nums text-gray-900">{fmtSatang(item.payoutTotal, { zeroDash: false })}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">{item.itemCount} รายการ</span>
+                    <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">ตรง {item.matchedCount}</span>
+                    <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">ตรวจสอบ {item.reviewCount}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="border-t border-gray-200 bg-gray-50 p-4">
