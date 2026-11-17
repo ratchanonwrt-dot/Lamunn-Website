@@ -89,19 +89,21 @@ try {
 
   const bankRows = parseReconciliationTable([
     ["วันที่", "รายละเอียด", "เงินเข้า", "เงินออก"],
-    ["02/01/2090", "[test] LINE MAN รวมสองสาขา", "127.50", ""],
+    ["01/01/2090", "[test] LINE MAN รวมสองสาขาวันเดียวกัน", "127.50", ""],
     ["03/01/2090", "[test] LINE MAN หักค่าธรรมเนียมถอน", "250.00", ""],
+    ["04/01/2090", "[test] เงินเข้าที่ไม่ระบุแพลตฟอร์ม", "999.00", ""],
   ], "bank");
   results.push(...reconcilePlatformPayouts(bankRows, payouts, "LINE_MAN"));
   const summary = summarizePlatformReconciliation(results);
 
   console.log("\n=== จับคู่แบบรวมยอดและค่าธรรมเนียมโอน ===");
   check("รวมสองสาขาเป็นเงินเข้าก้อนเดียว", results[0]?.payouts.length, 2);
-  check("ยอดวันแรกตรงกัน", results[0]?.status, "matched");
+  check("ยอดหลายสาขาและเงินเข้าวันเดียวกันตรงกัน", [results[0]?.status, results[0]?.daysApart], ["matched", 0]);
   check("ยอดวันที่สองหักค่าธรรมเนียม 5 บาท", results[1]?.inferredTransferFee, 500);
   check("หลังหักค่าธรรมเนียมแล้วยอดตรงกัน", results[1]?.status, "matched");
-  check("สรุปผลต่างเป็นศูนย์", summary.difference, 0);
-  check("ไม่สร้างรายการที่ไม่พบคู่", summary.notFoundCount, 0);
+  check("เงินเข้าที่ไม่ระบุชื่อแพลตฟอร์มและไม่มีต้นทางยังแสดงในผล", [results[2]?.status, results[2]?.bank?.amount, results[2]?.payouts.length], ["not-found", 99_900, 0]);
+  check("สรุปแยกธนาคารที่ไม่มีรายการแพลตฟอร์ม", [summary.platformWithoutBankCount, summary.bankWithoutPlatformCount], [0, 1]);
+  check("ผลต่างรวมเงินเข้าที่ไม่มีต้นทางแพลตฟอร์ม", summary.difference, 99_900);
 } finally {
   console.log("\n=== ล้างข้อมูลทดสอบ ===");
   payouts.length = 0;

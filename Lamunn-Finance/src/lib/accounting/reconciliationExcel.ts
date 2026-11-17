@@ -40,7 +40,9 @@ function bankStatusLabel(row: ReconciliationResultRow): string {
 }
 
 function platformStatusLabel(row: PlatformReconciliationResult): string {
-  if (row.status === "not-found") return "ไม่พบเงินเข้าธนาคาร";
+  if (row.status === "not-found") {
+    return row.bank && row.payouts.length === 0 ? "ไม่พบยอดโอนจากแพลตฟอร์ม" : "ไม่พบเงินเข้าธนาคาร";
+  }
   if (row.status === "mismatched") return "ยอดไม่ตรงกัน";
   const parts = ["ตรงกัน"];
   if (row.daysApart) parts.push(`เข้าหลัง ${row.daysApart} วัน`);
@@ -127,7 +129,7 @@ export function buildPlatformReconciliationWorkbook(
   rows.forEach((row, index) => {
     const excelRow = sheet.getRow(index + 5);
     excelRow.values = [
-      row.payouts[0]?.dateLabel ?? row.dateLabel,
+      row.payouts[0]?.dateLabel ?? "",
       row.payouts.map((payout) => [payout.storeName, payout.storeId].filter(Boolean).join(" / ")).join("\n"),
       row.payouts.map((payout) => payout.reference).filter(Boolean).join("\n"),
       toBaht(row.platformTotal),
@@ -150,7 +152,7 @@ export function buildPlatformReconciliationWorkbook(
     ["ยอดโอนตามแพลตฟอร์ม", summary.platformTotal],
     ["ค่าธรรมเนียมโอน", summary.transferFeeTotal],
     ["ยอดที่ควรเข้าธนาคาร", summary.bankExpectedTotal],
-    ["ยอดเข้าธนาคารที่จับคู่", summary.bankTotal],
+    ["ยอดเข้าธนาคารที่ตรวจพบ", summary.bankTotal],
     ["ผลต่าง", summary.difference],
   ];
   summaryRows.forEach(([label, amount], index) => {

@@ -56,6 +56,18 @@ const platformRows: PlatformReconciliationResult[] = [{
   amountDifference: 0,
   daysApart: 0,
   status: "matched",
+}, {
+  id: "[test]-bank-without-platform-2",
+  dateKey: "2090-01-06",
+  dateLabel: "06/01/2633",
+  bank: { rowNumber: 2, dateKey: "2090-01-06", dateLabel: "06/01/2633", detail: "[test] LINE MAN ไม่มีรายการต้นทาง", amount: 20_000 },
+  payouts: [],
+  platformTotal: 0,
+  inferredTransferFee: 0,
+  bankExpected: 0,
+  amountDifference: 20_000,
+  daysApart: null,
+  status: "not-found",
 }];
 
 try {
@@ -76,6 +88,8 @@ try {
   check("ยอดโอนแพลตฟอร์มเป็นตัวเลขบาท", platformSheet?.getCell("D5").value, 100);
   check("ค่าธรรมเนียมเป็นตัวเลขบาท", platformSheet?.getCell("E5").value, 5);
   check("แสดงสถานะตรงกัน", platformSheet?.getCell("J5").value, "ตรงกัน · หักค่าธรรมเนียมโอน 5 บาท");
+  check("แสดงเงินเข้าที่ไม่มีรายการแพลตฟอร์ม", platformSheet?.getCell("H6").value, 200);
+  check("แสดงสถานะไม่พบยอดโอนจากแพลตฟอร์ม", platformSheet?.getCell("J6").value, "ไม่พบยอดโอนจากแพลตฟอร์ม");
 } finally {
   console.log("\n=== ล้างข้อมูลทดสอบ ===");
   bankRows.length = 0;

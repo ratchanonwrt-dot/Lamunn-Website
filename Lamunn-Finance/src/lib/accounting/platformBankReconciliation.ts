@@ -44,6 +44,8 @@ export type PlatformReconciliationSummary = {
   matchedCount: number;
   mismatchedCount: number;
   notFoundCount: number;
+  platformWithoutBankCount: number;
+  bankWithoutPlatformCount: number;
   platformTotal: number;
   transferFeeTotal: number;
   bankExpectedTotal: number;
@@ -468,6 +470,22 @@ function bankMentionsDifferentPlatform(detail: string, platform: PlatformCode): 
     .some((code) => code !== platform && bankMentionsPlatform(detail, code));
 }
 
+function bankWithoutPlatformResult(bank: ReconciliationItem): PlatformReconciliationResult {
+  return {
+    id: `bank-without-platform-${bank.rowNumber}`,
+    dateKey: bank.dateKey,
+    dateLabel: bank.dateLabel,
+    bank,
+    payouts: [],
+    platformTotal: 0,
+    inferredTransferFee: 0,
+    bankExpected: 0,
+    amountDifference: bank.amount,
+    daysApart: null,
+    status: "not-found",
+  };
+}
+
 export function reconcilePlatformPayouts(
   bankRows: ReconciliationItem[],
   payoutRows: PlatformPayoutItem[],
@@ -540,14 +558,25 @@ export function reconcilePlatformPayouts(
       continue;
     }
 
-    if (!bankMentionsPlatform(bank.detail, platform)) continue;
+    if (!bankMentionsPlatform(bank.detail, platform)) {
+      // รายการที่ไม่ระบุช่องทางก็ต้องแสดง เพื่อให้ผู้ใช้ตรวจเงินเข้าที่ไม่มีข้อมูลแพลตฟอร์มได้ครบ
+      results.push(bankWithoutPlatformResult(bank));
+      continue;
+    }
     const nearestDate = payoutDates
       .map((dateKey) => ({ dateKey, gap: daysFromPlatformToBank(dateKey, bank.dateKey) }))
       .filter(({ gap }) => gap >= 0 && gap <= 5)
       .sort((left, right) => left.gap - right.gap)[0];
-    if (!nearestDate) continue;
+    if (!nearestDate) {
+      // แสดงเงินเข้าที่ระบุชื่อแพลตฟอร์มแม้ไม่มีข้อมูลต้นทาง เพื่อไม่ให้ยอดธนาคารส่วนเกินหายจากผลกระทบยอด
+      results.push(bankWithoutPlatformResult(bank));
+      continue;
+    }
     const nearestRows = payouts.filter((row) => row.dateKey === nearestDate.dateKey && !usedPayouts.has(row.id));
-    if (!nearestRows.length) continue;
+    if (!nearestRows.length) {
+      results.push(bankWithoutPlatformResult(bank));
+      continue;
+    }
     nearestRows.forEach((row) => usedPayouts.add(row.id));
     const platformTotal = nearestRows.reduce((sum, row) => sum + row.payoutAmount, 0);
     results.push({
@@ -598,6 +627,8 @@ export function summarizePlatformReconciliation(rows: PlatformReconciliationResu
     matchedCount: rows.filter((row) => row.status === "matched").length,
     mismatchedCount: rows.filter((row) => row.status === "mismatched").length,
     notFoundCount: rows.filter((row) => row.status === "not-found").length,
+    platformWithoutBankCount: rows.filter((row) => row.status === "not-found" && !row.bank).length,
+    bankWithoutPlatformCount: rows.filter((row) => row.status === "not-found" && Boolean(row.bank) && row.payouts.length === 0).length,
     platformTotal,
     transferFeeTotal,
     bankExpectedTotal,

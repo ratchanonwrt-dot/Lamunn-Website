@@ -20,13 +20,14 @@ import {
 } from "@/lib/accounting/platformBankReconciliation";
 import { useServerRefresh } from "./useServerRefresh";
 
-type ResultFilter = "all" | PlatformReconciliationResult["status"];
+type ResultFilter = "all" | "matched" | "mismatched" | "platform-without-bank" | "bank-without-platform";
 
 const FILTER_LABELS: Record<ResultFilter, string> = {
   all: "ทั้งหมด",
   matched: "ตรงกัน",
   mismatched: "ไม่ตรงกัน",
-  "not-found": "ไม่พบเงินเข้า",
+  "platform-without-bank": "มีรายการแพลตฟอร์ม แต่ไม่พบเงินเข้า",
+  "bank-without-platform": "มีเงินเข้า แต่ไม่พบยอดโอนจากแพลตฟอร์ม",
 };
 
 function parseCsv(text: string): unknown[][] {
@@ -149,7 +150,17 @@ function statusLabel(row: PlatformReconciliationResult) {
     const fee = row.inferredTransferFee ? " · หักค่าธรรมเนียมโอน 5 บาท" : "";
     return `ตรงกัน${row.daysApart ? ` · เข้าหลัง ${row.daysApart} วัน` : ""}${fee}`;
   }
-  return row.status === "mismatched" ? "ยอดไม่ตรงกัน" : "ไม่พบเงินเข้าธนาคาร";
+  if (row.status === "mismatched") return "ยอดไม่ตรงกัน";
+  return row.bank && row.payouts.length === 0
+    ? "ไม่พบยอดโอนจากแพลตฟอร์ม"
+    : "ไม่พบเงินเข้าธนาคาร";
+}
+
+function matchesFilter(row: PlatformReconciliationResult, filter: ResultFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "matched" || filter === "mismatched") return row.status === filter;
+  if (filter === "bank-without-platform") return row.status === "not-found" && Boolean(row.bank) && row.payouts.length === 0;
+  return row.status === "not-found" && !row.bank;
 }
 
 export default function PlatformBankReconciliation({ bankFile }: { bankFile: File | null }) {
@@ -164,7 +175,7 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
 
   const summary = useMemo(() => results ? summarizePlatformReconciliation(results) : null, [results]);
   const visibleResults = useMemo(() => (
-    results?.filter((row) => filter === "all" || row.status === filter) ?? null
+    results?.filter((row) => matchesFilter(row, filter)) ?? null
   ), [filter, results]);
 
   const changePlatform = (value: PlatformCode) => {
@@ -314,7 +325,7 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
             <div>
               <h3 className="font-semibold text-gray-900">ผลการกระทบยอด {PLATFORM_LABELS[platform]}</h3>
               <p className="mt-0.5 text-xs text-gray-500">
-                อ่านยอดโอน {payoutCount.toLocaleString("th-TH")} รายการ · ตรงกัน {summary.matchedCount} · ไม่ตรง {summary.mismatchedCount} · ไม่พบ {summary.notFoundCount}
+                อ่านยอดโอน {payoutCount.toLocaleString("th-TH")} รายการ · ตรงกัน {summary.matchedCount} · ไม่ตรง {summary.mismatchedCount} · แพลตฟอร์มไม่มีเงินเข้า {summary.platformWithoutBankCount} · ธนาคารไม่มีรายการแพลตฟอร์ม {summary.bankWithoutPlatformCount}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -331,7 +342,8 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
                   <option value="all">ทั้งหมด</option>
                   <option value="matched">ตรงกัน</option>
                   <option value="mismatched">ไม่ตรงกัน</option>
-                  <option value="not-found">ไม่พบเงินเข้า</option>
+                  <option value="platform-without-bank">มีรายการแพลตฟอร์ม แต่ไม่พบเงินเข้า</option>
+                  <option value="bank-without-platform">มีเงินเข้า แต่ไม่พบยอดโอนจากแพลตฟอร์ม</option>
                 </select>
               </label>
             </div>
@@ -355,7 +367,7 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
               <tbody>
                 {(visibleResults ?? []).map((row) => (
                   <tr key={row.id} className={`border-t ${tone(row.status)}`}>
-                    <td className="whitespace-nowrap px-4 py-3">{row.payouts[0]?.dateLabel ?? row.dateLabel}</td>
+                    <td className="whitespace-nowrap px-4 py-3">{row.payouts[0]?.dateLabel ?? "—"}</td>
                     <td className="px-4 py-3">
                       <div className="space-y-1">
                         {row.payouts.map((payout) => (
@@ -391,7 +403,7 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
                 ["ยอดโอนตามแพลตฟอร์ม", summary.platformTotal],
                 ["ค่าธรรมเนียมโอน", summary.transferFeeTotal],
                 ["ยอดที่ควรเข้าธนาคาร", summary.bankExpectedTotal],
-                ["ยอดเข้าธนาคารที่จับคู่", summary.bankTotal],
+                ["ยอดเข้าธนาคารที่ตรวจพบ", summary.bankTotal],
                 ["ผลต่าง", summary.difference],
               ].map(([label, amount]) => (
                 <div key={String(label)} className="rounded-lg border border-gray-200 bg-white p-3">
