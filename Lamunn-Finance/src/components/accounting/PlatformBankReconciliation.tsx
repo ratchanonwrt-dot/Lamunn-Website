@@ -349,7 +349,7 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
           <div>
             <h2 className="font-semibold text-gray-900">กระทบยอดเงินเข้าจากแพลตฟอร์ม</h2>
             <p className="mt-0.5 text-sm text-gray-500">
-              ตรวจยอดสุทธิจากแพลตฟอร์มกับเงินเข้าธนาคาร รองรับการรวมหลายสาขาเป็นเงินเข้าก้อนเดียว
+              แนบ Statement และไฟล์ยอดโอนสุทธิ แล้วระบบแยกแพลตฟอร์มและจับคู่ให้เอง
             </p>
           </div>
         </div>
@@ -358,33 +358,25 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
         </span>
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.45fr)]">
-        <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/50 px-5 py-5 text-center text-blue-700 hover:border-blue-400">
-          <FileSpreadsheet size={28} aria-hidden="true" />
-          <span className="mt-2 text-sm font-semibold">
-            {salesSummaryFiles.length ? `เลือกไฟล์สรุปยอดขายแล้ว ${salesSummaryFiles.length} ไฟล์` : "เลือกไฟล์สรุปยอดขายประจำเดือน"}
-          </span>
-          <span className="mt-1 text-xs opacity-75">สำนักงานใหญ่และทุกสาขาที่แยกไฟล์ · เลือกพร้อมกันได้หลายไฟล์</span>
-          <input
-            type="file"
-            accept=".xlsx"
-            multiple
-            className="sr-only"
-            onChange={(event) => {
-              setSalesSummaryFiles(Array.from(event.target.files ?? []));
-              setSalesControls([]);
-              setResults(null);
-              setError("");
-            }}
-          />
-        </label>
-        <div className="rounded-xl bg-blue-50 p-4 text-sm text-blue-900">
-          <p className="font-semibold">ไฟล์สรุปยอดขาย (ยอดควบคุม)</p>
-          <p className="mt-1 text-xs text-blue-700">ระบบอ่าน Sheet POS เพื่อสรุปยอดตามช่องทางและสาขา โดยไม่แก้ไขไฟล์ต้นฉบับ</p>
-          <div className="mt-3 max-h-20 space-y-1 overflow-y-auto text-xs">
-            {salesSummaryFiles.map((file) => <p key={`${file.name}-${file.size}`} className="truncate">{file.name}</p>)}
-            {!salesSummaryFiles.length && <p className="text-blue-500">ยังไม่ได้เลือก (เลือกภายหลังได้)</p>}
-          </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className={`rounded-xl border p-4 ${bankFile ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+          <p className="text-xs font-semibold text-gray-500">ขั้นที่ 1</p>
+          <p className="mt-1 font-semibold text-gray-900">Statement ธนาคาร</p>
+          <p className={`mt-2 truncate text-xs ${bankFile ? "text-emerald-700" : "text-amber-700"}`}>
+            {bankFile ? `พร้อมแล้ว · ${bankFile.name}` : "เลือกไฟล์ธนาคารด้านบนก่อน"}
+          </p>
+        </div>
+        <div className={`rounded-xl border p-4 ${platformFiles.length ? "border-emerald-200 bg-emerald-50" : "border-fuchsia-200 bg-fuchsia-50"}`}>
+          <p className="text-xs font-semibold text-gray-500">ขั้นที่ 2</p>
+          <p className="mt-1 font-semibold text-gray-900">ไฟล์ยอดโอนจากแพลตฟอร์ม</p>
+          <p className={`mt-2 text-xs ${platformFiles.length ? "text-emerald-700" : "text-fuchsia-700"}`}>
+            {platformFiles.length ? `พร้อมแล้ว ${platformFiles.length} ไฟล์` : "แนบทุกไฟล์พร้อมกันได้"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <p className="text-xs font-semibold text-gray-500">ขั้นที่ 3</p>
+          <p className="mt-1 font-semibold text-gray-900">ตรวจเงินเข้า</p>
+          <p className="mt-2 text-xs text-gray-500">กดปุ่มเดียวเพื่อจับคู่ทั้งหมด</p>
         </div>
       </div>
 
@@ -392,9 +384,10 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
         <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-fuchsia-200 bg-fuchsia-50/50 px-5 py-6 text-center text-fuchsia-700 hover:border-fuchsia-400">
           {platformFiles.length ? <CheckCircle2 size={30} aria-hidden="true" /> : <UploadCloud size={30} aria-hidden="true" />}
           <span className="mt-2 text-sm font-semibold">
-            {platformFiles.length ? `เลือกแล้ว ${platformFiles.length} ไฟล์` : "เลือกไฟล์จากทุกแพลตฟอร์ม"}
+            {platformFiles.length ? `เลือกไฟล์ยอดโอนแล้ว ${platformFiles.length} ไฟล์` : "แนบไฟล์ยอดโอนจากทุกแพลตฟอร์ม"}
           </span>
-          <span className="mt-1 text-xs opacity-75">รองรับ PDF, Excel (.xlsx) และ CSV · เลือกพร้อมกันได้หลายไฟล์</span>
+          <span className="mt-1 text-xs opacity-75">Grab CSV · LINE MAN PDF · TikTok Excel/CSV · Shopee Excel</span>
+          <span className="mt-1 text-xs opacity-75">เลือกหลายแพลตฟอร์มและหลายสาขาพร้อมกันได้</span>
           <input
             type="file"
             accept=".pdf,.xlsx,.csv"
@@ -411,7 +404,24 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
         </label>
 
         <div className="rounded-xl bg-gray-50 p-4 text-sm">
-          <p className="font-semibold text-gray-800">ไฟล์ที่เลือก</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-semibold text-gray-800">ไฟล์ยอดโอนที่เลือก</p>
+            {platformFiles.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPlatformFiles([]);
+                  setFileReports([]);
+                  setResults(null);
+                  setPayoutCount(0);
+                  setError("");
+                }}
+                className="text-xs font-medium text-gray-500 hover:text-rose-600"
+              >
+                ล้างไฟล์
+              </button>
+            )}
+          </div>
           <div className="mt-2 max-h-28 space-y-1 overflow-y-auto">
             {platformFiles.map((file) => {
               const report = fileReports.find((item) => item.fileName === file.name);
@@ -426,7 +436,7 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
               </div>
               );
             })}
-            {!platformFiles.length && <p className="text-xs text-gray-400">ยังไม่ได้เลือกไฟล์แพลตฟอร์ม</p>}
+            {!platformFiles.length && <p className="text-xs text-gray-400">ยังไม่ได้เลือกไฟล์ยอดโอน</p>}
           </div>
           <p className={`mt-4 rounded-lg px-3 py-2 text-xs font-medium ${
             bankFile && platformFiles.length
@@ -434,8 +444,8 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
               : "bg-amber-50 text-amber-700"
           }`}>
             {bankFile && platformFiles.length
-              ? "พร้อมเทียบไฟล์ธนาคารกับไฟล์จากแพลตฟอร์ม"
-              : "เลือกไฟล์ธนาคารและไฟล์จากแพลตฟอร์มก่อนเริ่มกระทบยอด"}
+              ? "พร้อมตรวจว่าเงินเข้าธนาคารครบหรือไม่"
+              : "ต้องมี Statement และไฟล์ยอดโอนก่อน"}
           </p>
           <button
             type="button"
@@ -444,19 +454,49 @@ export default function PlatformBankReconciliation({ bankFile }: { bankFile: Fil
             className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-fuchsia-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-fuchsia-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500"
           >
             {(processing || refreshing) && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-            {processing ? "กำลังอ่านและจัดกลุ่ม..." : "กระทบยอดเงินเข้าแพลตฟอร์ม"}
+            {processing ? "กำลังตรวจเงินเข้า..." : "ตรวจเงินเข้าจากทุกแพลตฟอร์ม"}
           </button>
         </div>
       </div>
 
-      {!bankFile && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">กรุณาเลือกไฟล์ธนาคารด้านบนก่อน</p>}
+      <details className="mt-4 rounded-xl border border-blue-100 bg-blue-50/50">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-blue-800">
+          ตัวเลือกเพิ่มเติม: แนบไฟล์สรุปยอดขายเพื่อตรวจยอดควบคุม
+          {salesSummaryFiles.length > 0 && ` · เลือกแล้ว ${salesSummaryFiles.length} ไฟล์`}
+        </summary>
+        <div className="grid gap-4 border-t border-blue-100 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.45fr)]">
+          <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-200 bg-white px-5 py-4 text-center text-blue-700 hover:border-blue-400">
+            <FileSpreadsheet size={26} aria-hidden="true" />
+            <span className="mt-2 text-sm font-semibold">
+              {salesSummaryFiles.length ? `เลือกแล้ว ${salesSummaryFiles.length} ไฟล์` : "เลือกไฟล์สรุปยอดขาย"}
+            </span>
+            <span className="mt-1 text-xs opacity-75">ไม่บังคับ · ใช้ Sheet POS ของสำนักงานใหญ่และทุกสาขา</span>
+            <input
+              type="file"
+              accept=".xlsx"
+              multiple
+              className="sr-only"
+              onChange={(event) => {
+                setSalesSummaryFiles(Array.from(event.target.files ?? []));
+                setSalesControls([]);
+                setResults(null);
+                setError("");
+              }}
+            />
+          </label>
+          <div className="rounded-xl bg-white p-4 text-sm text-blue-900">
+            <p className="font-semibold">ยอดควบคุม (ไม่ใช้จับคู่เงินเข้า)</p>
+            <p className="mt-1 text-xs text-blue-700">ระบบอ่าน Sheet POS เพื่อเปรียบเทียบยอดขาย โดยไม่แก้ไขหรือเก็บไฟล์ต้นฉบับ</p>
+            <div className="mt-3 max-h-20 space-y-1 overflow-y-auto text-xs">
+              {salesSummaryFiles.map((file) => <p key={`${file.name}-${file.size}`} className="truncate">{file.name}</p>)}
+              {!salesSummaryFiles.length && <p className="text-blue-500">ข้ามส่วนนี้ได้</p>}
+            </div>
+          </div>
+        </div>
+      </details>
       <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
-        ไฟล์สรุปยอดขายใช้ตรวจยอดควบคุม ส่วนการจับเงินจริงต้องมีไฟล์โอนจาก Grab, LINE MAN, TikTok หรือ Shopee และไฟล์ธนาคาร · PDF รองรับรายงานรายเดือน LINE MAN
+        ระบบใช้ “ยอดโอนสุทธิและวันที่โอน” จากไฟล์แพลตฟอร์มเทียบกับเงินเข้าธนาคาร รองรับหลายสาขารวมเป็นเงินเข้าก้อนเดียว
       </p>
-      <div className="mt-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-xs text-gray-600">
-        <p className="font-semibold text-gray-800">ไฟล์ที่ต้องแนบในแต่ละเดือน</p>
-        <p className="mt-1">1) Statement ธนาคาร Excel/CSV · 2) ไฟล์สรุปยอดขายสำนักงานใหญ่และทุกสาขา · 3) ไฟล์ยอดโอน Grab CSV, LINE MAN PDF, TikTok Excel/CSV และ Shopee Excel เฉพาะช่องทางที่ใช้งาน</p>
-      </div>
       {error && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
       {results && summary && (
