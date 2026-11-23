@@ -9,6 +9,8 @@ import { formatBaht } from "@/lib/format";
 import AccountingDateInput from "./AccountingDateInput";
 import { formatAccountingDate } from "@/lib/accounting/dateFormat";
 import { useServerRefresh } from "./useServerRefresh";
+import DonutChart, { CHART_COLORS } from "@/components/charts/DonutChart";
+import LineChart from "@/components/charts/LineChart";
 
 const inputCls = "rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const thaiDays = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์"];
@@ -158,7 +160,22 @@ export default function LivePayoutsPanel({
     .sort((a, b) => b.hours - a.hours || b.amount - a.amount || a.name.localeCompare(b.name, "th"))
     .slice(0, 5);
   const topStreamer = streamerRanking[0] ?? null;
-  const maxRankHours = streamerRanking[0]?.hours || 1;
+  const allStreamerRanking = Array.from(streamerTotals.values())
+    .sort((a, b) => b.hours - a.hours || b.amount - a.amount || a.name.localeCompare(b.name, "th"));
+  const donutLeaders = allStreamerRanking.slice(0, 5);
+  const otherHours = allStreamerRanking.slice(5).reduce((sum, streamer) => sum + streamer.hours, 0);
+  const chartColors = [CHART_COLORS.violet, CHART_COLORS.magenta, CHART_COLORS.blue, CHART_COLORS.aqua, CHART_COLORS.orange];
+  const hourSlices = [
+    ...donutLeaders.map((streamer, index) => ({ label: streamer.name, value: streamer.hours, color: chartColors[index] })),
+    ...(otherHours > 0 ? [{ label: "อื่น ๆ", value: otherHours, color: CHART_COLORS.yellow }] : []),
+  ];
+  const dailyTrend = Array.from(days.entries())
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .map(([date, dailyRows]) => ({ date, amount: dailyRows.reduce((sum, row) => sum + row.amount, 0) }));
+  const dailyAverage = dailyTrend.map((_, index) => {
+    const window = dailyTrend.slice(Math.max(0, index - 6), index + 1);
+    return window.reduce((sum, day) => sum + day.amount, 0) / window.length;
+  });
   const staleCount = rows.filter((r) => r.stale && r.status === "APPROVED").length;
 
   return (
@@ -267,32 +284,35 @@ export default function LivePayoutsPanel({
             </p>
           </div>
         </div>
-        <div className="border-t border-violet-100 bg-white/70 px-5 py-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-gray-800">แนวโน้มอันดับนักไลฟ์</h3>
-            <span className="text-[11px] text-gray-400">เรียงตามจำนวนชั่วโมง</span>
-          </div>
-          {streamerRanking.length > 0 ? (
-            <div className="space-y-3">
-              {streamerRanking.map((streamer, index) => (
-                <div key={streamer.name} className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(120px,1fr)_minmax(180px,3fr)_auto] sm:items-center sm:gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-gray-800"><span className="mr-1.5 text-xs font-bold text-violet-600">#{index + 1}</span>{streamer.name}</p>
-                    <p className="text-[11px] text-gray-400">{streamer.sessions} รายการ</p>
-                  </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
-                    <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-pink-500" style={{ width: `${Math.max(4, (streamer.hours / maxRankHours) * 100)}%` }} />
-                  </div>
-                  <div className="text-right">
-                    <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-gray-800">{hourFormatter.format(streamer.hours)} ชม.</p>
-                    <p className="whitespace-nowrap text-[11px] tabular-nums text-gray-400">{formatBaht(streamer.amount)}</p>
-                  </div>
-                </div>
-              ))}
+        <div className="grid gap-4 border-t border-violet-100 bg-white/70 p-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-gray-100 bg-white p-4">
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold text-gray-800">สัดส่วนชั่วโมงของนักไลฟ์</h3>
+              <p className="text-[11px] text-gray-400">5 อันดับแรกตามจำนวนชั่วโมง · ที่เหลือรวมเป็นอื่น ๆ</p>
             </div>
-          ) : (
-            <p className="py-4 text-center text-sm text-gray-400">ยังไม่มีข้อมูลสำหรับจัดอันดับ</p>
-          )}
+            {hourSlices.length > 0 ? (
+              <DonutChart data={hourSlices} size={180} formatValue={(value) => hourFormatter.format(value)} unit="ชั่วโมง" />
+            ) : (
+              <p className="py-16 text-center text-sm text-gray-400">ยังไม่มีข้อมูลสำหรับแสดงกราฟ</p>
+            )}
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-white p-4">
+            <div className="mb-2">
+              <h3 className="text-sm font-semibold text-gray-800">แนวโน้มค่าไลฟ์รายวัน</h3>
+              <p className="text-[11px] text-gray-400">เส้นประคือค่าเฉลี่ยเคลื่อนที่ย้อนหลังสูงสุด 7 วัน</p>
+            </div>
+            {dailyTrend.length > 0 ? (
+              <LineChart
+                xLabels={dailyTrend.map((day) => `${day.date.slice(8, 10)}/${day.date.slice(5, 7)}`)}
+                series={[
+                  { label: "ค่าไลฟ์รายวัน", color: CHART_COLORS.magenta, points: dailyTrend.map((day) => day.amount) },
+                  { label: "ค่าเฉลี่ย 7 วัน", color: CHART_COLORS.violet, points: dailyAverage, dashed: true },
+                ]}
+              />
+            ) : (
+              <p className="py-16 text-center text-sm text-gray-400">ยังไม่มีข้อมูลสำหรับแสดงกราฟ</p>
+            )}
+          </div>
         </div>
       </section>
 
