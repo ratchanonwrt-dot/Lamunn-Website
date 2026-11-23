@@ -32,7 +32,7 @@ export default function InputVatVendorSearch({ initialQuery, resultCount, totalC
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="ค้นหาชื่อผู้ขาย เลขผู้เสียภาษี หรือสาขา"
+          placeholder="ค้นหาชื่อผู้ขาย เลขที่ใบกำกับ เลขผู้เสียภาษี สาขา หรือจำนวนเงิน"
           className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-9 text-sm text-gray-900 outline-none focus:border-brand-400"
         />
         {query && (

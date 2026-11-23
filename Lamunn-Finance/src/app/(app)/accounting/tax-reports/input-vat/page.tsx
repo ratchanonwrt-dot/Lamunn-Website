@@ -127,7 +127,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
           <p className="text-sm font-medium text-gray-700">
             {report.rows.length === 0
               ? `เดือน ${thaiMonthLabel(year, month - 1)} ยังไม่มีใบกำกับภาษีซื้อ`
-              : `ไม่พบผู้ขายที่ตรงกับ “${vendorQuery}”`}
+              : `ไม่พบรายการที่ตรงกับ “${vendorQuery}”`}
           </p>
           {report.rows.length === 0 && canEdit && <p className="mt-1 text-sm text-gray-500">กด &ldquo;บันทึกใบกำกับภาษีซื้อ&rdquo; ด้านบนเพื่อเริ่มบันทึก</p>}
         </div>
@@ -135,7 +135,7 @@ export default async function InputVatPage({ searchParams }: { searchParams: { y
         <StatementShell
           companyName={settings.companyName}
           title="รายงานภาษีซื้อ"
-          subtitle={`สำหรับเดือนภาษี ${thaiMonthLabel(year, month - 1)}${vendorQuery ? ` · ผู้ขาย ${vendorQuery}` : ""}`}
+          subtitle={`สำหรับเดือนภาษี ${thaiMonthLabel(year, month - 1)}${vendorQuery ? ` · ค้นหา ${vendorQuery}` : ""}`}
         >
           <table className="w-full min-w-[60rem] text-sm">
             <thead>

@@ -4,13 +4,33 @@ function normalize(value: string | null | undefined) {
   return String(value ?? "")
     .normalize("NFKC")
     .toLocaleLowerCase("th-TH")
-    .replace(/[\s\-./()]+/g, "");
+    .replace(/[\s,\-./()]+/g, "");
 }
 
-export function matchesInputVatVendor(row: Pick<InputVatRow, "vendorName" | "taxId" | "branchTag">, query: string) {
+function moneySearchValue(satang: number) {
+  const absoluteSatang = Math.abs(satang);
+  const baht = Math.floor(absoluteSatang / 100);
+  const cents = String(absoluteSatang % 100).padStart(2, "0");
+  return `${satang < 0 ? "-" : ""}${baht}.${cents}`;
+}
+
+export function matchesInputVatVendor(
+  row: Pick<InputVatRow, "vendorName" | "invoiceNo" | "taxId" | "branchTag" | "base" | "vat" | "total">,
+  query: string,
+) {
   const needles = query.trim().split(/\s+/).map(normalize).filter(Boolean);
   if (needles.length === 0) return true;
-  const fields = [row.vendorName, row.taxId, row.branchTag].map(normalize);
+  // จำนวนเงินเก็บเป็นสตางค์ จึงแปลงเป็นข้อความสองตำแหน่งก่อนค้นหา
+  // เพื่อให้ 2523.36 และ 2,523.36 ให้ผลเดียวกัน โดยยังใช้จำนวนเต็มตลอดทาง
+  const fields = [
+    row.vendorName,
+    row.invoiceNo,
+    row.taxId,
+    row.branchTag,
+    moneySearchValue(row.base),
+    moneySearchValue(row.vat),
+    moneySearchValue(row.total),
+  ].map(normalize);
   return needles.every((needle) => fields.some((field) => field.includes(needle)));
 }
 
