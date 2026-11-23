@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { Copy, Download, Plus, X } from "lucide-react";
+import { Download, Plus, X } from "lucide-react";
 import type { DisplayLivePayout } from "@/lib/accounting/livePayoutWorkItems";
 import { formatBaht } from "@/lib/format";
 import AccountingDateInput from "./AccountingDateInput";
@@ -50,7 +50,6 @@ export default function LivePayoutsPanel({
   const [st, setSt] = useState(status);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [manual, setManual] = useState({ liveDate: to, payeeName: "", hours: "", amount: "", note: "", transferQueued: false });
   const [queuedById, setQueuedById] = useState<Record<string, boolean>>(() => Object.fromEntries(rows.map((row) => [row.id, row.transferQueued])));
@@ -128,17 +127,10 @@ export default function LivePayoutsPanel({
     refresh();
   }
 
-  function copy(text: string, id: string) {
-    navigator.clipboard?.writeText(text).then(() => {
-      setCopied(id);
-      setTimeout(() => setCopied(null), 1500);
-    });
-  }
-
   function exportCsv() {
     const pending = rows.filter((r) => !(queuedById[r.id] ?? r.transferQueued));
-    const lines = [["วันที่", "ชื่อบัญชี", "ธนาคาร", "เลขบัญชี", "ชั่วโมง", "ยอดขาย", "ยอดจ่าย", "หมายเหตุ"].join(",")];
-    for (const r of pending) lines.push([r.date, r.payeeName, r.bankName ?? "", r.bankAccountNo ?? "", r.hours, r.sales, r.amount, (r.note ?? "").replace(/,/g, " ")].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    const lines = [["วันที่", "ชื่อผู้รับเงิน", "ชั่วโมง", "ยอดจ่าย", "หมายเหตุ"].join(",")];
+    for (const r of pending) lines.push([r.date, r.payeeName, r.hours, r.amount, (r.note ?? "").replace(/,/g, " ")].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -261,14 +253,12 @@ export default function LivePayoutsPanel({
               <p className="text-xs text-gray-500">ยังไม่ขึ้นระบบโอน {formatBaht(list.filter((r) => !(queuedById[r.id] ?? r.transferQueued)).reduce((a, r) => a + r.amount, 0))}</p>
             </header>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1240px] text-sm">
+              <table className="w-full min-w-[920px] text-sm">
                 <thead className="text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="px-4 py-2">ชื่อผู้รับเงิน</th>
                     <th className="px-3 py-2">วันที่ไลฟ์</th>
-                    <th className="px-3 py-2">ธนาคาร / เลขบัญชี</th>
                     <th className="px-3 py-2 text-right">จำนวนชั่วโมง</th>
-                    <th className="px-3 py-2 text-right">ยอดขาย</th>
                     <th className="px-3 py-2 text-right">จำนวนเงิน</th>
                     <th className="px-3 py-2">หมายเหตุ</th>
                     <th className="px-3 py-2">อนุมัติโดย</th>
@@ -286,26 +276,7 @@ export default function LivePayoutsPanel({
                         {r.source === "MANUAL" && <span className="mt-1 inline-block rounded bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-700">เพิ่มเอง</span>}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-xs text-gray-600">{formatAccountingDate(r.date)}</td>
-                      <td className="px-3 py-2.5">
-                        {r.bankAccountNo ? (
-                          <div className="flex items-center gap-2">
-                            <div className="text-xs">
-                              {r.bankName && <p className="text-gray-600">{r.bankName}</p>}
-                              <p className="font-mono text-[13px] tabular-nums text-gray-900">{r.bankAccountNo}</p>
-                            </div>
-                            <button onClick={() => copy(r.bankAccountNo!, r.id)} title="คัดลอกเลขบัญชี" className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
-                              <Copy size={13} />
-                            </button>
-                            {copied === r.id && <span className="text-[11px] text-emerald-600">คัดลอกแล้ว</span>}
-                          </div>
-                        ) : (
-                          <span className={clsx("text-xs", r.source === "MANUAL" ? "text-gray-400" : "text-red-600")}>
-                            {r.source === "MANUAL" ? "รายการเพิ่มเอง" : "ไม่มีเลขบัญชี — แจ้งแอดมิน Live กรอกที่หน้าคนไลฟ์"}
-                          </span>
-                        )}
-                      </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">{r.hours}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">{formatBaht(r.sales)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-gray-900">
                         {formatBaht(r.amount)}
                         {r.stale && <p className="text-[11px] font-normal text-red-600">ยอดในเว็บ Live เปลี่ยน — รออนุมัติใหม่</p>}
