@@ -272,9 +272,9 @@ export default function LivePayoutsPanel({
                     <th className="px-3 py-2 text-right">จำนวนเงิน</th>
                     <th className="px-3 py-2">หมายเหตุ</th>
                     <th className="px-3 py-2">อนุมัติโดย</th>
+                    <th className="px-4 py-2 text-center">ขึ้นระบบโอนเงินแล้ว</th>
                     <th className="px-3 py-2">สถานะ</th>
                     <th className="px-3 py-2"></th>
-                    <th className="px-4 py-2 text-center">ขึ้นระบบโอนเงินแล้ว</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -315,6 +315,17 @@ export default function LivePayoutsPanel({
                         {r.approvedBy ?? "-"}
                         <p>{fmtDT(r.approvedAt)}</p>
                       </td>
+                      <td className="px-4 py-2.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={queuedById[r.id] ?? r.transferQueued}
+                          disabled={!canQueueTransfer || busy !== null || refreshing}
+                          title={!canQueueTransfer ? "เฉพาะ Admin และบัญชีเท่านั้นที่แก้ไขได้" : undefined}
+                          onChange={(event) => setTransferQueued(r, event.target.checked)}
+                          aria-label={`ขึ้นระบบโอนเงินแล้ว ${r.payeeName} ${formatAccountingDate(r.date)}`}
+                          className="h-5 w-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50"
+                        />
+                      </td>
                       <td className="px-3 py-2.5">
                         <span className={clsx("inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium", (queuedById[r.id] ?? r.transferQueued) ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
                           {r.source === "MANUAL"
@@ -340,17 +351,6 @@ export default function LivePayoutsPanel({
                             ถอนสถานะจ่าย
                           </button>
                         )}
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={queuedById[r.id] ?? r.transferQueued}
-                          disabled={!canQueueTransfer || busy !== null || refreshing}
-                          title={!canQueueTransfer ? "เฉพาะ Admin และบัญชีเท่านั้นที่แก้ไขได้" : undefined}
-                          onChange={(event) => setTransferQueued(r, event.target.checked)}
-                          aria-label={`ขึ้นระบบโอนเงินแล้ว ${r.payeeName} ${formatAccountingDate(r.date)}`}
-                          className="h-5 w-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50"
-                        />
                       </td>
                     </tr>
                   ))}
