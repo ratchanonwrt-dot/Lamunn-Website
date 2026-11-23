@@ -18,7 +18,17 @@ export const CHART_COLORS = {
   red: "#e34948",
 };
 
-export default function DonutChart({ data, size = 160 }: { data: Slice[]; size?: number }) {
+export default function DonutChart({
+  data,
+  size = 160,
+  formatValue = formatBaht,
+  unit = "บาท",
+}: {
+  data: Slice[];
+  size?: number;
+  formatValue?: (value: number) => string;
+  unit?: string;
+}) {
   const total = data.reduce((a, d) => a + d.value, 0);
   const r = size / 2 - 14;
   const cx = size / 2;
@@ -58,14 +68,14 @@ export default function DonutChart({ data, size = 160 }: { data: Slice[]; size?:
             {/* A single interpolated string, not multiple JSX children — React DOM only
                 supports one text-node child for <title>; with several children it renders
                 empty server-side but joins them client-side, causing a hydration mismatch. */}
-            <title>{`${s.label}: ${formatBaht(s.value)} บาท (${(s.fraction * 100).toFixed(1)}%)`}</title>
+            <title>{`${s.label}: ${formatValue(s.value)} ${unit} (${(s.fraction * 100).toFixed(1)}%)`}</title>
           </circle>
         ))}
         <text x={cx} y={cy - 4} textAnchor="middle" className="fill-gray-800" style={{ fontSize: 15, fontWeight: 700 }}>
-          {formatBaht(total)}
+          {formatValue(total)}
         </text>
         <text x={cx} y={cy + 14} textAnchor="middle" className="fill-gray-400" style={{ fontSize: 10 }}>
-          บาท
+          {unit}
         </text>
       </svg>
       <ul className="flex flex-col gap-1.5 text-sm">
