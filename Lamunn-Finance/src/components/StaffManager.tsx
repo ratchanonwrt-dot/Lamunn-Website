@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type StaffRole = "SUPER_ADMIN" | "MANAGER" | "STAFF" | "CATERING_STAFF";
+type StaffRole = "SUPER_ADMIN" | "MANAGER" | "STAFF" | "CATERING_STAFF" | "MARKETING";
 
 const ROLE_LABEL: Record<StaffRole, string> = {
   SUPER_ADMIN: "ผู้ดูแลระบบสูงสุด",
   MANAGER: "Manager",
   STAFF: "Accounting Team",
   CATERING_STAFF: "Catering Team",
+  MARKETING: "Marketing",
 };
 
 interface StaffUserRow {
@@ -41,6 +42,7 @@ function RoleSelect({
     >
       <option value="STAFF">{detailed ? "Accounting Team (ดูอย่างเดียว)" : ROLE_LABEL.STAFF}</option>
       <option value="CATERING_STAFF">{detailed ? "Catering Team (ดู/แก้ไขได้เฉพาะส่วน Catering)" : ROLE_LABEL.CATERING_STAFF}</option>
+      <option value="MARKETING">{detailed ? "Marketing (ใช้ได้เฉพาะหน้าทำจ่ายคนไลฟ์)" : ROLE_LABEL.MARKETING}</option>
       <option value="MANAGER">{detailed ? "Manager (แก้ไขได้ทุกอย่าง ยกเว้นจัดการผู้ใช้งาน)" : ROLE_LABEL.MANAGER}</option>
       <option value="SUPER_ADMIN">{detailed ? "ผู้ดูแลระบบสูงสุด (ทำได้ทุกอย่าง)" : ROLE_LABEL.SUPER_ADMIN}</option>
     </select>

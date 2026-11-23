@@ -4,7 +4,7 @@ import { prisma } from "@lamunn/db-finance";
 import { requireStaff, type Role } from "@/lib/requireStaff";
 import { logActivity } from "@/lib/activityLog";
 
-const VALID_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "STAFF", "CATERING_STAFF"];
+const VALID_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "STAFF", "CATERING_STAFF", "MARKETING"];
 
 export async function GET() {
   const staff = await requireStaff(["SUPER_ADMIN"]);

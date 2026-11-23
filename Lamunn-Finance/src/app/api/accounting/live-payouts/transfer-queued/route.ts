@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSectionApi } from "@/lib/permissions";
+import { requireLivePayoutTransferApi } from "@/lib/livePayoutAccess";
 import {
   setExternalLivePayoutTransferQueued,
   setManualLivePayoutTransferQueued,
@@ -7,7 +7,7 @@ import {
 
 /** POST — ติ๊กว่ารายการถูกนำขึ้นระบบโอนแล้ว แยกจากสถานะจ่ายจริงของเว็บ Live */
 export async function POST(req: NextRequest) {
-  const staff = await requireSectionApi("ACCOUNTING", "edit");
+  const staff = await requireLivePayoutTransferApi();
   if (!staff) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));

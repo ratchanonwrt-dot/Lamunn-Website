@@ -20,6 +20,21 @@ export default async function middleware(req: NextRequest) {
       loginUrl.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(loginUrl);
     }
+
+    // Marketing ใช้งาน Finance ได้เฉพาะหน้าทำจ่ายคนไลฟ์และ API เพิ่มรายการเท่านั้น
+    // การตรวจตรง middleware ป้องกันการพิมพ์ URL ของหน้า/API อื่นเองโดยตรง
+    if (token.role === "MARKETING") {
+      const allowedPage = pathname === "/accounting/live-payouts";
+      const allowedApi =
+        pathname === "/api/accounting/live-payouts" ||
+        pathname === "/api/accounting/live-payouts/manual";
+      if (!allowedPage && !allowedApi) {
+        if (pathname.startsWith("/api/")) {
+          return NextResponse.json({ error: "Marketing ใช้งานได้เฉพาะหน้าทำจ่ายคนไลฟ์" }, { status: 403 });
+        }
+        return NextResponse.redirect(new URL("/accounting/live-payouts", req.url));
+      }
+    }
   }
 
   return NextResponse.next();
