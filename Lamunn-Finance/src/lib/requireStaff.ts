@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-export type Role = "SUPER_ADMIN" | "MANAGER" | "STAFF" | "CATERING_STAFF";
+export type Role = "SUPER_ADMIN" | "MANAGER" | "STAFF" | "CATERING_STAFF" | "MARKETING";
 
 /** สิทธิ์ที่แก้ไข/กรอกข้อมูลได้ (STAFF ดูได้อย่างเดียว) — ใช้กับ route ที่เป็นการเขียนข้อมูลทั่วไป */
 export const EDITOR_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER"];

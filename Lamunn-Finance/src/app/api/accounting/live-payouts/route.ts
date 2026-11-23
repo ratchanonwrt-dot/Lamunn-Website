@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSectionApi } from "@/lib/permissions";
+import { requireLivePayoutApi } from "@/lib/livePayoutAccess";
 import { fetchLivePayouts } from "@/lib/accounting/livePayouts";
 
 export const dynamic = "force-dynamic";
 
 /** GET ?from&to&status — proxy ไปเว็บ Live (เฉพาะรายการที่อนุมัติแล้ว) */
 export async function GET(req: NextRequest) {
-  const staff = await requireSectionApi("ACCOUNTING", "view");
+  const staff = await requireLivePayoutApi();
   if (!staff) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const q = req.nextUrl.searchParams;
   const iso = (s: string | null, fallback: string) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : fallback);

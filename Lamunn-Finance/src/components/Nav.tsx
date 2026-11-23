@@ -51,6 +51,7 @@ const roleLabel: Record<string, string> = {
   MANAGER: "Manager",
   STAFF: "Accounting Team",
   CATERING_STAFF: "Catering Team",
+  MARKETING: "Marketing",
 };
 
 interface NavLink {
@@ -438,9 +439,12 @@ export default function Nav({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const isMarketing = role === "MARKETING";
   const canView = (l: NavLink) => role === "SUPER_ADMIN" || permissions[l.section]?.canView;
   const finance = financeLinks.filter(canView);
-  const accounting = accountingLinks.filter(canView);
+  const accounting = isMarketing
+    ? accountingLinks.filter((link) => link.href === "/accounting/live-payouts")
+    : accountingLinks.filter(canView);
   const other: (NavLink & { badge?: boolean })[] = otherLinks.filter(canView);
   const catering = cateringLinks.filter(canView);
   const reports = reportMenuGroups.flatMap((group) => {
@@ -478,13 +482,13 @@ export default function Nav({
           </p>
         </div>
       </div>
-      <AppSwitcher current="finance" />
+      {!isMarketing && <AppSwitcher current="finance" />}
       <nav className="flex flex-1 flex-col">
-        <NavGroup title="การเงิน" tone="blue" links={finance} pathname={pathname} />
+        {!isMarketing && <NavGroup title="การเงิน" tone="blue" links={finance} pathname={pathname} />}
         <NavGroup title="บัญชี" tone="amber" links={accounting} pathname={pathname} />
-        <ReportNavGroup groups={reports} pathname={pathname} />
-        <NavGroup title="Catering" tone="violet" links={catering} pathname={pathname} />
-        <NavGroup title="อื่นๆ" tone="slate" links={other} pathname={pathname} />
+        {!isMarketing && <ReportNavGroup groups={reports} pathname={pathname} />}
+        {!isMarketing && <NavGroup title="Catering" tone="violet" links={catering} pathname={pathname} />}
+        {!isMarketing && <NavGroup title="อื่นๆ" tone="slate" links={other} pathname={pathname} />}
       </nav>
       <button
         onClick={() => signOut({ callbackUrl: "/login" })}
