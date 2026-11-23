@@ -1,5 +1,6 @@
 import { requireSectionPage } from "@/lib/permissions";
 import { fetchLivePayouts } from "@/lib/accounting/livePayouts";
+import { fetchLivePayoutWorkItems, mergeLivePayoutWorkItems } from "@/lib/accounting/livePayoutWorkItems";
 import LivePayoutsPanel from "@/components/accounting/LivePayoutsPanel";
 
 export const dynamic = "force-dynamic";
@@ -12,13 +13,15 @@ export default async function LivePayoutsPage({ searchParams }: { searchParams: 
   const from = isoOr(searchParams.from, new Date(Date.now() - 23 * 86400e3).toISOString().slice(0, 10));
   const to = isoOr(searchParams.to, todayTH);
   const status = searchParams.status === "APPROVED" || searchParams.status === "PAID" ? searchParams.status : "ALL";
-  const { rows, error } = await fetchLivePayouts(from, to, status);
+  const { rows: liveRows, error } = await fetchLivePayouts(from, to, status);
+  const workItems = await fetchLivePayoutWorkItems(from, to, liveRows.map((row) => row.id));
+  const rows = mergeLivePayoutWorkItems(liveRows, workItems, status);
 
   return (
     <div>
       <h1 className="mb-1 text-xl font-bold text-gray-900">ทำจ่ายคนไลฟ์ (รายวัน)</h1>
       <p className="mb-4 text-sm text-gray-500">
-        ยอดที่แอดมินเว็บ Live <b>อนุมัติแล้ว</b> เท่านั้น พร้อมชื่อบัญชีและเลขบัญชีสำหรับโอน — โอนแล้วกด &ldquo;ทำจ่ายแล้ว&rdquo; สถานะจะกลับไปแสดงที่เว็บ Live ด้วย
+        ยอดที่แอดมินเว็บ Live <b>อนุมัติแล้ว</b> พร้อมรายการที่บัญชีเพิ่มเอง — ติ๊กช่องสุดท้ายเมื่อขึ้นระบบโอนเงินแล้ว
       </p>
       <LivePayoutsPanel rows={rows} error={error} from={from} to={to} status={status} canEdit={permissions.ACCOUNTING.canEdit} />
     </div>
