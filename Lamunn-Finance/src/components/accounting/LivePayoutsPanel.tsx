@@ -12,6 +12,7 @@ import { useServerRefresh } from "./useServerRefresh";
 
 const inputCls = "rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const thaiDays = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์"];
+const hourFormatter = new Intl.NumberFormat("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 function fmtDate(iso: string): string {
   const d = new Date(iso + "T00:00:00Z");
@@ -142,6 +143,22 @@ export default function LivePayoutsPanel({
   for (const r of rows) days.set(r.date, [...(days.get(r.date) ?? []), r]);
   const totalPending = rows.filter((r) => !(queuedById[r.id] ?? r.transferQueued)).reduce((a, r) => a + r.amount, 0);
   const totalPaid = rows.filter((r) => queuedById[r.id] ?? r.transferQueued).reduce((a, r) => a + r.amount, 0);
+  const totalHours = rows.reduce((sum, row) => sum + row.hours, 0);
+  const totalLiveFee = rows.reduce((sum, row) => sum + row.amount, 0);
+  const streamerTotals = new Map<string, { name: string; hours: number; amount: number; sessions: number }>();
+  for (const row of rows) {
+    const name = row.streamerName?.trim() || row.payeeName.trim() || "ไม่ระบุชื่อ";
+    const current = streamerTotals.get(name) ?? { name, hours: 0, amount: 0, sessions: 0 };
+    current.hours += row.hours;
+    current.amount += row.amount;
+    current.sessions += 1;
+    streamerTotals.set(name, current);
+  }
+  const streamerRanking = Array.from(streamerTotals.values())
+    .sort((a, b) => b.hours - a.hours || b.amount - a.amount || a.name.localeCompare(b.name, "th"))
+    .slice(0, 5);
+  const topStreamer = streamerRanking[0] ?? null;
+  const maxRankHours = streamerRanking[0]?.hours || 1;
   const staleCount = rows.filter((r) => r.stale && r.status === "APPROVED").length;
 
   return (
@@ -225,6 +242,59 @@ export default function LivePayoutsPanel({
           </form>
         </div>
       )}
+
+      <section className="mb-5 overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-white via-violet-50/50 to-pink-50/60 shadow-sm">
+        <div className="border-b border-violet-100 px-5 py-4">
+          <h2 className="text-base font-bold text-gray-900">แดชบอร์ดคนไลฟ์</h2>
+          <p className="mt-0.5 text-xs text-gray-500">สรุปตามช่วงวันที่และสถานะที่เลือก · จัดอันดับมือ 1 จากจำนวนชั่วโมงรวม</p>
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-pink-100 bg-white p-4 shadow-sm">
+            <p className="text-xs font-medium text-pink-600">ค่าไลฟ์รวม</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{formatBaht(totalLiveFee)}</p>
+            <p className="mt-1 text-xs text-gray-400">{rows.length} รายการ</p>
+          </div>
+          <div className="rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
+            <p className="text-xs font-medium text-blue-600">จำนวนชั่วโมงรวม</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{hourFormatter.format(totalHours)} ชั่วโมง</p>
+            <p className="mt-1 text-xs text-gray-400">รวมทุกคนในช่วงที่เลือก</p>
+          </div>
+          <div className="rounded-xl border border-amber-100 bg-white p-4 shadow-sm">
+            <p className="text-xs font-medium text-amber-600">นักไลฟ์มือ 1</p>
+            <p className="mt-1 truncate text-xl font-bold text-gray-900">{topStreamer?.name ?? "ยังไม่มีข้อมูล"}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {topStreamer ? `${hourFormatter.format(topStreamer.hours)} ชั่วโมง · ค่าไลฟ์ ${formatBaht(topStreamer.amount)}` : "เลือกช่วงวันที่ที่มีรายการเพื่อดูอันดับ"}
+            </p>
+          </div>
+        </div>
+        <div className="border-t border-violet-100 bg-white/70 px-5 py-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-gray-800">แนวโน้มอันดับนักไลฟ์</h3>
+            <span className="text-[11px] text-gray-400">เรียงตามจำนวนชั่วโมง</span>
+          </div>
+          {streamerRanking.length > 0 ? (
+            <div className="space-y-3">
+              {streamerRanking.map((streamer, index) => (
+                <div key={streamer.name} className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(120px,1fr)_minmax(180px,3fr)_auto] sm:items-center sm:gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-gray-800"><span className="mr-1.5 text-xs font-bold text-violet-600">#{index + 1}</span>{streamer.name}</p>
+                    <p className="text-[11px] text-gray-400">{streamer.sessions} รายการ</p>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-pink-500" style={{ width: `${Math.max(4, (streamer.hours / maxRankHours) * 100)}%` }} />
+                  </div>
+                  <div className="text-right">
+                    <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-gray-800">{hourFormatter.format(streamer.hours)} ชม.</p>
+                    <p className="whitespace-nowrap text-[11px] tabular-nums text-gray-400">{formatBaht(streamer.amount)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="py-4 text-center text-sm text-gray-400">ยังไม่มีข้อมูลสำหรับจัดอันดับ</p>
+          )}
+        </div>
+      </section>
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-gray-200 bg-white p-4">
