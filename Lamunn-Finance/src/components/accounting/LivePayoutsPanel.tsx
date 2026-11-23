@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { Copy, Download } from "lucide-react";
-import type { LivePayout } from "@/lib/accounting/livePayouts";
+import { Copy, Download, Plus, X } from "lucide-react";
+import type { DisplayLivePayout } from "@/lib/accounting/livePayoutWorkItems";
 import { formatBaht } from "@/lib/format";
 import AccountingDateInput from "./AccountingDateInput";
 import { formatAccountingDate } from "@/lib/accounting/dateFormat";
+import { useServerRefresh } from "./useServerRefresh";
 
 const inputCls = "rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const thaiDays = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์"];
@@ -23,8 +24,8 @@ function fmtDT(iso: string | null): string {
   return `${formatAccountingDate(bangkok)} ${time}`;
 }
 
-export default function LivePayoutsPanel({ rows, error, from, to, status, canEdit }: { rows: LivePayout[]; error: string | null; from: string; to: string; status: string; canEdit: boolean }) {
-  const router = useRouter();
+export default function LivePayoutsPanel({ rows, error, from, to, status, canEdit }: { rows: DisplayLivePayout[]; error: string | null; from: string; to: string; status: string; canEdit: boolean }) {
+  const { router, refresh, refreshing } = useServerRefresh();
   const pathname = usePathname();
   const [f, setF] = useState(from);
   const [t, setT] = useState(to);
@@ -32,8 +33,15 @@ export default function LivePayoutsPanel({ rows, error, from, to, status, canEdi
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [manual, setManual] = useState({ liveDate: to, payeeName: "", hours: "", amount: "", note: "", transferQueued: false });
+  const [queuedById, setQueuedById] = useState<Record<string, boolean>>(() => Object.fromEntries(rows.map((row) => [row.id, row.transferQueued])));
 
-  async function setPaid(r: LivePayout, paid: boolean) {
+  useEffect(() => {
+    setQueuedById(Object.fromEntries(rows.map((row) => [row.id, row.transferQueued])));
+  }, [rows]);
+
+  async function setPaid(r: DisplayLivePayout, paid: boolean) {
     let paidRef: string | null = null;
     if (paid) {
       const v = prompt(`ยืนยันทำจ่าย ${r.payeeName} ${formatBaht(r.amount)} (${r.date})\nเลขอ้างอิงการโอน (ไม่บังคับ):`, "");
@@ -49,7 +57,57 @@ export default function LivePayoutsPanel({ rows, error, from, to, status, canEdi
       setErr(b.error ?? "ทำรายการไม่สำเร็จ");
       return;
     }
-    router.refresh();
+    refresh();
+  }
+
+  async function addManual(event: FormEvent) {
+    event.preventDefault();
+    setBusy("add");
+    setErr(null);
+    const res = await fetch("/api/accounting/live-payouts/manual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(manual),
+    });
+    setBusy(null);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setErr(body.error ?? "เพิ่มรายการไม่สำเร็จ");
+      return;
+    }
+    setShowAdd(false);
+    setManual({ liveDate: to, payeeName: "", hours: "", amount: "", note: "", transferQueued: false });
+    refresh();
+  }
+
+  async function setTransferQueued(row: DisplayLivePayout, transferQueued: boolean) {
+    const previous = queuedById[row.id] ?? false;
+    setQueuedById((current) => ({ ...current, [row.id]: transferQueued }));
+    setBusy(`queue:${row.id}`);
+    setErr(null);
+    const res = await fetch("/api/accounting/live-payouts/transfer-queued", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: row.source,
+        workItemId: row.workItemId,
+        sourceId: row.source === "LIVE" ? row.id : null,
+        date: row.date,
+        payeeName: row.payeeName,
+        hours: row.hours,
+        amount: row.amount,
+        note: row.note,
+        transferQueued,
+      }),
+    });
+    setBusy(null);
+    if (!res.ok) {
+      setQueuedById((current) => ({ ...current, [row.id]: previous }));
+      const body = await res.json().catch(() => ({}));
+      setErr(body.error ?? "บันทึกสถานะขึ้นระบบโอนไม่สำเร็จ");
+      return;
+    }
+    refresh();
   }
 
   function copy(text: string, id: string) {
@@ -60,7 +118,7 @@ export default function LivePayoutsPanel({ rows, error, from, to, status, canEdi
   }
 
   function exportCsv() {
-    const pending = rows.filter((r) => r.status === "APPROVED");
+    const pending = rows.filter((r) => !(queuedById[r.id] ?? r.transferQueued));
     const lines = [["วันที่", "ชื่อบัญชี", "ธนาคาร", "เลขบัญชี", "ชั่วโมง", "ยอดขาย", "ยอดจ่าย", "หมายเหตุ"].join(",")];
     for (const r of pending) lines.push([r.date, r.payeeName, r.bankName ?? "", r.bankAccountNo ?? "", r.hours, r.sales, r.amount, (r.note ?? "").replace(/,/g, " ")].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -70,10 +128,10 @@ export default function LivePayoutsPanel({ rows, error, from, to, status, canEdi
     a.click();
   }
 
-  const days = new Map<string, LivePayout[]>();
+  const days = new Map<string, DisplayLivePayout[]>();
   for (const r of rows) days.set(r.date, [...(days.get(r.date) ?? []), r]);
-  const totalPending = rows.filter((r) => r.status === "APPROVED").reduce((a, r) => a + r.amount, 0);
-  const totalPaid = rows.filter((r) => r.status === "PAID").reduce((a, r) => a + r.amount, 0);
+  const totalPending = rows.filter((r) => !(queuedById[r.id] ?? r.transferQueued)).reduce((a, r) => a + r.amount, 0);
+  const totalPaid = rows.filter((r) => queuedById[r.id] ?? r.transferQueued).reduce((a, r) => a + r.amount, 0);
   const staleCount = rows.filter((r) => r.stale && r.status === "APPROVED").length;
 
   return (
@@ -98,19 +156,70 @@ export default function LivePayoutsPanel({ rows, error, from, to, status, canEdi
         <button onClick={() => router.push(`${pathname}?from=${f}&to=${t}&status=${st}`)} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
           แสดง
         </button>
-        <button onClick={exportCsv} disabled={rows.every((r) => r.status !== "APPROVED")} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40">
-          <Download size={14} /> CSV รายการรอจ่าย
+        <button onClick={exportCsv} disabled={rows.every((r) => queuedById[r.id] ?? r.transferQueued)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+          <Download size={14} /> CSV รายการยังไม่ขึ้นระบบโอน
         </button>
+        {canEdit && (
+          <button onClick={() => setShowAdd(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+            <Plus size={16} /> เพิ่มรายการ
+          </button>
+        )}
       </div>
+
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="add-live-payout-title">
+          <form onSubmit={addManual} className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 id="add-live-payout-title" className="text-lg font-bold text-gray-900">เพิ่มรายการทำจ่ายคนไลฟ์</h2>
+                <p className="text-sm text-gray-500">รายการนี้เก็บในระบบบัญชี และไม่แก้ข้อมูลต้นทางของเว็บ Live</p>
+              </div>
+              <button type="button" onClick={() => setShowAdd(false)} aria-label="ปิด" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-sm font-medium text-gray-700">ชื่อผู้รับเงิน</span>
+                <input required value={manual.payeeName} onChange={(event) => setManual((current) => ({ ...current, payeeName: event.target.value }))} className={`${inputCls} w-full`} placeholder="กรอกชื่อผู้รับเงิน" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">วันที่ไลฟ์</span>
+                <AccountingDateInput value={manual.liveDate} onChange={(liveDate) => setManual((current) => ({ ...current, liveDate }))} className={`${inputCls} w-full`} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">จำนวนชั่วโมง</span>
+                <input required inputMode="decimal" type="number" min="0.01" max="24" step="0.01" value={manual.hours} onChange={(event) => setManual((current) => ({ ...current, hours: event.target.value }))} className={`${inputCls} w-full`} placeholder="เช่น 3.5" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">จำนวนเงิน (บาท)</span>
+                <input required inputMode="decimal" value={manual.amount} onChange={(event) => setManual((current) => ({ ...current, amount: event.target.value }))} className={`${inputCls} w-full`} placeholder="เช่น 1,500.00" />
+              </label>
+              <label className="flex items-center gap-2 self-end rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700">
+                <input type="checkbox" checked={manual.transferQueued} onChange={(event) => setManual((current) => ({ ...current, transferQueued: event.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-brand-600" />
+                ขึ้นระบบโอนเงินแล้ว
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-sm font-medium text-gray-700">หมายเหตุ</span>
+                <textarea value={manual.note} onChange={(event) => setManual((current) => ({ ...current, note: event.target.value }))} rows={3} className={`${inputCls} w-full resize-y`} placeholder="กรอกรายละเอียดเพิ่มเติม (ถ้ามี)" />
+              </label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setShowAdd(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">ยกเลิก</button>
+              <button type="submit" disabled={busy !== null || refreshing} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">บันทึกรายการ</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="text-xs text-gray-500">รอจ่าย (อนุมัติแล้ว)</p>
+          <p className="text-xs text-gray-500">ยังไม่ขึ้นระบบโอนเงิน</p>
           <p className="text-2xl font-bold tabular-nums text-amber-700">{formatBaht(totalPending)}</p>
           {staleCount > 0 && <p className="mt-1 text-xs text-red-600">{staleCount} รายการยอดในเว็บ Live เปลี่ยนหลังอนุมัติ — รอแอดมิน Live อนุมัติใหม่ก่อนจ่าย</p>}
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="text-xs text-gray-500">จ่ายแล้วในช่วงนี้</p>
+          <p className="text-xs text-gray-500">ขึ้นระบบโอนเงินแล้ว</p>
           <p className="text-2xl font-bold tabular-nums text-emerald-700">{formatBaht(totalPaid)}</p>
         </div>
       </div>
@@ -127,20 +236,23 @@ export default function LivePayoutsPanel({ rows, error, from, to, status, canEdi
                 {fmtDate(date)}
                 <span className="ml-2 text-xs font-normal text-gray-500">{list.length} คน · รวม {formatBaht(list.reduce((a, r) => a + r.amount, 0))}</span>
               </p>
-              <p className="text-xs text-gray-500">รอจ่าย {formatBaht(list.filter((r) => r.status === "APPROVED").reduce((a, r) => a + r.amount, 0))}</p>
+              <p className="text-xs text-gray-500">ยังไม่ขึ้นระบบโอน {formatBaht(list.filter((r) => !(queuedById[r.id] ?? r.transferQueued)).reduce((a, r) => a + r.amount, 0))}</p>
             </header>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-sm">
+              <table className="w-full min-w-[1240px] text-sm">
                 <thead className="text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                   <tr>
                     <th className="px-4 py-2">ชื่อผู้รับเงิน</th>
+                    <th className="px-3 py-2">วันที่ไลฟ์</th>
                     <th className="px-3 py-2">ธนาคาร / เลขบัญชี</th>
-                    <th className="px-3 py-2 text-right">ชม.</th>
+                    <th className="px-3 py-2 text-right">จำนวนชั่วโมง</th>
                     <th className="px-3 py-2 text-right">ยอดขาย</th>
-                    <th className="px-3 py-2 text-right">ยอดจ่าย</th>
+                    <th className="px-3 py-2 text-right">จำนวนเงิน</th>
+                    <th className="px-3 py-2">หมายเหตุ</th>
                     <th className="px-3 py-2">อนุมัติโดย</th>
                     <th className="px-3 py-2">สถานะ</th>
                     <th className="px-3 py-2"></th>
+                    <th className="px-4 py-2 text-center">ขึ้นระบบโอนเงินแล้ว</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -149,8 +261,9 @@ export default function LivePayoutsPanel({ rows, error, from, to, status, canEdi
                       <td className="px-4 py-2.5">
                         <p className="font-medium text-gray-900">{r.payeeName}</p>
                         {r.payeeName !== r.streamerName && <p className="text-xs text-gray-500">คนไลฟ์: {r.streamerName}</p>}
-                        {r.note && <p className="text-xs text-gray-500">📝 {r.note}</p>}
+                        {r.source === "MANUAL" && <span className="mt-1 inline-block rounded bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-700">เพิ่มเอง</span>}
                       </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-xs text-gray-600">{formatAccountingDate(r.date)}</td>
                       <td className="px-3 py-2.5">
                         {r.bankAccountNo ? (
                           <div className="flex items-center gap-2">
@@ -164,7 +277,9 @@ export default function LivePayoutsPanel({ rows, error, from, to, status, canEdi
                             {copied === r.id && <span className="text-[11px] text-emerald-600">คัดลอกแล้ว</span>}
                           </div>
                         ) : (
-                          <span className="text-xs text-red-600">ไม่มีเลขบัญชี — แจ้งแอดมิน Live กรอกที่หน้าคนไลฟ์</span>
+                          <span className={clsx("text-xs", r.source === "MANUAL" ? "text-gray-400" : "text-red-600")}>
+                            {r.source === "MANUAL" ? "รายการเพิ่มเอง" : "ไม่มีเลขบัญชี — แจ้งแอดมิน Live กรอกที่หน้าคนไลฟ์"}
+                          </span>
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">{r.hours}</td>
@@ -173,15 +288,18 @@ export default function LivePayoutsPanel({ rows, error, from, to, status, canEdi
                         {formatBaht(r.amount)}
                         {r.stale && <p className="text-[11px] font-normal text-red-600">ยอดในเว็บ Live เปลี่ยน — รออนุมัติใหม่</p>}
                       </td>
+                      <td className="max-w-[220px] px-3 py-2.5 text-xs text-gray-600">{r.note || "-"}</td>
                       <td className="px-3 py-2.5 text-xs text-gray-500">
                         {r.approvedBy ?? "-"}
                         <p>{fmtDT(r.approvedAt)}</p>
                       </td>
                       <td className="px-3 py-2.5">
-                        <span className={clsx("inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium", r.status === "PAID" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
-                          {r.status === "PAID" ? "จ่ายแล้ว" : "รอจ่าย"}
+                        <span className={clsx("inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium", (queuedById[r.id] ?? r.transferQueued) ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+                          {r.source === "MANUAL"
+                            ? ((queuedById[r.id] ?? r.transferQueued) ? "ขึ้นระบบโอนแล้ว" : "ยังไม่ขึ้นระบบโอน")
+                            : (r.status === "PAID" ? "จ่ายแล้ว" : "รอจ่าย")}
                         </span>
-                        {r.status === "PAID" && (
+                        {r.source === "LIVE" && r.status === "PAID" && (
                           <p className="mt-1 text-[11px] text-gray-500">
                             {fmtDT(r.paidAt)}
                             {r.paidBy ? ` · ${r.paidBy}` : ""}
@@ -190,16 +308,26 @@ export default function LivePayoutsPanel({ rows, error, from, to, status, canEdi
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-right">
-                        {canEdit && r.status === "APPROVED" && (
+                        {canEdit && r.source === "LIVE" && r.status === "APPROVED" && (
                           <button disabled={busy !== null || r.stale} title={r.stale ? "รอแอดมิน Live อนุมัติยอดใหม่ก่อน" : ""} onClick={() => setPaid(r, true)} className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-40">
                             ทำจ่ายแล้ว
                           </button>
                         )}
-                        {canEdit && r.status === "PAID" && (
+                        {canEdit && r.source === "LIVE" && r.status === "PAID" && (
                           <button disabled={busy !== null} onClick={() => setPaid(r, false)} className="text-xs text-gray-400 hover:text-red-600">
                             ถอนสถานะจ่าย
                           </button>
                         )}
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={queuedById[r.id] ?? r.transferQueued}
+                          disabled={!canEdit || busy !== null || refreshing}
+                          onChange={(event) => setTransferQueued(r, event.target.checked)}
+                          aria-label={`ขึ้นระบบโอนเงินแล้ว ${r.payeeName} ${formatAccountingDate(r.date)}`}
+                          className="h-5 w-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50"
+                        />
                       </td>
                     </tr>
                   ))}

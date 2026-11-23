@@ -1313,3 +1313,22 @@ model AccAllChannelCashDaily {
   @@index([periodYear, periodMonth, branchOrder])
   @@map("acc_all_channel_cash_daily")
 }
+
+// รายการทำจ่ายคนไลฟ์ที่บัญชีเพิ่มเอง และสถานะส่งเข้าระบบโอนของรายการจากเว็บ Live
+model AccLivePayoutWorkItem {
+  id             String   @id @default(cuid())
+  sourceId       String?  @unique // id จากเว็บ Live; null = รายการที่บัญชีเพิ่มเอง
+  liveDate       DateTime @db.Date
+  payeeName      String
+  hours          Decimal  @db.Decimal(8, 2)
+  amount         Decimal  @db.Decimal(15, 2)
+  note           String?
+  transferQueued Boolean  @default(false)
+  createdBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([liveDate])
+  @@index([transferQueued])
+  @@map("acc_live_payout_work_items")
+}
