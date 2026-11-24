@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { Download, Plus, X } from "lucide-react";
+import { Download, Plus, Search, X } from "lucide-react";
 import type { DisplayLivePayout } from "@/lib/accounting/livePayoutWorkItems";
 import { formatBaht } from "@/lib/format";
 import AccountingDateInput from "./AccountingDateInput";
@@ -53,6 +53,8 @@ export default function LivePayoutsPanel({
   const [f, setF] = useState(from);
   const [t, setT] = useState(to);
   const [st, setSt] = useState(status);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -162,8 +164,20 @@ export default function LivePayoutsPanel({
     refresh();
   }
 
+  const normalizedSearch = searchTerm.trim().toLocaleLowerCase("th-TH");
+  const numericSearch = normalizedSearch ? Number(normalizedSearch.replace(/,/g, "")) : Number.NaN;
+  const visibleRows = normalizedSearch
+    ? rows.filter((row) => {
+        const names = [row.payeeName, row.streamerName, row.nickname].filter(Boolean).join(" ").toLocaleLowerCase("th-TH");
+        const nameMatches = names.includes(normalizedSearch);
+        const amountMatches = Number.isFinite(numericSearch) && Math.abs(row.amount - numericSearch) < 0.005;
+        const hourMatches = Number.isFinite(numericSearch) && Math.abs(row.hours - numericSearch) < 0.005;
+        return nameMatches || amountMatches || hourMatches;
+      })
+    : rows;
+
   function exportCsv() {
-    const pending = rows.filter((r) => !(queuedById[r.id] ?? r.transferQueued));
+    const pending = visibleRows.filter((r) => !(queuedById[r.id] ?? r.transferQueued));
     const lines = [["วันที่", "ชื่อผู้รับเงิน", "ชั่วโมง", "ยอดจ่าย", "หมายเหตุ"].join(",")];
     for (const r of pending) lines.push([r.date, r.payeeName, r.hours, r.amount, (r.note ?? "").replace(/,/g, " ")].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -174,13 +188,13 @@ export default function LivePayoutsPanel({
   }
 
   const days = new Map<string, DisplayLivePayout[]>();
-  for (const r of rows) days.set(r.date, [...(days.get(r.date) ?? []), r]);
-  const totalPending = rows.filter((r) => !(queuedById[r.id] ?? r.transferQueued)).reduce((a, r) => a + r.amount, 0);
-  const totalPaid = rows.filter((r) => queuedById[r.id] ?? r.transferQueued).reduce((a, r) => a + r.amount, 0);
-  const totalHours = rows.reduce((sum, row) => sum + row.hours, 0);
-  const totalLiveFee = rows.reduce((sum, row) => sum + row.amount, 0);
+  for (const r of visibleRows) days.set(r.date, [...(days.get(r.date) ?? []), r]);
+  const totalPending = visibleRows.filter((r) => !(queuedById[r.id] ?? r.transferQueued)).reduce((a, r) => a + r.amount, 0);
+  const totalPaid = visibleRows.filter((r) => queuedById[r.id] ?? r.transferQueued).reduce((a, r) => a + r.amount, 0);
+  const totalHours = visibleRows.reduce((sum, row) => sum + row.hours, 0);
+  const totalLiveFee = visibleRows.reduce((sum, row) => sum + row.amount, 0);
   const streamerTotals = new Map<string, { name: string; hours: number; amount: number; sessions: number }>();
-  for (const row of rows) {
+  for (const row of visibleRows) {
     const name = row.streamerName?.trim() || row.payeeName.trim() || "ไม่ระบุชื่อ";
     const current = streamerTotals.get(name) ?? { name, hours: 0, amount: 0, sessions: 0 };
     current.hours += row.hours;
@@ -208,7 +222,7 @@ export default function LivePayoutsPanel({
     const window = dailyTrend.slice(Math.max(0, index - 6), index + 1);
     return window.reduce((sum, day) => sum + day.amount, 0) / window.length;
   });
-  const staleCount = rows.filter((r) => r.stale && r.status === "APPROVED").length;
+  const staleCount = visibleRows.filter((r) => r.stale && r.status === "APPROVED").length;
 
   return (
     <div className="flex flex-col">
@@ -232,7 +246,7 @@ export default function LivePayoutsPanel({
         <button onClick={() => router.push(`${pathname}?from=${f}&to=${t}&status=${st}`)} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
           แสดง
         </button>
-        <button onClick={exportCsv} disabled={rows.every((r) => queuedById[r.id] ?? r.transferQueued)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+        <button onClick={exportCsv} disabled={visibleRows.length === 0 || visibleRows.every((r) => queuedById[r.id] ?? r.transferQueued)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40">
           <Download size={14} /> CSV รายการยังไม่ขึ้นระบบโอน
         </button>
         {canAdd && (
@@ -241,6 +255,37 @@ export default function LivePayoutsPanel({
           </button>
         )}
       </div>
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSearchTerm(searchInput);
+        }}
+        className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-3"
+      >
+        <div className="relative min-w-[240px] flex-1">
+          <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="ค้นหาชื่อ จำนวนเงิน หรือจำนวนชั่วโมง"
+            className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          />
+        </div>
+        <button type="submit" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+          <Search size={15} /> ค้นหา
+        </button>
+        {searchTerm && (
+          <button
+            type="button"
+            onClick={() => { setSearchInput(""); setSearchTerm(""); }}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            ล้างการค้นหา
+          </button>
+        )}
+        <span className="text-xs text-gray-500">พบ {visibleRows.length} จาก {rows.length} รายการ</span>
+      </form>
 
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="add-live-payout-title">
@@ -297,7 +342,7 @@ export default function LivePayoutsPanel({
           <div className="rounded-xl border border-pink-100 bg-white p-4 shadow-sm">
             <p className="text-xs font-medium text-pink-600">ค่าไลฟ์รวม</p>
             <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{formatBaht(totalLiveFee)}</p>
-            <p className="mt-1 text-xs text-gray-400">{rows.length} รายการ</p>
+            <p className="mt-1 text-xs text-gray-400">{visibleRows.length} รายการ</p>
           </div>
           <div className="rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
             <p className="text-xs font-medium text-blue-600">จำนวนชั่วโมงรวม</p>
@@ -358,7 +403,11 @@ export default function LivePayoutsPanel({
 
       {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {err && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
-      {!error && rows.length === 0 && <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">ยังไม่มีรายการที่อนุมัติในช่วงที่เลือก</div>}
+      {!error && visibleRows.length === 0 && (
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">
+          {searchTerm ? "ไม่พบรายการที่ตรงกับคำค้นหา" : "ยังไม่มีรายการที่อนุมัติในช่วงที่เลือก"}
+        </div>
+      )}
 
       <div className="space-y-4">
         {Array.from(days.entries()).map(([date, list]) => (
