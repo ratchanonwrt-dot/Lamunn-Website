@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { formatBaht } from "@/lib/format";
 import { useCanEdit } from "@/lib/RoleContext";
-import { useCellSave, cellStatusClass } from "@/lib/useCellSave";
+import { useCellSave, cellStatusClass, useServerSyncedInput } from "@/lib/useCellSave";
 
 interface DayRow {
   date: string; // yyyy-mm-dd
@@ -53,10 +53,11 @@ function EditableCell({
   onCommit: (field: NumericField, value: number | null) => void;
 }) {
   const canEdit = useCanEdit("MONTHLY");
-  const [val, setVal] = useState((value ?? "").toString());
+  const { val, setVal, onFocus, doneEditing } = useServerSyncedInput((value ?? "").toString());
   const { status, save } = useCellSave("/api/company-channel");
 
   async function handleBlur() {
+    doneEditing();
     if (val === (value ?? "").toString()) return;
     const overrideParam = OVERRIDE_PARAM[field];
     const previous = value;
@@ -73,6 +74,7 @@ function EditableCell({
       value={val}
       disabled={!canEdit}
       onChange={(e) => setVal(e.target.value)}
+      onFocus={onFocus}
       onBlur={handleBlur}
       className={`w-24 rounded-lg border px-2 py-1 text-right text-sm outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${cellStatusClass(status)}`}
     />
@@ -81,10 +83,11 @@ function EditableCell({
 
 function NoteCell({ date, value }: { date: string; value: string | null }) {
   const canEdit = useCanEdit("MONTHLY");
-  const [val, setVal] = useState(value ?? "");
+  const { val, setVal, onFocus, doneEditing } = useServerSyncedInput(value ?? "");
   const { status, save } = useCellSave("/api/company-channel");
 
   function handleBlur() {
+    doneEditing();
     if (val === (value ?? "")) return;
     void save({ date, note: val });
   }
@@ -95,6 +98,7 @@ function NoteCell({ date, value }: { date: string; value: string | null }) {
       value={val}
       disabled={!canEdit}
       onChange={(e) => setVal(e.target.value)}
+      onFocus={onFocus}
       onBlur={handleBlur}
       className={`w-32 rounded-lg border px-2 py-1 text-sm outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${cellStatusClass(status)}`}
     />
