@@ -67,6 +67,14 @@ export async function setManualLivePayoutTransferQueued(id: string, transferQueu
   return result.count === 1;
 }
 
+export async function setManualLivePayoutNote(id: string, note: string | null) {
+  const result = await prisma.accLivePayoutWorkItem.updateMany({
+    where: { id, sourceId: null },
+    data: { note },
+  });
+  return result.count === 1;
+}
+
 export async function setExternalLivePayoutTransferQueued(
   payout: Pick<LivePayout, "id" | "date" | "payeeName" | "hours" | "amount" | "note">,
   transferQueued: boolean,

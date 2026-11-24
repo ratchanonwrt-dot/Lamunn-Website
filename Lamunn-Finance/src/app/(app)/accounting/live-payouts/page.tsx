@@ -32,6 +32,7 @@ export default async function LivePayoutsPage({ searchParams }: { searchParams: 
         canAdd
         canManagePayment={staff.canQueueTransfer}
         canQueueTransfer={staff.canQueueTransfer}
+        canEditNote={staff.role === "SUPER_ADMIN"}
       />
     </div>
   );

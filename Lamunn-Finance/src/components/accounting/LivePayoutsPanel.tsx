@@ -36,6 +36,7 @@ export default function LivePayoutsPanel({
   canAdd,
   canManagePayment,
   canQueueTransfer,
+  canEditNote,
 }: {
   rows: DisplayLivePayout[];
   error: string | null;
@@ -45,6 +46,7 @@ export default function LivePayoutsPanel({
   canAdd: boolean;
   canManagePayment: boolean;
   canQueueTransfer: boolean;
+  canEditNote: boolean;
 }) {
   const { router, refresh, refreshing } = useServerRefresh();
   const pathname = usePathname();
@@ -54,11 +56,13 @@ export default function LivePayoutsPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [manual, setManual] = useState({ liveDate: to, payeeName: "", hours: "", amount: "", note: "", transferQueued: false });
+  const [manual, setManual] = useState({ liveDate: to, payeeName: "", hours: "", amount: "", transferQueued: false });
   const [queuedById, setQueuedById] = useState<Record<string, boolean>>(() => Object.fromEntries(rows.map((row) => [row.id, row.transferQueued])));
+  const [noteById, setNoteById] = useState<Record<string, string>>(() => Object.fromEntries(rows.map((row) => [row.id, row.note ?? ""])));
 
   useEffect(() => {
     setQueuedById(Object.fromEntries(rows.map((row) => [row.id, row.transferQueued])));
+    setNoteById(Object.fromEntries(rows.map((row) => [row.id, row.note ?? ""])));
   }, [rows]);
 
   async function setPaid(r: DisplayLivePayout, paid: boolean) {
@@ -96,7 +100,7 @@ export default function LivePayoutsPanel({
       return;
     }
     setShowAdd(false);
-    setManual({ liveDate: to, payeeName: "", hours: "", amount: "", note: "", transferQueued: false });
+    setManual({ liveDate: to, payeeName: "", hours: "", amount: "", transferQueued: false });
     refresh();
   }
 
@@ -116,7 +120,7 @@ export default function LivePayoutsPanel({
         payeeName: row.payeeName,
         hours: row.hours,
         amount: row.amount,
-        note: row.note,
+        note: noteById[row.id] ?? row.note,
         transferQueued,
       }),
     });
@@ -125,6 +129,34 @@ export default function LivePayoutsPanel({
       setQueuedById((current) => ({ ...current, [row.id]: previous }));
       const body = await res.json().catch(() => ({}));
       setErr(body.error ?? "บันทึกสถานะขึ้นระบบโอนไม่สำเร็จ");
+      return;
+    }
+    refresh();
+  }
+
+  async function saveNote(row: DisplayLivePayout) {
+    if (!canEditNote) return;
+    setBusy(`note:${row.id}`);
+    setErr(null);
+    const res = await fetch("/api/accounting/live-payouts/note", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: row.source,
+        workItemId: row.workItemId,
+        sourceId: row.source === "LIVE" ? row.id : null,
+        date: row.date,
+        payeeName: row.payeeName,
+        hours: row.hours,
+        amount: row.amount,
+        transferQueued: queuedById[row.id] ?? row.transferQueued,
+        note: noteById[row.id] ?? "",
+      }),
+    });
+    setBusy(null);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setErr(body.error ?? "บันทึกหมายเหตุไม่สำเร็จ");
       return;
     }
     refresh();
@@ -247,10 +279,6 @@ export default function LivePayoutsPanel({
               ) : (
                 <p className="self-end rounded-lg bg-amber-50 px-3 py-2.5 text-xs text-amber-800">เฉพาะ Admin และบัญชีเท่านั้นที่ติ๊กขึ้นระบบโอนเงินได้</p>
               )}
-              <label className="block sm:col-span-2">
-                <span className="mb-1 block text-sm font-medium text-gray-700">หมายเหตุ</span>
-                <textarea value={manual.note} onChange={(event) => setManual((current) => ({ ...current, note: event.target.value }))} rows={3} className={`${inputCls} w-full resize-y`} placeholder="กรอกรายละเอียดเพิ่มเติม (ถ้ามี)" />
-              </label>
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setShowAdd(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">ยกเลิก</button>
@@ -262,7 +290,7 @@ export default function LivePayoutsPanel({
 
       <section className="mb-5 overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-white via-violet-50/50 to-pink-50/60 shadow-sm">
         <div className="border-b border-violet-100 px-5 py-4">
-          <h2 className="text-base font-bold text-gray-900">แดชบอร์ดคนไลฟ์</h2>
+          <h2 className="text-base font-bold text-gray-900">ภาพรวมค่าไลฟ์และประสิทธิภาพนักไลฟ์</h2>
           <p className="mt-0.5 text-xs text-gray-500">สรุปตามช่วงวันที่และสถานะที่เลือก · จัดอันดับมือ 1 จากจำนวนชั่วโมงรวม</p>
         </div>
         <div className="grid gap-3 p-4 sm:grid-cols-3">
@@ -350,9 +378,9 @@ export default function LivePayoutsPanel({
                     <th className="px-3 py-2">วันที่ไลฟ์</th>
                     <th className="px-3 py-2 text-right">จำนวนชั่วโมง</th>
                     <th className="px-3 py-2 text-right">จำนวนเงิน</th>
-                    <th className="px-3 py-2">หมายเหตุ</th>
                     <th className="px-3 py-2">อนุมัติโดย</th>
                     <th className="px-4 py-2 text-center">ขึ้นระบบโอนเงินแล้ว</th>
+                    <th className="px-3 py-2">หมายเหตุ (Admin)</th>
                     <th className="px-3 py-2">สถานะ</th>
                     <th className="px-3 py-2"></th>
                   </tr>
@@ -371,7 +399,6 @@ export default function LivePayoutsPanel({
                         {formatBaht(r.amount)}
                         {r.stale && <p className="text-[11px] font-normal text-red-600">ยอดในเว็บ Live เปลี่ยน — รออนุมัติใหม่</p>}
                       </td>
-                      <td className="max-w-[220px] px-3 py-2.5 text-xs text-gray-600">{r.note || "-"}</td>
                       <td className="px-3 py-2.5 text-xs text-gray-500">
                         {r.approvedBy ?? "-"}
                         <p>{fmtDT(r.approvedAt)}</p>
@@ -386,6 +413,29 @@ export default function LivePayoutsPanel({
                           aria-label={`ขึ้นระบบโอนเงินแล้ว ${r.payeeName} ${formatAccountingDate(r.date)}`}
                           className="h-5 w-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50"
                         />
+                      </td>
+                      <td className="min-w-[240px] px-3 py-2.5">
+                        {canEditNote ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              value={noteById[r.id] ?? ""}
+                              maxLength={500}
+                              onChange={(event) => setNoteById((current) => ({ ...current, [r.id]: event.target.value }))}
+                              placeholder="Admin กรอกหมายเหตุ"
+                              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 outline-none focus:border-brand-400"
+                            />
+                            <button
+                              type="button"
+                              disabled={busy !== null || refreshing || (noteById[r.id] ?? "") === (r.note ?? "")}
+                              onClick={() => saveNote(r)}
+                              className="rounded-lg border border-brand-200 px-2.5 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40"
+                            >
+                              บันทึก
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-500">{r.note || "-"}</span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5">
                         <span className={clsx("inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium", (queuedById[r.id] ?? r.transferQueued) ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
