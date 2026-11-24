@@ -127,6 +127,7 @@ enum HeldDepositStatus {
   CONTRACT_ONGOING // ยังไม่หมดสัญญา
   NOT_RETURNED // ยังไม่ได้คืน
   DEDUCTED // หักเงินประกัน
+  RETURNED // ได้คืนแล้ว — ไม่นับในยอดเงินมัดจำรวมอีกต่อไป (lib/heldDepositCalc.ts)
 }
 
 // เงินปันผลที่จ่ายไปแล้ว — กรอกเอง เก็บเป็นประวัติทุกรายการ (ไม่ใช่แค่ยอดเดียว)

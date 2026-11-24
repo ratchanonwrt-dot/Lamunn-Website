@@ -7,7 +7,7 @@ import EditDepositDateCell from "@/components/EditDepositDateCell";
 import HeldDepositStatusBadge from "@/components/HeldDepositStatusBadge";
 import HeldDepositVatSelect from "@/components/HeldDepositVatSelect";
 import { formatBaht } from "@/lib/format";
-import { refundableDepositTotal } from "@/lib/heldDepositCalc";
+import { isStillHeld, refundableDepositTotal } from "@/lib/heldDepositCalc";
 
 export default async function HeldDepositsPage({ searchParams }: { searchParams: { sort?: string; dir?: string } }) {
   await requireSectionPage("HELD_DEPOSITS");
@@ -19,7 +19,10 @@ export default async function HeldDepositsPage({ searchParams }: { searchParams:
     orderBy: sortByDeposited ? { depositedAt: { sort: dir, nulls: "last" } } : { createdAt: "desc" },
   });
 
-  const total = deposits.reduce((a, d) => a + d.amount, 0);
+  // รายการที่ "ได้คืนแล้ว" ไม่นับในยอดรวม (เงินกลับเข้าบริษัทแล้ว) — แสดงแยกไว้ดูอย่างเดียว
+  const total = deposits.filter(isStillHeld).reduce((a, d) => a + d.amount, 0);
+  const returned = deposits.filter((d) => !isStillHeld(d));
+  const returnedTotal = returned.reduce((a, d) => a + d.amount, 0);
   // สูตรเดียวกับหน้าสถานะการเงินบริษัท — ดู src/lib/heldDepositCalc.ts
   const { refundExVat, sumIncVat, sumExVat, sumNoVat, sumUnspecified } = refundableDepositTotal(deposits);
 
@@ -34,6 +37,11 @@ export default async function HeldDepositsPage({ searchParams }: { searchParams:
         <div className="rounded-xl border border-gray-200 bg-white p-4">
           <p className="text-xs text-gray-500">ยอดเงินมัดจำรวมทั้งหมด</p>
           <p className="mt-1 text-xl font-bold text-brand-700">{formatBaht(total)} บาท</p>
+          {returnedTotal > 0 && (
+            <p className="mt-0.5 text-[11px] text-emerald-600">
+              ไม่รวมที่ได้คืนแล้ว {formatBaht(returnedTotal)} บาท ({returned.length} รายการ)
+            </p>
+          )}
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4">
           <p className="text-xs text-emerald-600">รวม VAT</p>
@@ -86,9 +94,9 @@ export default async function HeldDepositsPage({ searchParams }: { searchParams:
           </thead>
           <tbody>
             {deposits.map((d) => (
-              <tr key={d.id} className="border-t border-gray-100">
-                <td className="px-4 py-2 font-medium text-gray-800">{d.location}</td>
-                <td className="px-4 py-2 text-right font-medium text-gray-800">{formatBaht(d.amount)}</td>
+              <tr key={d.id} className={`border-t border-gray-100 ${isStillHeld(d) ? "" : "bg-emerald-50/40"}`}>
+                <td className={`px-4 py-2 font-medium ${isStillHeld(d) ? "text-gray-800" : "text-gray-400"}`}>{d.location}</td>
+                <td className={`px-4 py-2 text-right font-medium ${isStillHeld(d) ? "text-gray-800" : "text-gray-400 line-through"}`}>{formatBaht(d.amount)}</td>
                 <td className="px-4 py-2">
                   <HeldDepositVatSelect id={d.id} vatType={d.vatType} />
                 </td>
