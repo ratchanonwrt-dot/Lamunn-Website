@@ -316,12 +316,6 @@ export default function LivePayoutsPanel({
                 <span className="mb-1 block text-sm font-medium text-gray-700">จำนวนเงิน (บาท)</span>
                 <input required inputMode="decimal" value={manual.amount} onChange={(event) => setManual((current) => ({ ...current, amount: event.target.value }))} className={`${inputCls} w-full`} placeholder="เช่น 1,500.00" />
               </label>
-              {canQueueTransfer && (
-                <label className="flex items-center gap-2 self-end rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700">
-                  <input type="checkbox" checked={manual.transferQueued} onChange={(event) => setManual((current) => ({ ...current, transferQueued: event.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-brand-600" />
-                  ขึ้นระบบโอนเงินแล้ว
-                </label>
-              )}
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setShowAdd(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">ยกเลิก</button>
