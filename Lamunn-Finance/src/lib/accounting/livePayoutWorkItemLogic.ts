@@ -38,6 +38,11 @@ export type ValidManualLivePayoutInput = {
   transferQueued: boolean;
 };
 
+export function normalizeLivePayoutNote(value: unknown): string | null {
+  const note = String(value ?? "").trim().slice(0, 500);
+  return note || null;
+}
+
 function validIsoDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -60,14 +65,13 @@ export function parseManualLivePayoutInput(input: ManualLivePayoutInput): { data
   const amountSatang = signedInputToSatang(input.amount as string | number | null | undefined);
   if (amountSatang <= 0) return { error: "จำนวนเงินต้องมากกว่า 0 บาท" };
 
-  const noteText = String(input.note ?? "").trim().slice(0, 500);
   return {
     data: {
       liveDate,
       payeeName,
       hours,
       amountSatang,
-      note: noteText || null,
+      note: normalizeLivePayoutNote(input.note),
       transferQueued: input.transferQueued === true,
     },
   };
@@ -86,6 +90,7 @@ export function mergeLivePayoutWorkItems(
       ...row,
       source: "LIVE",
       workItemId: state?.id ?? null,
+      note: state?.note ?? row.note,
       transferQueued: state?.transferQueued ?? row.status === "PAID",
     };
   });
