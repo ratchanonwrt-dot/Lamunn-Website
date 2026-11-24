@@ -211,7 +211,7 @@ export default function LivePayoutsPanel({
   const staleCount = rows.filter((r) => r.stale && r.status === "APPROVED").length;
 
   return (
-    <div>
+    <div className="flex flex-col">
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500">ตั้งแต่</label>
@@ -288,7 +288,7 @@ export default function LivePayoutsPanel({
         </div>
       )}
 
-      <section className="mb-5 overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-white via-violet-50/50 to-pink-50/60 shadow-sm">
+      <section className="order-last mt-5 overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-white via-violet-50/50 to-pink-50/60 shadow-sm">
         <div className="border-b border-violet-100 px-5 py-4">
           <h2 className="text-base font-bold text-gray-900">ภาพรวมค่าไลฟ์และประสิทธิภาพนักไลฟ์</h2>
           <p className="mt-0.5 text-xs text-gray-500">สรุปตามช่วงวันที่และสถานะที่เลือก · จัดอันดับมือ 1 จากจำนวนชั่วโมงรวม</p>
