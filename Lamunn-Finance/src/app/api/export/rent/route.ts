@@ -42,8 +42,13 @@ export async function GET(req: NextRequest) {
   );
   const effectiveRates = await getEffectiveGpRates(year, month, baseRates);
 
+  // เฉพาะสาขาที่เปิดจริงในเดือนนั้น (มียอดขาย) — ให้ตรงกับหน้าค่าเช่า
   const rows = branches
     .filter((b) => b.rentConfig)
+    .filter((b) => {
+      const s = salesByBranch.get(b.id);
+      return (s?.cashPos ?? 0) + (s?.transfer ?? 0) + (s?.cashTransferCombined ?? 0) + (s?.grab ?? 0) + (s?.lineman ?? 0) > 0;
+    })
     .map((b) => {
       const s = salesByBranch.get(b.id);
       const storefront = b.type === "CASH" ? (s?.cashPos ?? 0) + (s?.transfer ?? 0) : s?.cashTransferCombined ?? 0;
