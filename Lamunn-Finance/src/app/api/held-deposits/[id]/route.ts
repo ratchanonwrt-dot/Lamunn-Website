@@ -14,7 +14,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const data: Record<string, unknown> = {};
   if (depositedAt !== undefined) data.depositedAt = depositedAt ? parseDateOnly(depositedAt) : null;
-  if (status !== undefined) data.status = status;
+  if (status !== undefined) {
+    const STATUSES = ["CONTRACT_ONGOING", "NOT_RETURNED", "DEDUCTED", "RETURNED"];
+    if (!STATUSES.includes(status)) return NextResponse.json({ error: "invalid status" }, { status: 400 });
+    data.status = status;
+  }
   if (vatType !== undefined) {
     const VAT_TYPES = ["INCLUDES_VAT", "EXCLUDES_VAT", "NO_VAT"];
     if (vatType !== null && !VAT_TYPES.includes(vatType)) {

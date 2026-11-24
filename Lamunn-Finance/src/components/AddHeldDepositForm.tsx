@@ -71,6 +71,7 @@ export default function AddHeldDepositForm() {
           <option value="CONTRACT_ONGOING">ยังไม่หมดสัญญา</option>
           <option value="NOT_RETURNED">ยังไม่ได้คืน</option>
           <option value="DEDUCTED">หักเงินประกัน</option>
+          <option value="RETURNED">ได้คืนแล้ว</option>
         </select>
       </div>
       <div>
