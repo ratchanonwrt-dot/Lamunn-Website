@@ -11,6 +11,8 @@ import TiktokOutstandingEdit from "@/components/TiktokOutstandingEdit";
 import { CompanyStatusProvider, LiveTotal } from "@/components/CompanyStatusLive";
 import AddDividendForm from "@/components/AddDividendForm";
 import DeleteDividendButton from "@/components/DeleteDividendButton";
+import DividendSourceToggle from "@/components/DividendSourceToggle";
+import type { DividendSource } from "@/lib/dividendSource";
 
 export default async function CompanyStatusPage() {
   await requirePageOwner();
@@ -26,6 +28,10 @@ export default async function CompanyStatusPage() {
 
   const creditTermOutstanding = perBranchOutstanding.reduce((a, b) => a + b.totalOutstanding, 0);
   const dividendTotal = dividends.reduce((a, d) => a + d.amount, 0);
+  const dividendBy = (src: string | null) => dividends.filter((d) => (d.source ?? null) === src).reduce((a, d) => a + d.amount, 0);
+  const dividendCash = dividendBy("CASH");
+  const dividendBank = dividendBy("BANK");
+  const dividendUnset = dividendBy(null);
   // เงินมัดจำนับเป็นสินทรัพย์ด้วยยอดที่ "จะได้คืนจริง" (ถอด VAT 7% ออกจากยอดที่กรอกแบบรวม VAT)
   // แถวที่ยังไม่ระบุ VAT นับตามหน้าตั๋วไปก่อน ไม่ให้สินทรัพย์หายจนกว่าจะไปติ๊กครบในหน้าเงินมัดจำ
   const { refundExVat, sumUnspecified } = refundableDepositTotal(deposits);
@@ -95,17 +101,23 @@ export default async function CompanyStatusPage() {
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <p className="text-xs text-gray-500">เงินจ่ายปันผลแล้วสะสม (กรอกเอง)</p>
           <p className="mt-1 text-2xl font-bold text-gray-800">{formatBaht(dividendTotal)} บาท</p>
+          <div className="mt-2 flex flex-col gap-0.5 text-xs">
+            <span className="text-amber-700">เงินสด {formatBaht(dividendCash)}</span>
+            <span className="text-sky-700">บัญชีบริษัท {formatBaht(dividendBank)}</span>
+            {dividendUnset > 0 && <span className="text-gray-400">ยังไม่ระบุ {formatBaht(dividendUnset)}</span>}
+          </div>
         </div>
       </div>
 
       <h2 className="mb-3 text-sm font-semibold text-gray-700">ประวัติเงินปันผลที่จ่ายไป</h2>
       <AddDividendForm />
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-        <table className="w-full min-w-[500px] text-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-4 py-2">วันที่</th>
               <th className="px-4 py-2 text-right">จำนวนเงิน</th>
+              <th className="px-4 py-2">จ่ายจาก</th>
               <th className="px-4 py-2">หมายเหตุ</th>
               <th className="px-4 py-2"></th>
             </tr>
@@ -115,6 +127,9 @@ export default async function CompanyStatusPage() {
               <tr key={d.id} className="border-t border-gray-100">
                 <td className="px-4 py-2">{formatThaiDate(d.date)}</td>
                 <td className="px-4 py-2 text-right font-medium text-gray-800">{formatBaht(d.amount)}</td>
+                <td className="px-4 py-2">
+                  <DividendSourceToggle id={d.id} source={(d.source as DividendSource | null) ?? null} />
+                </td>
                 <td className="px-4 py-2 text-gray-500">{d.note ?? "-"}</td>
                 <td className="px-4 py-2">
                   <DeleteDividendButton id={d.id} />
@@ -123,7 +138,7 @@ export default async function CompanyStatusPage() {
             ))}
             {dividends.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-center text-gray-400" colSpan={4}>
+                <td className="px-4 py-6 text-center text-gray-400" colSpan={5}>
                   ยังไม่มีประวัติการจ่ายปันผล
                 </td>
               </tr>
