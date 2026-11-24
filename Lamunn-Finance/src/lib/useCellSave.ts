@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { scheduleRefresh } from "@/lib/coalescedRefresh";
 
@@ -56,4 +56,26 @@ export function cellStatusClass(status: CellStatus): string {
     default:
       return "border-gray-200 bg-gray-50 focus:border-brand-400 focus:bg-white";
   }
+}
+
+/** ค่าในช่องกรอกที่ "ตาม" ค่าจากเซิร์ฟเวอร์ — ช่องตารางยอดขายเก็บค่าที่พิมพ์ไว้ใน state ของตัวเอง
+ * ถ้าใช้ useState(ค่าเริ่มต้น) ตรงๆ พอ BackgroundSync ดึงยอดใหม่จาก IMS แล้ว refresh หน้า ยอดรวมของแถวเปลี่ยนแต่ช่องยังโชว์ค่าเก่า
+ * (เจอจริง: 24 พ.ย. 2569 ช่องรับหน้าร้าน/Catering ขึ้น 0 แต่ "รวมวันนั้น" มี 31,291.25)
+ * จึงอัปเดตช่องตามค่าใหม่จากเซิร์ฟเวอร์เสมอ ยกเว้นตอนที่ผู้ใช้กำลังพิมพ์ช่องนั้นอยู่ ไม่งั้นค่าที่พิมพ์จะถูกทับ */
+export function useServerSyncedInput(serverValue: string) {
+  const [val, setVal] = useState(serverValue);
+  const editing = useRef(false);
+  useEffect(() => {
+    if (!editing.current) setVal(serverValue);
+  }, [serverValue]);
+  return {
+    val,
+    setVal,
+    onFocus: () => {
+      editing.current = true;
+    },
+    doneEditing: () => {
+      editing.current = false;
+    },
+  };
 }

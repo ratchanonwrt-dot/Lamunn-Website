@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { formatBaht } from "@/lib/format";
 import { useCanEdit } from "@/lib/RoleContext";
-import { useCellSave, cellStatusClass } from "@/lib/useCellSave";
+import { useCellSave, cellStatusClass, useServerSyncedInput } from "@/lib/useCellSave";
 
 interface DayDetail {
   storefront: number;
@@ -59,10 +59,11 @@ function SimpleAmountCell({
   onCommit: Commit;
 }) {
   const canEdit = useCanEdit("MONTHLY");
-  const [val, setVal] = useState(value.toString());
+  const { val, setVal, onFocus, doneEditing } = useServerSyncedInput(value.toString());
   const { status, save } = useCellSave("/api/daily-sales");
 
   async function handleBlur() {
+    doneEditing();
     if (Number(val) === value) return;
     const previous = value;
     onCommit({ [field]: toNum(val) });
@@ -78,6 +79,7 @@ function SimpleAmountCell({
       step="0.01"
       value={val}
       onChange={(e) => setVal(e.target.value)}
+      onFocus={onFocus}
       onBlur={handleBlur}
       className={`w-24 ${inputBase} ${cellStatusClass(status)}`}
     />
@@ -99,12 +101,18 @@ function StorefrontCell({
   onCommit: Commit;
 }) {
   const canEdit = useCanEdit("MONTHLY");
-  const [cashPos, setCashPos] = useState((d.cashPos ?? 0).toString());
-  const [transfer, setTransfer] = useState((d.transfer ?? 0).toString());
-  const [combined, setCombined] = useState((d.cashTransferCombined ?? 0).toString());
+  const cashField = useServerSyncedInput((d.cashPos ?? 0).toString());
+  const transferField = useServerSyncedInput((d.transfer ?? 0).toString());
+  const combinedField = useServerSyncedInput((d.cashTransferCombined ?? 0).toString());
+  const [cashPos, setCashPos] = [cashField.val, cashField.setVal];
+  const [transfer, setTransfer] = [transferField.val, transferField.setVal];
+  const [combined, setCombined] = [combinedField.val, combinedField.setVal];
   const { status, save } = useCellSave("/api/daily-sales");
 
   async function handleBlurCash() {
+    cashField.doneEditing();
+    transferField.doneEditing();
+    combinedField.doneEditing();
     if (type === "CASH" && Number(cashPos) === (d.cashPos ?? 0) && Number(transfer) === (d.transfer ?? 0)) return;
     if (type === "CREDIT_TERM" && Number(combined) === (d.cashTransferCombined ?? 0)) return;
     const previous: Edit = { cashPos: d.cashPos, transfer: d.transfer, cashTransferCombined: d.cashTransferCombined };
@@ -126,6 +134,7 @@ function StorefrontCell({
         step="0.01"
         value={combined}
         onChange={(e) => setCombined(e.target.value)}
+        onFocus={combinedField.onFocus}
         onBlur={handleBlurCash}
         className={`w-24 ${inputBase} ${cellStatusClass(status)}`}
       />
@@ -140,6 +149,7 @@ function StorefrontCell({
         title="เงินสด POS"
         value={cashPos}
         onChange={(e) => setCashPos(e.target.value)}
+        onFocus={cashField.onFocus}
         onBlur={handleBlurCash}
         className={`w-16 rounded-lg border px-1.5 py-2 text-right text-xs outline-none transition-colors md:py-1 ${cellStatusClass(status)}`}
       />
@@ -150,6 +160,7 @@ function StorefrontCell({
         title="เงินโอน"
         value={transfer}
         onChange={(e) => setTransfer(e.target.value)}
+        onFocus={transferField.onFocus}
         onBlur={handleBlurCash}
         className={`w-16 rounded-lg border px-1.5 py-2 text-right text-xs outline-none transition-colors md:py-1 ${cellStatusClass(status)}`}
       />
@@ -160,10 +171,11 @@ function StorefrontCell({
 // เซลล์แก้ไขเงินสดนับ (ส่งกลับครัวกลาง) — เฉพาะสาขา CASH เท่านั้น
 function CashCountedCell({ branchId, date, value, onCommit }: { branchId: string; date: string; value: number | null; onCommit: Commit }) {
   const canEdit = useCanEdit("MONTHLY");
-  const [val, setVal] = useState((value ?? 0).toString());
+  const { val, setVal, onFocus, doneEditing } = useServerSyncedInput((value ?? 0).toString());
   const { status, save } = useCellSave("/api/daily-sales");
 
   async function handleBlur() {
+    doneEditing();
     if (Number(val) === (value ?? 0)) return;
     const previous = value;
     onCommit({ cashCounted: val === "" ? null : toNum(val) });
@@ -179,6 +191,7 @@ function CashCountedCell({ branchId, date, value, onCommit }: { branchId: string
       step="0.01"
       value={val}
       onChange={(e) => setVal(e.target.value)}
+      onFocus={onFocus}
       onBlur={handleBlur}
       className={`w-24 ${inputBase} ${cellStatusClass(status)}`}
     />
@@ -188,10 +201,11 @@ function CashCountedCell({ branchId, date, value, onCommit }: { branchId: string
 // เซลล์แก้ไขยอดรวม POS (เช็คยอด, ไม่บังคับ) — ใช้ในหน้าเช็คยอด POS
 function PosCheckCell({ branchId, date, value, onCommit }: { branchId: string; date: string; value: number | null; onCommit: Commit }) {
   const canEdit = useCanEdit("MONTHLY");
-  const [val, setVal] = useState((value ?? "").toString());
+  const { val, setVal, onFocus, doneEditing } = useServerSyncedInput((value ?? "").toString());
   const { status, save } = useCellSave("/api/daily-sales");
 
   async function handleBlur() {
+    doneEditing();
     if (val === (value ?? "").toString()) return;
     const previous = value;
     onCommit({ posCheckTotal: val === "" ? null : toNum(val) });
@@ -207,6 +221,7 @@ function PosCheckCell({ branchId, date, value, onCommit }: { branchId: string; d
       step="0.01"
       value={val}
       onChange={(e) => setVal(e.target.value)}
+      onFocus={onFocus}
       onBlur={handleBlur}
       className={`w-24 ${inputBase} ${cellStatusClass(status)}`}
     />
@@ -216,10 +231,11 @@ function PosCheckCell({ branchId, date, value, onCommit }: { branchId: string; d
 // เซลล์แก้ไขหมายเหตุ
 function NoteCell({ branchId, date, value, onCommit }: { branchId: string; date: string; value: string | null; onCommit: Commit }) {
   const canEdit = useCanEdit("MONTHLY");
-  const [val, setVal] = useState(value ?? "");
+  const { val, setVal, onFocus, doneEditing } = useServerSyncedInput(value ?? "");
   const { status, save } = useCellSave("/api/daily-sales");
 
   async function handleBlur() {
+    doneEditing();
     if (val === (value ?? "")) return;
     const previous = value;
     onCommit({ note: val || null });
@@ -234,6 +250,7 @@ function NoteCell({ branchId, date, value, onCommit }: { branchId: string; date:
       type="text"
       value={val}
       onChange={(e) => setVal(e.target.value)}
+      onFocus={onFocus}
       onBlur={handleBlur}
       className={`w-32 rounded-lg border px-2 py-2 text-sm outline-none transition-colors md:py-1 ${cellStatusClass(status)}`}
     />
