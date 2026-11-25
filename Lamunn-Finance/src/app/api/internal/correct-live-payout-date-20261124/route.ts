@@ -1,11 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@lamunn/db-finance";
+import { requireLivePayoutTransferApi } from "@/lib/livePayoutAccess";
 
-export async function POST(req: NextRequest) {
-  const expectedSecret = process.env.PAYOUT_SHARED_SECRET;
-  if (!expectedSecret || req.headers.get("x-payout-secret") !== expectedSecret) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+export async function POST() {
+  const staff = await requireLivePayoutTransferApi();
+  if (!staff) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const matches = await prisma.accLivePayoutWorkItem.findMany({
     where: {
