@@ -9,7 +9,7 @@ export async function POST() {
   const matches = await prisma.accLivePayoutWorkItem.findMany({
     where: {
       sourceId: null,
-      payeeName: "คุณยิ้ม",
+      payeeName: "คุณมิ้น",
       liveDate: new Date("2026-11-25T00:00:00.000Z"),
       hours: 2,
       amount: 500,
